@@ -1,0 +1,14 @@
+# Núcleo
+anthropic>=0.116.0        # LLM (concepto, guion, escenas, metadatos, visión)
+pyyaml>=6.0
+pillow>=10.0              # miniaturas y placeholders
+
+# Proveedores opcionales (instala solo los que uses)
+openai>=1.40              # TTS (tts-1/gpt-4o-mini-tts), STT (whisper-1), imágenes (gpt-image-1)
+elevenlabs>=1.6           # TTS de alta calidad multilingüe
+edge-tts>=6.1             # TTS gratuito (voces neuronales de Edge)
+replicate>=0.32           # imágenes (FLUX), video generativo (Kling/Wan), música (MusicGen)
+
+# Publicación en YouTube (opcional)
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.1

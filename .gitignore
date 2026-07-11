@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+projects/*
+!projects/.gitkeep
+assets/music/*
+!assets/music/README.md
+client_secrets.json
+token.json
+.venv/
