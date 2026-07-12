@@ -118,6 +118,18 @@ def api_delete_asset(slug: str, asset_id: int) -> dict:
     return {"assets": project.get("assets") or []}
 
 
+def api_delete_project(slug: str) -> dict:
+    import shutil
+    if RUNS.get(slug, {}).get("running"):
+        raise ApiError(409, "No se puede borrar mientras se está generando.")
+    project = Project(slug)
+    if not project.dir.exists():
+        raise ApiError(404, "El proyecto no existe.")
+    shutil.rmtree(project.dir)
+    RUNS.pop(slug, None)
+    return {"deleted": slug}
+
+
 def api_save_keys(body: dict) -> dict:
     """Guarda claves de API en .env (merge línea a línea) y en el proceso."""
     import os
@@ -381,6 +393,8 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
                 self._json(api_delete_asset(m.group(1), int(m.group(2))))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
+                self._json(api_delete_project(m.group(1)))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
@@ -390,10 +404,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(e)}, 500)
 
 
-def serve(port: int = 8765) -> None:
+def serve(port: int = 8765, open_browser: bool = True) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"🎬 ytstudio UI → http://localhost:{port}")
-    print("   (Ctrl+C para detener)")
+    url = f"http://localhost:{port}"
+    print(f"🎬 ytstudio UI → {url}")
+    print("   (deja esta ventana abierta; Ctrl+C para detener)")
+    if open_browser:
+        import webbrowser
+        threading.Timer(1.0, webbrowser.open, args=(url,)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

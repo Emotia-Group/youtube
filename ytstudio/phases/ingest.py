@@ -100,10 +100,30 @@ def set_text_input(project, text: str) -> None:
     project.set("has_text_input", bool(text.strip()))
 
 
+def _migrate_legacy_input(project) -> None:
+    """Proyectos creados antes del modelo de assets: convierte el input_meta
+    único en un asset (o en texto pegado) para que sigan funcionando."""
+    input_dir = project.path("input")
+    meta = project.get("input_meta")
+    if not meta or project.get("assets") or (input_dir / "texto.txt").exists():
+        return
+    old = input_dir / meta["file"]
+    if not old.exists():
+        return
+    if old.suffix.lower() in TEXT_EXT:
+        set_text_input(project, old.read_text(encoding="utf-8"))
+    else:
+        category = {"voice": "voz", "voz": "voz", "image": "referencia",
+                    "video": "referencia", "referencia": "referencia",
+                    "broll": "broll"}.get(meta["type"], "auto")
+        add_asset(project, old, category)
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
     lang = cfg.get("language", "es")
+    _migrate_legacy_input(project)
     assets = project.get("assets") or []
     stt = None
 

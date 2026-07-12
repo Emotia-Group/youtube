@@ -87,7 +87,7 @@ def cmd_phases(args) -> None:
 
 def cmd_ui(args) -> None:
     from ytstudio.webui.server import serve
-    serve(port=args.port)
+    serve(port=args.port, open_browser=not args.no_browser)
 
 
 def main() -> None:
@@ -133,6 +133,8 @@ def main() -> None:
 
     p_ui = sub.add_parser("ui", help="Abrir la interfaz web local")
     p_ui.add_argument("--port", type=int, default=8765)
+    p_ui.add_argument("--no-browser", action="store_true",
+                      help="No abrir el navegador automáticamente")
     p_ui.set_defaults(func=cmd_ui)
 
     args = parser.parse_args()

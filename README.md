@@ -46,9 +46,13 @@ cp .env.example .env   # y completa las claves de los proveedores que uses
 git clone https://github.com/Emotia-Group/youtube.git
 cd youtube
 py -m pip install -r requirements.txt
-copy .env.example .env
 py -m ytstudio ui
 ```
+
+Después de la primera instalación, basta con **doble clic en `iniciar.bat`**
+(abre el programa y el navegador solos) y **`actualizar.bat`** para traer la
+última versión. Las claves de API se configuran desde la propia interfaz
+(⚙ Configuración → Claves de API).
 
 Para ffmpeg en Windows: descarga `ffmpeg-release-essentials.zip` de
 https://www.gyan.dev/ffmpeg/builds/ y descomprímelo en `C:\ffmpeg`

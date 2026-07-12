@@ -262,6 +262,7 @@ async function renderProject(activeTab){
         <option value="">Rehacer desde…</option>
         ${CAT.phases.map(ph=>`<option value="${ph.name}">${esc(ph.label)}</option>`).join('')}
       </select>
+      <button class="btn sec small" title="Borrar proyecto" ${running?'disabled':''} onclick="deleteProject()">🗑</button>
     </div>
   </div>
   ${mock?`<div class="banner">⚠ <b>Modo vista previa</b> — no hay clave de API configurada (<code>ANTHROPIC_API_KEY</code>), así que el video se generará con contenido de marcador (voz silenciosa, imágenes de relleno). Tu guion <b>sí se respeta</b>. Para calidad real, añade tu clave en el archivo <code>.env</code> y elige los proveedores en ⚙ Configuración.</div>`:''}
@@ -357,6 +358,12 @@ async function renderTab(tab,p){
     </div>`;
   }
 }
+async function deleteProject(){
+  if(!confirm(`¿Borrar el proyecto «${current}» y todos sus archivos generados? Esta acción no se puede deshacer.`))return;
+  try{await api('/api/projects/'+current,{method:'DELETE'});
+    toast('Proyecto borrado');current=null;await refreshList();showNew();
+  }catch(e){toast('⚠ '+e.message)}
+}
 async function deleteAsset(id){
   if(!confirm('¿Borrar este archivo del proyecto? Se volverá a analizar el material.'))return;
   try{await api(`/api/projects/${current}/assets/${id}`,{method:'DELETE'});
@@ -408,7 +415,14 @@ function startPoll(){
       if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;}
       if(log.running&&log.phase!==lastPhase){lastPhase=log.phase;renderPhasesOnly(log.phase);}
     }
-    if(wasRunning&&!log.running){await renderProject();refreshList();toast(log.error?'⚠ '+log.error:'✅ ¡Video generado!')}
+    if(wasRunning&&!log.running){
+      if(!log.error){
+        const d=await api('/api/projects/'+current);
+        if(d.final_video)window._tab='Video';  // mostrar el resultado directamente
+      }
+      await renderProject();refreshList();
+      toast(log.error?'⚠ '+log.error:'✅ ¡Video generado!');
+    }
     wasRunning=log.running;
   },1500);
 }
