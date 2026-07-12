@@ -61,7 +61,7 @@ def api_list_projects() -> list[dict]:
 
 
 def api_create_project(body: dict) -> dict:
-    from ytstudio.phases.ingest import stage_input
+    from ytstudio.phases.ingest import add_asset, set_text_input
 
     slug = slugify(body.get("slug") or "")
     if not slug:
@@ -69,35 +69,88 @@ def api_create_project(body: dict) -> dict:
     if Project.exists(slug):
         raise ApiError(409, f"El proyecto '{slug}' ya existe.")
 
-    text = body.get("text") or None
-    file_info = body.get("file")  # {name, data_base64}
-    if not text and not file_info:
-        raise ApiError(400, "Indica un texto o adjunta un archivo.")
+    text = (body.get("text") or "").strip()
+    files = body.get("files") or []  # [{name, data_base64, category}]
+    if not text and not files:
+        raise ApiError(400, "Escribe un texto o adjunta al menos un archivo.")
 
     project = Project.create(slug)
-    source = None
-    if file_info:
-        name = Path(file_info["name"]).name  # sin rutas
-        source = project.path("input") / name
-        source.write_bytes(base64.b64decode(file_info["data_base64"]))
-        text = None
-    try:
-        meta = stage_input(project, source, text, body.get("type", "auto"))
-    except ValueError as e:
-        raise ApiError(400, str(e))
+    if text:
+        set_text_input(project, text)
+    for f in files:
+        try:
+            add_asset(project, Path(Path(f["name"]).name),
+                      f.get("category", "auto"),
+                      data=base64.b64decode(f["data_base64"]))
+        except ValueError as e:
+            raise ApiError(400, str(e))
 
     # Preset de estilo por proyecto (override del global)
     preset = body.get("style_preset")
     if preset and preset in STYLE_PRESETS:
         (project.dir / "config.yaml").write_text(
             yaml.safe_dump({"style": {"preset": preset}}, allow_unicode=True), encoding="utf-8")
-    return {"slug": slug, "input": meta}
+    return {"slug": slug, "assets": project.get("assets") or []}
+
+
+def api_add_assets(slug: str, body: dict) -> dict:
+    from ytstudio.phases.ingest import add_asset
+
+    project = Project(slug)
+    for f in body.get("files") or []:
+        try:
+            add_asset(project, Path(Path(f["name"]).name),
+                      f.get("category", "auto"),
+                      data=base64.b64decode(f["data_base64"]))
+        except ValueError as e:
+            raise ApiError(400, str(e))
+    # Material nuevo → hay que reanalizar desde el principio
+    project.reset_from("ingest", PHASE_ORDER)
+    return {"assets": project.get("assets") or []}
+
+
+def api_delete_asset(slug: str, asset_id: int) -> dict:
+    from ytstudio.phases.ingest import remove_asset
+
+    project = Project(slug)
+    remove_asset(project, asset_id)
+    project.reset_from("ingest", PHASE_ORDER)
+    return {"assets": project.get("assets") or []}
+
+
+def api_save_keys(body: dict) -> dict:
+    """Guarda claves de API en .env (merge línea a línea) y en el proceso."""
+    import os
+    allowed = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY",
+               "REPLICATE_API_TOKEN"}
+    updates = {k: v.strip() for k, v in (body.get("keys") or {}).items()
+               if k in allowed and isinstance(v, str) and v.strip()}
+    if not updates:
+        raise ApiError(400, "No hay claves para guardar.")
+
+    env_path = ROOT / ".env"
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    for key, value in updates.items():
+        pattern = re.compile(rf"^\s*{key}\s*=")
+        replaced = False
+        for i, line in enumerate(lines):
+            if pattern.match(line):
+                lines[i] = f"{key}={value}"
+                replaced = True
+                break
+        if not replaced:
+            lines.append(f"{key}={value}")
+        os.environ[key] = value
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"saved": True, "keys": key_status()}
 
 
 def api_project_detail(slug: str) -> dict:
     project = Project(slug)
     detail = _project_summary(slug)
     detail["phase_info"] = project.state.get("phases", {})
+    detail["assets"] = project.get("assets") or []
+    detail["has_text_input"] = bool(project.get("has_text_input"))
     detail["concept"] = project.get("concept")
     detail["metadata"] = project.get("metadata")
     detail["brief"] = project.get("brief")
@@ -296,6 +349,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_create_project(self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/run", path):
                 self._json(api_run(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/assets", path):
+                self._json(api_add_assets(m.group(1), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
@@ -309,8 +364,23 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             if path == "/api/config":
                 self._json(api_save_config(self._body()))
+            elif path == "/api/keys":
+                self._json(api_save_keys(self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_save_script(m.group(1), self._body()))
+            else:
+                self._json({"error": "No encontrado"}, 404)
+        except ApiError as e:
+            self._json({"error": e.message}, e.status)
+        except Exception as e:
+            traceback.print_exc()
+            self._json({"error": str(e)}, 500)
+
+    def do_DELETE(self):
+        try:
+            path = self.path.split("?")[0]
+            if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
+                self._json(api_delete_asset(m.group(1), int(m.group(2))))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:

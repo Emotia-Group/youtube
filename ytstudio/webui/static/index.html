@@ -64,6 +64,15 @@
   .radio-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
   .radio-row label{display:flex;gap:6px;align-items:center;cursor:pointer;font-size:14px}
   .radio-row input{width:auto}
+  .upcats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin:10px 0}
+  .upcat{background:var(--panel2);border:1px dashed var(--line);border-radius:10px;padding:12px}
+  .upcat b{display:block;margin-bottom:2px}
+  .upcat .hint{font-size:12px;color:var(--muted);margin-bottom:8px;display:block}
+  .upcat input[type=file]{font-size:12.5px;padding:6px}
+  .filechip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 10px;margin-top:6px;font-size:12.5px}
+  .filechip span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filechip button{background:none;color:var(--err);font-size:15px;padding:0 2px}
+  .keyfield{display:grid;grid-template-columns:220px 1fr auto;gap:10px;align-items:center;margin-bottom:10px}
 
   /* log */
   #log{background:#080a0e;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.7 ui-monospace,monospace;max-height:230px;overflow-y:auto;white-space:pre-wrap;display:none}
@@ -149,32 +158,72 @@ function showNew(){
     <div class="step"><b>2 · La IA produce</b>concepto y estilo, guion, guion gráfico por escenas, voz en off, imágenes y música.</div>
     <div class="step"><b>3 · Se monta</b>todo se une con animación, subtítulos y música: obtienes el video, la miniatura y los metadatos.</div>
   </div>
-  ${mock?`<div class="banner">⚠ <b>Modo vista previa activo</b> — sin clave de API, el resultado usa contenido de marcador (para ver cómo funciona). Añade <code>ANTHROPIC_API_KEY</code> en <code>.env</code> para calidad real.</div>`:''}
+  ${mock?`<div class="banner">⚠ <b>Modo vista previa activo</b> — sin clave de API, el resultado usa contenido de marcador (para ver cómo funciona). Configura tu clave en ⚙ Configuración para calidad real.</div>`:''}
   <div class="card">
     <label class="f"><span>1 · Nombre del proyecto</span>
       <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
-    <label class="f"><span>2 · Escribe tu idea o pega tu guion completo</span>
-      <textarea id="np-text" rows="7" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
-    <label class="f"><span>…o, en su lugar, adjunta un archivo (guion .txt/.md, nota de voz .mp3/.m4a, imagen o video de referencia)</span>
-      <input type="file" id="np-file"></label>
-    <h3>3 · Estilo del video</h3>
+    <label class="f"><span>2 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
+      <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
+    <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
+    ${uploadCatsHtml()}
+    <h3>4 · Estilo del video</h3>
     <div class="presets">${presets}</div>
     <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
   </div>`;
+  window._pending=[];
 }
+
+const UPLOAD_CATS=[
+  ['guion','📄 Guion o idea','Documentos con tu guion: PDF, Word (.docx), PowerPoint, Excel, .txt, .md','.txt,.md,.pdf,.docx,.doc,.pptx,.xlsx,.xls'],
+  ['voz','🎙 Nota de voz / narración','Audio con tu idea o narración: se transcribe como base del guion (mp3, wav, m4a…)','audio/*'],
+  ['broll','🎬 Tu B-roll (imágenes y videos)','Tus propias imágenes/videos: se usan directamente en el montaje del video','image/*,video/*'],
+  ['referencia','🎨 Referencia de estilo','Imagen o video cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*'],
+];
+function uploadCatsHtml(){
+  return `<div class="upcats">${UPLOAD_CATS.map(([k,label,hint,accept])=>`
+    <div class="upcat"><b>${label}</b><span class="hint">${hint}</span>
+      <input type="file" multiple accept="${accept}" onchange="addPending('${k}',this)">
+      <div id="chips-${k}"></div>
+    </div>`).join('')}</div>`;
+}
+function addPending(cat,input){
+  window._pending=window._pending||[];
+  for(const f of input.files){
+    if(f.size>300*1024*1024){toast(`«${f.name}» supera 300 MB — omitido`);continue}
+    window._pending.push({file:f,category:cat});
+  }
+  input.value='';
+  renderChips();
+}
+function removePending(i){window._pending.splice(i,1);renderChips()}
+function renderChips(){
+  UPLOAD_CATS.forEach(([k])=>{const el=$('#chips-'+k);if(el)el.innerHTML=''});
+  (window._pending||[]).forEach((p,i)=>{
+    const el=$('#chips-'+p.category);
+    if(el)el.insertAdjacentHTML('beforeend',
+      `<div class="filechip"><span title="${esc(p.file.name)}">${esc(p.file.name)}</span>
+       <em class="muted" style="font-size:11px">${(p.file.size/1048576).toFixed(1)} MB</em>
+       <button title="Quitar" onclick="removePending(${i})">✕</button></div>`);
+  });
+}
+function readB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f)})}
 async function createProject(){
   const slug=$('#np-slug').value.trim(), text=$('#np-text').value.trim();
-  const fileEl=$('#np-file');
-  const body={slug,text,style_preset:document.querySelector('.preset.sel')?.dataset.k};
-  if(fileEl.files.length){
-    const f=fileEl.files[0];
-    if(f.size>200*1024*1024){toast('Archivo demasiado grande (máx. 200 MB)');return}
-    const b64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f)});
-    body.file={name:f.name,data_base64:b64};
-  }
-  try{const r=await api('/api/projects',{method:'POST',body:JSON.stringify(body)});
-    toast(`Proyecto creado (input: ${r.input.type})`);openProject(r.slug);
-  }catch(e){toast('⚠ '+e.message)}
+  const pending=window._pending||[];
+  if(!slug){toast('Ponle un nombre al proyecto');return}
+  if(!text&&!pending.length){toast('Escribe una idea/guion o sube al menos un archivo');return}
+  const btn=document.querySelector('button.btn[onclick="createProject()"]');
+  if(btn){btn.disabled=true;btn.textContent='Subiendo…'}
+  try{
+    const files=[];
+    for(const p of pending){
+      files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
+    }
+    const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
+      {slug,text,files,style_preset:document.querySelector('.preset.sel')?.dataset.k})});
+    toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
+    openProject(r.slug);
+  }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}
 }
 
 /* ---------- proyecto ---------- */
@@ -197,7 +246,7 @@ async function renderProject(activeTab){
   const running=p.running;
   const mock=!CAT.keys.ANTHROPIC_API_KEY;
   const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
-  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Video','▶'],['Concepto','💡']];
+  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Video','▶'],['Concepto','💡'],['Archivos','📎']];
   const tab=activeTab||window._tab||'Guion';window._tab=tab;
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between">
@@ -274,6 +323,24 @@ async function renderTab(tab,p){
         ${p.thumbnail?`<a href="/files/${current}/${p.thumbnail}" download>miniatura.jpg</a>`:''}</div>
     </div>`;
   }
+  else if(tab==='Archivos'){
+    const catLabel={guion:'📄 Guion',voz:'🎙 Voz',broll:'🎬 B-roll propio',referencia:'🎨 Referencia'};
+    const rows=(p.assets||[]).map(a=>`
+      <div class="filechip" style="max-width:640px">
+        <span class="badge" style="margin:0">${catLabel[a.category]||a.category}</span>
+        <span title="${esc(a.name)}">${esc(a.name)}</span>
+        <button title="Borrar" onclick="deleteAsset(${a.id})">✕</button>
+      </div>`).join('');
+    el.innerHTML=`<div class="card">
+      <div class="muted" style="margin-bottom:10px">${p.has_text_input?'✔ Este proyecto también tiene texto pegado como material principal.':''}
+      Al añadir o borrar archivos se vuelve a analizar el material (los pasos se regeneran).</div>
+      ${rows||'<div class="muted">No hay archivos subidos.</div>'}
+      <h3>Añadir más archivos</h3>
+      ${uploadCatsHtml()}
+      <button class="btn small" onclick="uploadPending()">⬆ Subir seleccionados</button>
+    </div>`;
+    window._pending=[];
+  }
   else if(tab==='Concepto'){
     const c=p.concept;
     if(!c){el.innerHTML='<div class="card muted">El concepto se genera en la fase 2.</div>';return}
@@ -289,6 +356,25 @@ async function renderTab(tab,p){
       <div class="row" style="margin-top:8px">${(c.visual_style?.palette||[]).map(h=>`<span style="background:${esc(h)};width:34px;height:22px;border-radius:5px;display:inline-block" title="${esc(h)}"></span>`).join('')}</div>
     </div>`;
   }
+}
+async function deleteAsset(id){
+  if(!confirm('¿Borrar este archivo del proyecto? Se volverá a analizar el material.'))return;
+  try{await api(`/api/projects/${current}/assets/${id}`,{method:'DELETE'});
+    toast('Archivo borrado');renderProject('Archivos');refreshList();
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function uploadPending(){
+  const pending=window._pending||[];
+  if(!pending.length){toast('Selecciona archivos primero');return}
+  try{
+    const files=[];
+    for(const p of pending){
+      files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
+    }
+    await api(`/api/projects/${current}/assets`,{method:'POST',body:JSON.stringify({files})});
+    window._pending=[];
+    toast(`${files.length} archivo(s) añadidos`);renderProject('Archivos');refreshList();
+  }catch(e){toast('⚠ '+e.message)}
 }
 async function saveScript(){
   try{await api(`/api/projects/${current}/script`,{method:'PUT',body:JSON.stringify({content:$('#scripted').value})});
@@ -382,8 +468,20 @@ function showSettings(){
     </div>`).join('');
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between"><h1>⚙ Configuración</h1>
-    <button class="btn" onclick="saveSettings()">💾 Guardar configuración</button></div>
-  <p class="muted">Las claves de API se definen en el archivo <code>.env</code> (no se guardan aquí). El punto verde indica que la clave está disponible.</p><br>
+    <button class="btn" onclick="saveSettings()">💾 Guardar configuración</button></div><br>
+  <div class="card"><h2>🔑 Claves de API</h2>
+    <p class="muted" style="margin-bottom:12px">Pega aquí tus claves y pulsa Guardar — se almacenan en tu archivo local <code>.env</code> y se activan al instante. La mínima recomendada es la de Anthropic (Claude), que genera el concepto, el guion y las escenas: consíguela en <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</p>
+    ${[['ANTHROPIC_API_KEY','Anthropic (Claude) — guion, concepto, escenas'],
+       ['OPENAI_API_KEY','OpenAI — voz TTS, Whisper, imágenes'],
+       ['ELEVENLABS_API_KEY','ElevenLabs — voces premium'],
+       ['REPLICATE_API_TOKEN','Replicate — FLUX, Kling, MusicGen']].map(([k,label])=>`
+      <div class="keyfield">
+        <span style="font-size:13px">${label}</span>
+        <input type="password" id="key-${k}" placeholder="${CAT.keys[k]?'●●●●●●●● (ya configurada — escribe para reemplazar)':'pega tu clave aquí'}">
+        <span class="keydot ${CAT.keys[k]?'on':'off'}" title="${CAT.keys[k]?'configurada':'sin configurar'}"></span>
+      </div>`).join('')}
+    <button class="btn small" onclick="saveKeys()">💾 Guardar claves</button>
+  </div>
   <div class="card"><h2>Estilo por defecto</h2>
     <div class="presets" id="stylegrid">${presets}</div></div>
   <div class="card"><h2>Video</h2>
@@ -412,6 +510,20 @@ function showSettings(){
         <option value="false" ${!CFG.audio.duck?'selected':''}>Desactivado</option></select></label>
     </div></div>`;
   cats.forEach(renderModelPick);
+}
+async function saveKeys(){
+  const keys={};
+  for(const k of ['ANTHROPIC_API_KEY','OPENAI_API_KEY','ELEVENLABS_API_KEY','REPLICATE_API_TOKEN']){
+    const v=$('#key-'+k)?.value.trim();
+    if(v)keys[k]=v;
+  }
+  if(!Object.keys(keys).length){toast('Pega al menos una clave');return}
+  try{
+    const r=await api('/api/keys',{method:'PUT',body:JSON.stringify({keys})});
+    CAT.keys=r.keys;
+    toast('✅ Claves guardadas y activas');
+    showSettings();
+  }catch(e){toast('⚠ '+e.message)}
 }
 async function saveSettings(){
   const cfg=JSON.parse(JSON.stringify(CFG));

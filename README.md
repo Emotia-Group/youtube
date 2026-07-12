@@ -69,7 +69,8 @@ python -m ytstudio ui          # abre http://localhost:8765
 
 La UI web local permite hacer todo sin tocar la terminal:
 
-- **Crear proyectos** desde texto o arrastrando un archivo (guion, nota de voz, imagen, video de referencia)
+- **Crear proyectos** desde texto y/o varios archivos a la vez, organizados por categoría: **Guion** (PDF, Word .docx, PowerPoint, Excel, txt, md), **Nota de voz/narración** (mp3, wav, m4a…), **Tu B-roll** (tus propias imágenes y videos, que se usan directamente en el montaje) y **Referencia de estilo** (imagen o video que se analiza con IA). Los archivos se pueden borrar y añadir en cualquier momento desde la pestaña Archivos
+- **Configurar las claves de API desde la interfaz** (⚙ Configuración → Claves de API): se guardan en tu `.env` local y se activan al instante
 - **Elegir el estilo cinematográfico** por proyecto: documental cinematográfico, cine épico, misterio/true crime, histórico/vintage o divulgación moderna (los presets guían la dirección visual, el tono, la música y fijan 24 fps para look de cine)
 - **Ejecutar el pipeline** completo o por tramos, con progreso y log en vivo
 - **Revisar y editar el guion** antes de producir (al guardar se regeneran las fases posteriores)

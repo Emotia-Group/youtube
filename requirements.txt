@@ -3,6 +3,12 @@ anthropic>=0.116.0        # LLM (concepto, guion, escenas, metadatos, visión)
 pyyaml>=6.0
 pillow>=10.0              # miniaturas y placeholders
 
+# Lectura de documentos de guion (PDF, Word, PowerPoint, Excel)
+pypdf>=4.0
+python-docx>=1.1
+python-pptx>=0.6.23
+openpyxl>=3.1
+
 # Proveedores opcionales (instala solo los que uses)
 openai>=1.40              # TTS (tts-1/gpt-4o-mini-tts), STT (whisper-1), imágenes (gpt-image-1)
 elevenlabs>=1.6           # TTS de alta calidad multilingüe
