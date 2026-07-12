@@ -45,7 +45,23 @@ a un *mock* (guion de ejemplo, voz silenciosa con duración realista, tarjetas
 placeholder, música sintética) para que puedas validar el pipeline y el
 montaje de punta a punta antes de gastar en generación real.
 
-## Uso
+## Interfaz gráfica (recomendada)
+
+```bash
+python -m ytstudio ui          # abre http://localhost:8765
+```
+
+La UI web local permite hacer todo sin tocar la terminal:
+
+- **Crear proyectos** desde texto o arrastrando un archivo (guion, nota de voz, imagen, video de referencia)
+- **Elegir el estilo cinematográfico** por proyecto: documental cinematográfico, cine épico, misterio/true crime, histórico/vintage o divulgación moderna (los presets guían la dirección visual, el tono, la música y fijan 24 fps para look de cine)
+- **Ejecutar el pipeline** completo o por tramos, con progreso y log en vivo
+- **Revisar y editar el guion** antes de producir (al guardar se regeneran las fases posteriores)
+- **Ver el storyboard** escena por escena: imagen de B-roll, narración, prompt, animación y audio de la voz
+- **Previsualizar el video final**, la miniatura y los metadatos, con descargas directas
+- **Módulo de integraciones** (⚙ Configuración): selecciona proveedor y modelo para cada categoría — Claude (Opus/Sonnet/Haiku), ElevenLabs/OpenAI/Edge TTS con selector de voces en español, FLUX/gpt-image-1/Recraft/SD 3.5 para imágenes, Kling/Wan/Hailuo/LTX para video generativo, MusicGen/biblioteca para música — con indicador de qué claves de API están disponibles
+
+## Uso por línea de comandos
 
 ```bash
 # 1) Crear un proyecto desde cualquier input

@@ -85,6 +85,11 @@ def cmd_phases(args) -> None:
         print(f"  {i:>2}. {name:<10} {desc}")
 
 
+def cmd_ui(args) -> None:
+    from ytstudio.webui.server import serve
+    serve(port=args.port)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ytstudio",
@@ -119,6 +124,10 @@ def main() -> None:
 
     p_phases = sub.add_parser("phases", help="Listar las fases del pipeline")
     p_phases.set_defaults(func=cmd_phases)
+
+    p_ui = sub.add_parser("ui", help="Abrir la interfaz web local")
+    p_ui.add_argument("--port", type=int, default=8765)
+    p_ui.set_defaults(func=cmd_ui)
 
     args = parser.parse_args()
     args.func(args)

@@ -1,58 +1,45 @@
-# Configuración global del pipeline. Cada proyecto puede sobreescribirla
-# con un config.yaml propio dentro de su carpeta.
-
-language: es                 # idioma del video (guion, VO, subtítulos, metadatos)
-
+language: es
+style:
+  preset: documental_cinematografico
 video:
   width: 1920
   height: 1080
-  fps: 30
-  target_minutes: 10         # duración objetivo del video largo
-  scene_padding: 0.35        # silencio (s) tras la narración de cada escena
-  transition: fade           # fade | cut
-  burn_subtitles: false      # true = subtítulos quemados; false = pista soft (activable en YouTube)
-
+  fps: 24
+  target_minutes: 10
+  scene_padding: 0.35
+  transition: fade
+  burn_subtitles: false
 providers:
-  # llm: anthropic | mock
   llm:
     name: anthropic
     model: claude-opus-4-8
-  # tts: elevenlabs | openai | edge | mock
   tts:
     name: mock
-    voice: ""                # ej. elevenlabs voice_id, "onyx" (openai), "es-MX-JorgeNeural" (edge)
-  # stt (notas de voz / video de referencia): openai | mock
+    voice: ''
   stt:
     name: mock
-  # images: openai | replicate | mock
   images:
     name: mock
-    model: black-forest-labs/flux-1.1-pro   # solo replicate
-    size: "1792x1024"                        # solo openai
-  # video generativo por escena: replicate | none
-  # "none" = B-roll en imagen con animación Ken Burns (recomendado para videos largos)
+    model: black-forest-labs/flux-1.1-pro
+    size: 1792x1024
   videogen:
     name: none
     model: kwaivgi/kling-v1.6-standard
-    max_scenes: 0            # nº de escenas clave a generar en video (0 = ninguna)
-  # music: library | replicate | mock
+    max_scenes: 0
   music:
     name: mock
     model: meta/musicgen
     library_dir: assets/music
-
 audio:
-  music_db: -21              # volumen de la música bajo la voz
-  duck: true                 # ducking automático de música bajo la narración
-  vo_lufs: -16               # normalización de la voz
-
+  music_db: -21
+  duck: true
+  vo_lufs: -16
 subtitles:
   max_chars_per_line: 42
   max_lines: 2
   font: DejaVu Sans
   font_size: 54
-
 publish:
-  enabled: false             # true = subir a YouTube al final (requiere OAuth)
-  privacy: private           # private | unlisted | public
-  category_id: "27"          # 27 = Educación
+  enabled: false
+  privacy: private
+  category_id: '27'

@@ -39,4 +39,10 @@ def load_config(project_dir: Path | None = None) -> dict:
         local = project_dir / "config.yaml"
         if local.exists():
             cfg = _deep_merge(cfg, yaml.safe_load(local.read_text()) or {})
+
+    # El preset de estilo puede fijar los fps del render (ej. 24 para cine)
+    from ytstudio.catalog import get_style_preset
+    preset = get_style_preset(cfg)
+    if preset and preset.get("fps"):
+        cfg.setdefault("video", {})["fps"] = preset["fps"]
     return cfg

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ytstudio — creador de videos</title>
+<style>
+  :root{
+    --bg:#0c0e13; --panel:#141821; --panel2:#1a1f2b; --line:#262d3d;
+    --text:#e8eaf0; --muted:#8b93a7; --accent:#f0b429; --accent2:#e8590c;
+    --ok:#37b24d; --err:#f03e3e; --run:#4dabf7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;height:100vh;display:flex;overflow:hidden}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px}
+  input,textarea,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;width:100%}
+  input:focus,textarea:focus,select:focus{outline:1px solid var(--accent)}
+  ::placeholder{color:#5a6178}
+  h1{font-size:19px} h2{font-size:16px;margin-bottom:10px} h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
+  .btn{background:var(--accent);color:#141414;font-weight:600;padding:10px 18px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .btn.small{padding:6px 12px;font-size:13px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* sidebar */
+  #sidebar{width:250px;min-width:250px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
+  #logo{display:flex;align-items:center;gap:9px;margin-bottom:20px;padding:0 4px}
+  #logo .clap{font-size:24px}
+  #logo small{display:block;color:var(--muted);font-size:11px}
+  .navbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;color:var(--text);padding:9px 10px;border-radius:8px;margin-bottom:4px}
+  .navbtn:hover{background:var(--panel2)}
+  .navbtn.active{background:var(--panel2);color:var(--accent)}
+  #projlist{flex:1;overflow-y:auto;margin-top:6px}
+  .proj{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px}
+  .proj:hover{background:var(--panel2)}
+  .proj.active{background:var(--panel2);outline:1px solid var(--line)}
+  .proj .name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .proj .bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+  .proj .bar i{display:block;height:100%;background:var(--accent)}
+  .proj.running .bar i{background:var(--run)}
+
+  /* main */
+  #main{flex:1;overflow-y:auto;padding:26px 34px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .muted{color:var(--muted);font-size:13px}
+  label.f{display:block;margin-bottom:12px}
+  label.f span{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+
+  /* fases */
+  #phases{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+  .phase{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .phase.done{border-color:var(--ok);color:var(--ok)}
+  .phase.failed{border-color:var(--err);color:var(--err)}
+  .phase.running{border-color:var(--run);color:var(--run);animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{opacity:.5}}
+
+  /* log */
+  #log{background:#080a0e;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.7 ui-monospace,monospace;max-height:230px;overflow-y:auto;white-space:pre-wrap;display:none}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tab{background:none;color:var(--muted);padding:9px 16px;border-radius:8px 8px 0 0;font-weight:600}
+  .tab.active{color:var(--accent);background:var(--panel)}
+
+  /* storyboard */
+  .scene{display:flex;gap:16px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  .scene img{width:240px;height:135px;object-fit:cover;border-radius:8px;background:#000}
+  .scene .num{color:var(--accent);font-weight:700;font-size:13px}
+  .scene audio{width:100%;height:32px;margin-top:8px}
+  .badge{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:11.5px;color:var(--muted);margin-left:6px}
+
+  /* settings */
+  .provcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+  .keydot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+  .keydot.on{background:var(--ok)} .keydot.off{background:var(--err)}
+  .preset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;background:var(--panel2)}
+  .preset.sel{border-color:var(--accent);outline:1px solid var(--accent)}
+  .preset b{display:block;margin-bottom:3px}
+  .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+
+  #toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:12px 18px;border-radius:10px;display:none;z-index:50}
+  video{width:100%;max-height:520px;border-radius:10px;background:#000}
+  textarea#scripted{min-height:420px;font:14px/1.7 ui-monospace,monospace}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
+  <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
+  <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
+  <h3 style="padding:0 6px">Proyectos</h3>
+  <div id="projlist"></div>
+</div>
+
+<div id="main"></div>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=t=>(t??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let CAT=null, CFG=null, current=null, pollTimer=null, view='home';
+
+async function api(path,opts={}){
+  const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||r.statusText);
+  return data;
+}
+function toast(msg,ms=2800){const t=$('#toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',ms)}
+
+/* ---------- sidebar ---------- */
+async function refreshList(){
+  const projects=await api('/api/projects');
+  $('#projlist').innerHTML=projects.map(p=>`
+    <div class="proj ${p.slug===current?'active':''} ${p.running?'running':''}" onclick="openProject('${p.slug}')">
+      <div class="name">${p.running?'⏳ ':''}${esc(p.slug)}</div>
+      <div class="muted">${p.done}/${p.total} fases</div>
+      <div class="bar"><i style="width:${100*p.done/p.total}%"></i></div>
+    </div>`).join('')||'<div class="muted" style="padding:8px">Sin proyectos aún</div>';
+}
+
+/* ---------- nuevo proyecto ---------- */
+function showNew(){
+  view='new';current=null;stopPoll();refreshList();
+  const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
+    <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
+         onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
+      <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
+    </div>`).join('');
+  $('#main').innerHTML=`
+  <h1>Nuevo proyecto</h1><br>
+  <div class="card">
+    <label class="f"><span>Nombre del video/proyecto</span>
+      <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
+    <label class="f"><span>Tu input — escribe la idea o el guion completo…</span>
+      <textarea id="np-text" rows="6" placeholder="Ej.: Quiero un documental sobre los fareros que salvaron miles de vidas en el siglo XIX…"></textarea></label>
+    <label class="f"><span>…o adjunta un archivo (guion .txt/.md, nota de voz, imagen o video de referencia)</span>
+      <input type="file" id="np-file"></label>
+    <h3>Estilo cinematográfico</h3>
+    <div class="presets">${presets}</div>
+    <br><button class="btn" onclick="createProject()">Crear proyecto</button>
+  </div>`;
+}
+async function createProject(){
+  const slug=$('#np-slug').value.trim(), text=$('#np-text').value.trim();
+  const fileEl=$('#np-file');
+  const body={slug,text,style_preset:document.querySelector('.preset.sel')?.dataset.k};
+  if(fileEl.files.length){
+    const f=fileEl.files[0];
+    if(f.size>200*1024*1024){toast('Archivo demasiado grande (máx. 200 MB)');return}
+    const b64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f)});
+    body.file={name:f.name,data_base64:b64};
+  }
+  try{const r=await api('/api/projects',{method:'POST',body:JSON.stringify(body)});
+    toast(`Proyecto creado (input: ${r.input.type})`);openProject(r.slug);
+  }catch(e){toast('⚠ '+e.message)}
+}
+
+/* ---------- proyecto ---------- */
+async function openProject(slug){
+  view='project';current=slug;refreshList();
+  await renderProject();startPoll();
+}
+async function renderProject(activeTab){
+  const p=await api('/api/projects/'+current);
+  const running=p.running;
+  const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
+  const phaseChips=CAT.phases.map(ph=>{
+    let st=p.phases[ph.name];
+    if(running&&st==='pending')st='';
+    const icon={done:'✔',failed:'✖'}[st]||'·';
+    return `<div class="phase ${st}${running&&st==='pending'?' running':''}" title="${esc(ph.desc)}">${icon} ${ph.name}</div>`;
+  }).join('');
+  const tabs=['Guion','Storyboard','Video','Concepto'];
+  const tab=activeTab||window._tab||'Guion';window._tab=tab;
+  $('#main').innerHTML=`
+  <div class="row" style="justify-content:space-between">
+    <h1>🎬 ${esc(current)}</h1>
+    <div class="row">
+      <select id="run-to" style="width:auto">
+        <option value="">Ejecutar todo</option>
+        <option value="script">Solo hasta el guion (revisar antes)</option>
+        <option value="scenes">Hasta el storyboard</option>
+      </select>
+      <button class="btn" id="btn-run" ${running?'disabled':''} onclick="runPipeline()">${running?'Ejecutando…':'▶ Ejecutar'}</button>
+      <select id="run-from" style="width:auto" onchange="rerunFrom(this.value)" ${running?'disabled':''}>
+        <option value="">Re-ejecutar desde…</option>
+        ${CAT.phases.map(ph=>`<option value="${ph.name}">${ph.name}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+  <div id="phases">${phaseChips}</div>
+  ${p.total_duration?`<div class="muted">Duración: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
+  ${failed?`<div class="card" style="border-color:var(--err)">✖ Falló la fase <b>${failed[0]}</b>: ${esc(p.phase_info[failed[0]]?.error||'')}</div>`:''}
+  <pre id="log"></pre><br>
+  <div class="tabs">${tabs.map(t=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${t}</button>`).join('')}</div>
+  <div id="tabbody"></div>`;
+  if(running){$('#log').style.display='block'}
+  renderTab(tab,p);
+}
+function switchTab(t){window._tab=t;renderProject(t)}
+
+async function renderTab(tab,p){
+  const el=$('#tabbody');
+  if(tab==='Guion'){
+    if(!p.has_script){el.innerHTML='<div class="card muted">Aún no hay guion. Ejecuta el pipeline (puedes elegir "Solo hasta el guion" para revisarlo antes de producir).</div>';return}
+    const s=await api(`/api/projects/${current}/script`);
+    el.innerHTML=`<div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <span class="muted">Edita libremente — al guardar se regeneran las fases posteriores.</span>
+        <button class="btn small" onclick="saveScript()">💾 Guardar guion</button></div>
+      <textarea id="scripted">${esc(s.content)}</textarea></div>`;
+  }
+  else if(tab==='Storyboard'){
+    if(!p.scenes){el.innerHTML='<div class="card muted">Aún no hay escenas (fase «scenes»).</div>';return}
+    el.innerHTML=p.scenes.map(s=>`
+      <div class="scene">
+        ${s.broll_image?`<img src="/files/${current}/06_broll/${s.broll_image}" loading="lazy">`:'<div style="width:240px" class="muted">sin imagen aún</div>'}
+        <div style="flex:1">
+          <div class="num">ESCENA ${s.id} — ${esc(s.section)}
+            <span class="badge">${s.animation}</span><span class="badge">${s.broll_type}</span>
+            ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}</div>
+          <p style="margin:6px 0">${esc(s.narration)}</p>
+          <div class="muted" style="font-size:12px">🎨 ${esc(s.broll_prompt)}</div>
+          ${s.on_screen_text?`<div class="muted">🔤 Texto en pantalla: <b>${esc(s.on_screen_text)}</b></div>`:''}
+          ${s.vo_file?`<audio controls preload="none" src="/files/${current}/05_voiceover/${s.vo_file}"></audio>`:''}
+        </div>
+      </div>`).join('');
+  }
+  else if(tab==='Video'){
+    if(!p.final_video){el.innerHTML='<div class="card muted">El video final aparecerá aquí al terminar la fase de montaje.</div>';return}
+    const m=p.metadata_full||{};
+    el.innerHTML=`<div class="card">
+      <video controls src="/files/${current}/${p.final_video}"></video>
+      <div class="row" style="margin-top:14px;align-items:flex-start">
+        ${p.thumbnail?`<div><h3>Miniatura</h3><img src="/files/${current}/${p.thumbnail}" style="width:320px;border-radius:8px"></div>`:''}
+        <div style="flex:1;min-width:280px">
+          <h3>Metadatos</h3>
+          <b>${esc(m.title||'')}</b>
+          <p class="muted" style="white-space:pre-wrap;max-height:180px;overflow-y:auto">${esc(m.description||'')}</p>
+          <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>
+        </div>
+      </div>
+      <br><div class="muted">Archivos: <a href="/files/${current}/${p.final_video}" download>video_final.mp4</a> ·
+        <a href="/files/${current}/08_subtitles/subtitulos.srt" download>subtitulos.srt</a> ·
+        ${p.thumbnail?`<a href="/files/${current}/${p.thumbnail}" download>miniatura.jpg</a>`:''}</div>
+    </div>`;
+  }
+  else if(tab==='Concepto'){
+    const c=p.concept;
+    if(!c){el.innerHTML='<div class="card muted">El concepto se genera en la fase 2.</div>';return}
+    el.innerHTML=`<div class="card">
+      <h3>Títulos propuestos</h3>${(c.title_options||[]).map(t=>`<div>• ${esc(t)}</div>`).join('')}
+      <div class="grid2" style="margin-top:14px">
+        <div><h3>Ángulo</h3>${esc(c.angle)}</div><div><h3>Audiencia</h3>${esc(c.audience)}</div>
+        <div><h3>Tono</h3>${esc(c.tone)}</div><div><h3>Música</h3>${esc(c.music_direction?.mood)} — ${esc(c.music_direction?.description)}</div>
+      </div>
+      <h3>Estructura</h3>${(c.structure||[]).map((s,i)=>`<div>${i+1}. ${esc(s)}</div>`).join('')}
+      <h3>Estilo visual</h3><p>${esc(c.visual_style?.description)}</p>
+      <div class="muted">Prefijo de prompts: <code>${esc(c.visual_style?.prompt_prefix)}</code></div>
+      <div class="row" style="margin-top:8px">${(c.visual_style?.palette||[]).map(h=>`<span style="background:${esc(h)};width:34px;height:22px;border-radius:5px;display:inline-block" title="${esc(h)}"></span>`).join('')}</div>
+    </div>`;
+  }
+}
+async function saveScript(){
+  try{await api(`/api/projects/${current}/script`,{method:'PUT',body:JSON.stringify({content:$('#scripted').value})});
+    toast('Guion guardado — las fases posteriores se regenerarán');renderProject('Guion');
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function runPipeline(){
+  try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({to:$('#run-to').value||null})});
+    startPoll();renderProject();
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function rerunFrom(phase){
+  if(!phase)return;
+  if(!confirm(`Re-ejecutar desde «${phase}»? Se invalidan las fases posteriores.`))return;
+  try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:phase})});
+    startPoll();renderProject();
+  }catch(e){toast('⚠ '+e.message)}
+}
+
+/* ---------- polling ---------- */
+function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
+function startPoll(){
+  stopPoll();
+  let lastCount=-1,wasRunning=false;
+  pollTimer=setInterval(async()=>{
+    if(view!=='project'||!current){stopPoll();return}
+    const log=await api(`/api/projects/${current}/log`);
+    const el=$('#log');
+    if(el&&(log.running||log.lines.length)){
+      el.style.display='block';
+      if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;
+        if(log.running)renderPhasesOnly();}
+    }
+    if(wasRunning&&!log.running){await renderProject();refreshList();toast(log.error?'⚠ '+log.error:'✅ Pipeline terminado')}
+    wasRunning=log.running;
+  },1800);
+}
+async function renderPhasesOnly(){
+  const p=await api('/api/projects/'+current);
+  const chips=CAT.phases.map(ph=>{
+    const st=p.phases[ph.name];const icon={done:'✔',failed:'✖'}[st]||'·';
+    return `<div class="phase ${st}" title="${esc(ph.desc)}">${icon} ${ph.name}</div>`;}).join('');
+  const el=$('#phases');if(el)el.innerHTML=chips;
+}
+
+/* ---------- configuración ---------- */
+function provCard(catKey){
+  const cat=CAT.catalog[catKey];
+  const cur=CFG.providers[catKey]||{};
+  const opts=cat.options.map(o=>{
+    const key=o.env?`<span class="keydot ${CAT.keys[o.env]?'on':'off'}"></span><span class="muted" style="font-size:12px">${o.env}${CAT.keys[o.env]?'':' (no definida)'}</span>`:'<span class="keydot on"></span><span class="muted" style="font-size:12px">sin clave</span>';
+    return `<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px;cursor:pointer">
+      <input type="radio" name="prov-${catKey}" value="${o.name}" ${cur.name===o.name?'checked':''} style="width:auto" onchange="renderModelPick('${catKey}')">
+      <b>${esc(o.label)}</b> ${key}
+    </label><div class="muted" style="margin:0 0 10px 24px;font-size:12.5px">${esc(o.notes||'')}</div>`;
+  }).join('');
+  return `<div class="provcard" id="cat-${catKey}">
+    <h2>${esc(cat.title)}</h2>${opts}
+    <div id="models-${catKey}"></div>
+  </div>`;
+}
+function renderModelPick(catKey){
+  const cat=CAT.catalog[catKey];
+  const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
+  const opt=cat.options.find(o=>o.name===sel)||{};
+  const cur=CFG.providers[catKey]||{};
+  let html='';
+  const items=opt.models||opt.voices||[];
+  if(items.length){
+    const field=opt.voices?'voice':'model';
+    const curVal=cur[field]||items[0].id;
+    html+=`<label class="f"><span>${opt.voices?'Voz':'Modelo'}</span>
+      <select id="pick-${catKey}" onchange="$('#free-${catKey}').value=this.value">
+        ${items.map(m=>`<option value="${m.id}" ${m.id===curVal?'selected':''}>${esc(m.label)}</option>`).join('')}
+      </select></label>
+      <label class="f"><span>o escribe un ${opt.voices?'voice_id':'modelo'} personalizado</span>
+      <input id="free-${catKey}" value="${esc(curVal)}"></label>`;
+  }
+  (cat.extra_fields||[]).forEach(f=>{
+    html+=`<label class="f"><span>${esc(f.label)}</span>
+      <input type="number" id="extra-${catKey}-${f.key}" value="${cur[f.key]??0}">
+      <span class="muted" style="font-size:12px">${esc(f.hint||'')}</span></label>`;
+  });
+  $('#models-'+catKey).innerHTML=html;
+}
+function showSettings(){
+  view='settings';current=null;stopPoll();refreshList();
+  const cats=Object.keys(CAT.catalog);
+  const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
+    <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
+      onclick="document.querySelectorAll('#stylegrid .preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
+      <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
+      ${p.fps?`<span class="badge">${p.fps} fps</span>`:''}
+    </div>`).join('');
+  $('#main').innerHTML=`
+  <div class="row" style="justify-content:space-between"><h1>⚙ Configuración</h1>
+    <button class="btn" onclick="saveSettings()">💾 Guardar configuración</button></div>
+  <p class="muted">Las claves de API se definen en el archivo <code>.env</code> (no se guardan aquí). El punto verde indica que la clave está disponible.</p><br>
+  <div class="card"><h2>Estilo por defecto</h2>
+    <div class="presets" id="stylegrid">${presets}</div></div>
+  <div class="card"><h2>Video</h2>
+    <div class="grid2">
+      <label class="f"><span>Duración objetivo (minutos)</span><input type="number" id="v-min" value="${CFG.video.target_minutes}"></label>
+      <label class="f"><span>Resolución</span>
+        <select id="v-res">
+          <option value="1920x1080" ${CFG.video.width===1920?'selected':''}>1920×1080 (Full HD)</option>
+          <option value="2560x1440" ${CFG.video.width===2560?'selected':''}>2560×1440 (2K)</option>
+          <option value="3840x2160" ${CFG.video.width===3840?'selected':''}>3840×2160 (4K)</option>
+        </select></label>
+      <label class="f"><span>Subtítulos</span>
+        <select id="v-subs">
+          <option value="false" ${!CFG.video.burn_subtitles?'selected':''}>Pista activable (recomendado para YouTube)</option>
+          <option value="true" ${CFG.video.burn_subtitles?'selected':''}>Quemados en el video</option>
+        </select></label>
+      <label class="f"><span>Idioma</span><input id="v-lang" value="${esc(CFG.language)}"></label>
+    </div></div>
+  <h3 style="font-size:15px">Módulo de integraciones — modelos de IA</h3>
+  ${cats.map(provCard).join('')}
+  <div class="card"><h2>Audio</h2>
+    <div class="grid2">
+      <label class="f"><span>Volumen de música (dB bajo la voz)</span><input type="number" id="a-db" value="${CFG.audio.music_db}"></label>
+      <label class="f"><span>Ducking automático</span>
+        <select id="a-duck"><option value="true" ${CFG.audio.duck?'selected':''}>Activado</option>
+        <option value="false" ${!CFG.audio.duck?'selected':''}>Desactivado</option></select></label>
+    </div></div>`;
+  cats.forEach(renderModelPick);
+}
+async function saveSettings(){
+  const cfg=JSON.parse(JSON.stringify(CFG));
+  cfg.style={preset:document.querySelector('#stylegrid .preset.sel')?.dataset.k||'ninguno'};
+  cfg.video.target_minutes=+$('#v-min').value||10;
+  const [w,h]=$('#v-res').value.split('x').map(Number);
+  cfg.video.width=w;cfg.video.height=h;
+  cfg.video.burn_subtitles=$('#v-subs').value==='true';
+  cfg.language=$('#v-lang').value||'es';
+  cfg.audio.music_db=+$('#a-db').value; cfg.audio.duck=$('#a-duck').value==='true';
+  for(const catKey of Object.keys(CAT.catalog)){
+    const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
+    if(!sel)continue;
+    cfg.providers[catKey]=cfg.providers[catKey]||{};
+    cfg.providers[catKey].name=sel;
+    const opt=CAT.catalog[catKey].options.find(o=>o.name===sel)||{};
+    const free=$(`#free-${catKey}`);
+    if(free&&free.value){cfg.providers[catKey][opt.voices?'voice':'model']=free.value}
+    (CAT.catalog[catKey].extra_fields||[]).forEach(f=>{
+      const el=$(`#extra-${catKey}-${f.key}`);if(el)cfg.providers[catKey][f.key]=+el.value||0;
+    });
+  }
+  try{await api('/api/config',{method:'PUT',body:JSON.stringify({config:cfg})});
+    CFG=cfg;toast('✅ Configuración guardada');
+  }catch(e){toast('⚠ '+e.message)}
+}
+
+/* ---------- init ---------- */
+(async function(){
+  const data=await api('/api/config');
+  CAT=data;CFG=data.config;
+  await refreshList();
+  const projects=await api('/api/projects');
+  if(projects.length)openProject(projects[0].slug);else showNew();
+})();
+</script>
+</body>
+</html>

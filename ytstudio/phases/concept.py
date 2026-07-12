@@ -42,10 +42,13 @@ CONCEPT_SCHEMA = {
 
 
 def run(project, cfg) -> None:
+    from ytstudio.catalog import get_style_preset
+
     llm = get_llm(cfg)
     brief = project.get("brief")
     lang = cfg.get("language", "es")
     target = cfg["video"].get("target_minutes", 10)
+    preset = get_style_preset(cfg)
 
     from pathlib import Path
     frames = [Path(f) for f in brief.get("reference_frames", []) if Path(f).exists()]
@@ -72,6 +75,14 @@ def run(project, cfg) -> None:
         "y description\n"
         f"- duration_minutes: duración final recomendada (cercana a {target})"
     )
+    if preset:
+        prompt += (
+            f"\n\nEl creador eligió el preset de estilo «{preset['label']}». "
+            "Adáptalo al tema del video (no lo copies literal):\n"
+            f"- Dirección visual: {preset['visual_direction']}\n"
+            f"- Tono de narración: {preset['tone']}\n"
+            f"- Dirección musical: {preset['music']}"
+        )
     if frames:
         prompt += ("\n\nHay imágenes de referencia adjuntas: el visual_style debe "
                    "ser coherente con ellas.")
