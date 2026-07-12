@@ -25,6 +25,12 @@ PHASE_ORDER = [name for name, _, _ in PHASES]
 
 def run_pipeline(project, cfg, *, from_phase: str | None = None,
                  to_phase: str | None = None, log=print) -> None:
+    # Verificar ffmpeg desde el inicio (en Windows también lo busca en
+    # C:\ffmpeg\bin y lo añade al PATH) — mejor un error claro ahora que
+    # un fallo críptico en mitad del pipeline.
+    from ytstudio.utils.media import require_ffmpeg
+    require_ffmpeg()
+
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 

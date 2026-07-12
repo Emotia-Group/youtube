@@ -90,7 +90,7 @@ def run(project, cfg) -> None:
     concept = llm.complete_json(system, prompt, schema=CONCEPT_SCHEMA,
                                 images=frames or None, purpose="concept")
     project.path("concept", "concept.json").write_text(
-        json.dumps(concept, ensure_ascii=False, indent=2))
+        json.dumps(concept, ensure_ascii=False, indent=2), encoding="utf-8")
     project.set("concept", concept)
 
     # Resumen legible para revisión humana
@@ -106,4 +106,4 @@ def run(project, cfg) -> None:
            f"Prefijo de prompts: `{concept['visual_style']['prompt_prefix']}`", "",
            "## Música", f"{concept['music_direction']['mood']} — "
            f"{concept['music_direction']['description']}"]
-    project.path("concept", "concept.md").write_text("\n".join(md))
+    project.path("concept", "concept.md").write_text("\n".join(md), encoding="utf-8")

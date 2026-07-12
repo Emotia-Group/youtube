@@ -37,7 +37,8 @@ audio:
 subtitles:
   max_chars_per_line: 42
   max_lines: 2
-  font: DejaVu Sans
+  font: Arial          # familia para subtítulos quemados (Arial existe en Win/Mac;
+                       # en Linux fontconfig la sustituye automáticamente)
   font_size: 54
 publish:
   enabled: false

@@ -61,11 +61,10 @@ class MockImages:
             color = tuple(int(a + (b - a) * t) for a, b in zip(top, bottom))
             draw.line([(0, y), (self.width, y)], fill=color)
 
-        try:
-            font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 44)
-        except OSError:
-            font = ImageFont.load_default()
+        from ytstudio.utils.media import find_font
+        font_path = find_font(bold=True)
+        font = (ImageFont.truetype(font_path, 44) if font_path
+                else ImageFont.load_default(size=44))
         text = "[B-ROLL] " + (prompt[:90] + "…" if len(prompt) > 90 else prompt)
         draw.text((60, self.height // 2 - 30), text, fill=(235, 235, 235), font=font)
         img.save(out, quality=90)

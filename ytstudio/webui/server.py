@@ -90,7 +90,7 @@ def api_create_project(body: dict) -> dict:
     preset = body.get("style_preset")
     if preset and preset in STYLE_PRESETS:
         (project.dir / "config.yaml").write_text(
-            yaml.safe_dump({"style": {"preset": preset}}, allow_unicode=True))
+            yaml.safe_dump({"style": {"preset": preset}}, allow_unicode=True), encoding="utf-8")
     return {"slug": slug, "input": meta}
 
 
@@ -107,14 +107,14 @@ def api_project_detail(slug: str) -> dict:
 
     scenes_file = project.dir / DIRS["scenes"] / "scenes.json"
     if scenes_file.exists():
-        detail["scenes"] = json.loads(scenes_file.read_text())["scenes"]
+        detail["scenes"] = json.loads(scenes_file.read_text(encoding="utf-8"))["scenes"]
     final = project.dir / DIRS["final"] / "video_final.mp4"
     detail["final_video"] = f"{DIRS['final']}/video_final.mp4" if final.exists() else None
     thumb = project.dir / DIRS["final"] / "miniatura.jpg"
     detail["thumbnail"] = f"{DIRS['final']}/miniatura.jpg" if thumb.exists() else None
     meta_file = project.dir / DIRS["final"] / "metadata.json"
     if meta_file.exists():
-        detail["metadata_full"] = json.loads(meta_file.read_text())
+        detail["metadata_full"] = json.loads(meta_file.read_text(encoding="utf-8"))
     return detail
 
 
@@ -154,13 +154,13 @@ def api_get_script(slug: str) -> dict:
     path = Project(slug).dir / DIRS["script"] / "guion.md"
     if not path.exists():
         raise ApiError(404, "Aún no hay guion (ejecuta hasta la fase 'script').")
-    return {"content": path.read_text()}
+    return {"content": path.read_text(encoding="utf-8")}
 
 
 def api_save_script(slug: str, body: dict) -> dict:
     project = Project(slug)
     path = project.path("script", "guion.md")
-    path.write_text(body.get("content", ""))
+    path.write_text(body.get("content", ""), encoding="utf-8")
     # Editar el guion invalida las fases posteriores
     project.reset_from("scenes", PHASE_ORDER)
     project.mark_phase("script", "done", edited=True)
@@ -182,7 +182,7 @@ def api_save_config(body: dict) -> dict:
     if not isinstance(cfg, dict):
         raise ApiError(400, "Config inválida.")
     (ROOT / "config.yaml").write_text(
-        yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False))
+        yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return {"saved": True}
 
 

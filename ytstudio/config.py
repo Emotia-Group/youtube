@@ -21,7 +21,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 def load_dotenv(path: Path = ROOT / ".env") -> None:
     if not path.exists():
         return
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -34,11 +34,11 @@ def load_dotenv(path: Path = ROOT / ".env") -> None:
 def load_config(project_dir: Path | None = None) -> dict:
     load_dotenv()
     cfg_path = ROOT / "config.yaml"
-    cfg = yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}
+    cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
     if project_dir:
         local = project_dir / "config.yaml"
         if local.exists():
-            cfg = _deep_merge(cfg, yaml.safe_load(local.read_text()) or {})
+            cfg = _deep_merge(cfg, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
 
     # El preset de estilo puede fijar los fps del render (ej. 24 para cine)
     from ytstudio.catalog import get_style_preset

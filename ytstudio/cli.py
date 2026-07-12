@@ -91,6 +91,12 @@ def cmd_ui(args) -> None:
 
 
 def main() -> None:
+    # En Windows, la salida redirigida usa cp1252 y los emojis del log
+    # romperían con UnicodeEncodeError — forzamos UTF-8 tolerante.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(
         prog="ytstudio",
         description="Sistema inteligente de creación de videos largos para YouTube.")

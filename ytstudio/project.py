@@ -36,7 +36,7 @@ class Project:
         self.state_path = self.dir / "project.json"
         self.state: dict = {"slug": slug, "phases": {}, "data": {}}
         if self.state_path.exists():
-            self.state = json.loads(self.state_path.read_text())
+            self.state = json.loads(self.state_path.read_text(encoding="utf-8"))
 
     # --- rutas ---
     def path(self, key: str, *parts: str) -> Path:
@@ -49,7 +49,7 @@ class Project:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.state_path.write_text(
             json.dumps(self.state, ensure_ascii=False, indent=2)
-        )
+        , encoding="utf-8")
 
     def phase_status(self, phase: str) -> str:
         return self.state["phases"].get(phase, {}).get("status", "pending")

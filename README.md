@@ -31,7 +31,7 @@ INPUT (guion | idea | nota de voz | imagen | video de referencia)
 
 ```bash
 # Requisitos del sistema
-sudo apt install ffmpeg
+sudo apt install ffmpeg        # Linux  ·  brew install ffmpeg (macOS)
 
 # Dependencias Python (mínimas: anthropic, pyyaml, pillow)
 pip install -r requirements.txt
@@ -39,6 +39,22 @@ pip install -r requirements.txt
 # Claves de API
 cp .env.example .env   # y completa las claves de los proveedores que uses
 ```
+
+### Windows
+
+```powershell
+git clone https://github.com/Emotia-Group/youtube.git
+cd youtube
+py -m pip install -r requirements.txt
+copy .env.example .env
+py -m ytstudio ui
+```
+
+Para ffmpeg en Windows: descarga `ffmpeg-release-essentials.zip` de
+https://www.gyan.dev/ffmpeg/builds/ y descomprímelo en `C:\ffmpeg`
+(debe existir `C:\ffmpeg\bin\ffmpeg.exe`). No hace falta tocar el PATH:
+ytstudio lo detecta ahí automáticamente. En Windows los comandos usan
+`py` en lugar de `python`.
 
 **Sin claves de API el sistema sigue funcionando**: cada proveedor se degrada
 a un *mock* (guion de ejemplo, voz silenciosa con duración realista, tarjetas

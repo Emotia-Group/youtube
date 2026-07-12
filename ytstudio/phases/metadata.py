@@ -54,11 +54,10 @@ def _make_thumbnail(project, cfg, text: str) -> str:
     draw = ImageDraw.Draw(img, "RGBA")
     # Banda inferior oscura para legibilidad
     draw.rectangle([(0, 480), (1280, 720)], fill=(0, 0, 0, 150))
-    try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 84)
-    except OSError:
-        font = ImageFont.load_default()
+    from ytstudio.utils.media import find_font
+    font_path = find_font(bold=True)
+    font = (ImageFont.truetype(font_path, 84) if font_path
+            else ImageFont.load_default(size=84))
 
     # Ajuste de texto a 2 líneas máximo
     words, lines, cur = text.upper().split(), [], ""
@@ -109,5 +108,5 @@ def run(project, cfg) -> None:
     meta["thumbnail"] = _make_thumbnail(project, cfg, meta["thumbnail_text"])
 
     project.path("final", "metadata.json").write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2))
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     project.set("metadata", {k: meta[k] for k in ("title", "tags", "thumbnail")})

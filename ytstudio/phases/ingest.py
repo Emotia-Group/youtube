@@ -41,7 +41,7 @@ def detect_input_type(source: Path | None, text: str | None, forced: str) -> str
     if ext in IMAGE_EXT:
         return "image"
     if ext in TEXT_EXT:
-        content = source.read_text()
+        content = source.read_text(encoding="utf-8")
         return "script" if len(content.split()) > 350 else "idea"
     raise ValueError(f"No sé interpretar el archivo: {source.name}")
 
@@ -58,17 +58,17 @@ def run(project, cfg) -> None:
     raw_text, frames = "", []
 
     if input_type in ("script", "idea"):
-        raw_text = (input_dir / meta["file"]).read_text()
+        raw_text = (input_dir / meta["file"]).read_text(encoding="utf-8")
     elif input_type == "voice":
         stt = get_stt(cfg)
         raw_text = stt.transcribe(input_dir / meta["file"])
-        (input_dir / "transcripcion.txt").write_text(raw_text)
+        (input_dir / "transcripcion.txt").write_text(raw_text, encoding="utf-8")
     elif input_type == "video":
         video = input_dir / meta["file"]
         audio = extract_audio(video, input_dir / "audio_referencia.mp3")
         stt = get_stt(cfg)
         raw_text = stt.transcribe(audio)
-        (input_dir / "transcripcion.txt").write_text(raw_text)
+        (input_dir / "transcripcion.txt").write_text(raw_text, encoding="utf-8")
         frames = extract_frames(video, input_dir / "frames", count=6)
     elif input_type == "image":
         frames = [input_dir / meta["file"]]
@@ -99,7 +99,7 @@ def run(project, cfg) -> None:
         **analysis,
     }
     (input_dir / "brief.json").write_text(
-        json.dumps(brief, ensure_ascii=False, indent=2))
+        json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
     project.set("brief", brief)
 
 
@@ -109,7 +109,7 @@ def stage_input(project, source: Path | None, text: str | None, forced: str) -> 
     input_type = detect_input_type(source, text, forced)
     if text is not None:
         file = input_dir / "input.txt"
-        file.write_text(text)
+        file.write_text(text, encoding="utf-8")
     else:
         file = input_dir / source.name
         shutil.copy(source, file)

@@ -31,12 +31,12 @@ def _credentials():
                     "Falta client_secrets.json (OAuth de Google Cloud) en la raíz.")
             flow = InstalledAppFlow.from_client_secrets_file(str(secrets), SCOPES)
             creds = flow.run_local_server(port=0)
-        token_path.write_text(creds.to_json())
+        token_path.write_text(creds.to_json(), encoding="utf-8")
     return creds
 
 
 def run(project, cfg) -> None:
-    meta = json.loads(project.path("final", "metadata.json").read_text())
+    meta = json.loads(project.path("final", "metadata.json").read_text(encoding="utf-8"))
     video = Path(project.get("final_video"))
 
     if not cfg.get("publish", {}).get("enabled", False):

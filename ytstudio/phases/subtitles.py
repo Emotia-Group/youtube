@@ -62,10 +62,10 @@ def run(project, cfg) -> None:
     for i, c in enumerate(cues, 1):
         srt += [str(i), f"{_fmt_srt(c['start'])} --> {_fmt_srt(c['end'])}",
                 c["text"], ""]
-    project.path("subtitles", "subtitulos.srt").write_text("\n".join(srt))
+    project.path("subtitles", "subtitulos.srt").write_text("\n".join(srt), encoding="utf-8")
 
     # ASS estilizado (para quemado)
-    font = sub_cfg.get("font", "DejaVu Sans")
+    font = sub_cfg.get("font", "Arial")
     size = sub_cfg.get("font_size", 54)
     w, h = cfg["video"]["width"], cfg["video"]["height"]
     header = f"""[Script Info]
@@ -85,5 +85,5 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         + c["text"].replace("\n", "\\N")
         for c in cues
     ]
-    project.path("subtitles", "subtitulos.ass").write_text(header + "\n".join(events) + "\n")
+    project.path("subtitles", "subtitulos.ass").write_text(header + "\n".join(events) + "\n", encoding="utf-8")
     project.set("subtitle_cues", len(cues))

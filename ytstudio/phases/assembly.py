@@ -6,9 +6,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from ytstudio.phases.scenes import load_scenes
-from ytstudio.utils.media import FONT_BOLD, require_ffmpeg, run_ffmpeg
+from ytstudio.utils.media import (filter_path, find_font, require_ffmpeg,
+                                  run_ffmpeg)
 
 FADE = 0.3  # fundido de entrada/salida por escena (s)
+
+# Códigos ISO-639-2 para la pista de subtítulos del mp4
+_LANG3 = {"es": "spa", "en": "eng", "pt": "por", "fr": "fra", "de": "deu",
+          "it": "ita", "ja": "jpn", "ko": "kor", "zh": "chi", "ru": "rus"}
 
 
 def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
@@ -27,11 +32,6 @@ def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
     z, x, y = presets.get(animation, presets["zoom_in"])
     return (f"scale=3840:-2,setsar=1,"
             f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={fps}")
-
-
-def _escape_drawtext(text: str) -> str:
-    return (text.replace("\\", "\\\\").replace(":", "\\:")
-            .replace("'", "\\'").replace("%", "\\%"))
 
 
 def _render_scene(scene: dict, project, cfg, out: Path) -> None:
@@ -54,12 +54,19 @@ def _render_scene(scene: dict, project, cfg, out: Path) -> None:
 
     label = "v0"
     if scene.get("on_screen_text"):
-        text = _escape_drawtext(scene["on_screen_text"])
-        filters.append(
-            f"[{label}]drawtext=fontfile={FONT_BOLD}:text='{text}':"
-            f"fontsize={int(h * 0.055)}:fontcolor=white:borderw=3:bordercolor=black@0.85:"
-            f"x=(w-text_w)/2:y=h*0.10[v1]")
-        label = "v1"
+        font = find_font(bold=True)
+        # Sin fuente localizable se omite el texto en pantalla (no fallar el render)
+        if font:
+            # textfile= evita el doble escapado del parser de filtros: el texto
+            # va en un archivo UTF-8 y admite cualquier carácter.
+            textfile = out.parent / f"ostext_{scene['id']:03d}.txt"
+            textfile.write_text(scene["on_screen_text"], encoding="utf-8")
+            filters.append(
+                f"[{label}]drawtext=fontfile='{filter_path(font)}':"
+                f"textfile='{filter_path(textfile)}':expansion=none:"
+                f"fontsize={int(h * 0.055)}:fontcolor=white:borderw=3:bordercolor=black@0.85:"
+                f"x=(w-text_w)/2:y=h*0.10[v1]")
+            label = "v1"
     if use_fade:
         filters.append(f"[{label}]fade=t=in:st=0:d={FADE},"
                        f"fade=t=out:st={max(0.0, dur - FADE):.3f}:d={FADE}[v2]")
@@ -89,12 +96,13 @@ def run(project, cfg) -> None:
         if not out.exists():
             _render_scene(scene, project, cfg, out)
 
-    # 2) Concatenación de escenas
+    # 2) Concatenación de escenas (rutas con '/' también en Windows)
     concat_list = scenes_dir / "list.txt"
     scene_files = [(scenes_dir / "scene_{:03d}.mp4".format(s["id"])).resolve()
                    for s in scenes]
     concat_list.write_text(
-        "\n".join(f"file '{p}'" for p in scene_files) + "\n")
+        "\n".join(f"file '{p.as_posix()}'" for p in scene_files) + "\n",
+        encoding="utf-8")
     body = final_dir / "cuerpo.mp4"
     run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list),
                 "-c", "copy", str(body)], "concatenación")
@@ -120,18 +128,20 @@ def run(project, cfg) -> None:
 
     if burn:
         ass = project.path("subtitles", "subtitulos.ass")
-        filter_complex = ";".join(afilters) + f";[0:v]ass={ass}[vout]"
+        filter_complex = (";".join(afilters)
+                          + f";[0:v]ass='{filter_path(ass)}'[vout]")
         args += ["-filter_complex", filter_complex,
                  "-map", "[vout]", "-map", "[aout]",
                  "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                  "-pix_fmt", "yuv420p"]
     else:
         srt = project.path("subtitles", "subtitulos.srt")
+        lang = _LANG3.get(cfg.get("language", "es"), "und")
         args += ["-i", str(srt),
                  "-filter_complex", ";".join(afilters),
                  "-map", "0:v", "-map", "[aout]", "-map", "2:0",
                  "-c:v", "copy", "-c:s", "mov_text",
-                 "-metadata:s:s:0", f"language={cfg.get('language', 'es')[:3]}"]
+                 "-metadata:s:s:0", f"language={lang}"]
 
     args += ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output)]
     run_ffmpeg(args, "mezcla final")

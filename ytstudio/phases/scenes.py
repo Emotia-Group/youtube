@@ -90,7 +90,7 @@ def run(project, cfg) -> None:
         s["id"] = i  # ids consecutivos garantizados
 
     project.path("scenes", "scenes.json").write_text(
-        json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2))
+        json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     md = ["# Storyboard", ""]
     for s in scenes:
@@ -100,14 +100,14 @@ def run(project, cfg) -> None:
         if s["on_screen_text"]:
             md.append(f"**Texto en pantalla:** {s['on_screen_text']}")
         md.append("")
-    project.path("scenes", "storyboard.md").write_text("\n".join(md))
+    project.path("scenes", "storyboard.md").write_text("\n".join(md), encoding="utf-8")
     project.set("scene_count", len(scenes))
 
 
 def load_scenes(project) -> list[dict]:
-    return json.loads(project.path("scenes", "scenes.json").read_text())["scenes"]
+    return json.loads(project.path("scenes", "scenes.json").read_text(encoding="utf-8"))["scenes"]
 
 
 def save_scenes(project, scenes: list[dict]) -> None:
     project.path("scenes", "scenes.json").write_text(
-        json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2))
+        json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2), encoding="utf-8")

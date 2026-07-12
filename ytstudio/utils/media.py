@@ -1,26 +1,97 @@
-"""Utilidades ffmpeg/ffprobe compartidas por varias fases."""
+"""Utilidades ffmpeg/ffprobe compartidas por varias fases.
+
+Compatibilidad multiplataforma: localización de fuentes tipográficas en
+Windows/macOS/Linux, autodetección de ffmpeg en rutas comunes de Windows y
+escapado de rutas para los filtros de ffmpeg (los ':' de 'C:\\' rompen el
+grafo de filtros si no se escapan).
+"""
 from __future__ import annotations
 
 import json
+import os
+import platform
 import shutil
 import subprocess
 from pathlib import Path
 
-FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+# Candidatas por sistema: (negrita, regular)
+_FONT_CANDIDATES = {
+    "Windows": [
+        (r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\arial.ttf"),
+        (r"C:\Windows\Fonts\segoeuib.ttf", r"C:\Windows\Fonts\segoeui.ttf"),
+        (r"C:\Windows\Fonts\calibrib.ttf", r"C:\Windows\Fonts\calibri.ttf"),
+    ],
+    "Darwin": [
+        ("/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+         "/System/Library/Fonts/Supplemental/Arial.ttf"),
+        ("/Library/Fonts/Arial Bold.ttf", "/Library/Fonts/Arial.ttf"),
+        ("/System/Library/Fonts/Helvetica.ttc",
+         "/System/Library/Fonts/Helvetica.ttc"),
+    ],
+    "Linux": [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+        ("/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+         "/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+    ],
+}
+
+# Ubicaciones típicas de ffmpeg en Windows cuando no está en el PATH
+_WIN_FFMPEG_DIRS = [
+    r"C:\ffmpeg\bin",
+    r"C:\Program Files\ffmpeg\bin",
+    os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links"),
+]
+
+
+def find_font(bold: bool = True) -> str | None:
+    """Ruta de una fuente del sistema (negrita o regular), o None."""
+    for bold_path, regular_path in _FONT_CANDIDATES.get(platform.system(), []):
+        path = bold_path if bold else regular_path
+        if Path(path).exists():
+            return path
+    # Último recurso: cualquier candidata de cualquier sistema
+    for pairs in _FONT_CANDIDATES.values():
+        for bold_path, regular_path in pairs:
+            path = bold_path if bold else regular_path
+            if Path(path).exists():
+                return path
+    return None
+
+
+def filter_path(p: Path | str) -> str:
+    """Escapa una ruta para usarla como valor de opción en un filtro ffmpeg
+    (drawtext fontfile=, ass=). Barras de Windows → '/', y se escapan los
+    caracteres especiales del parser de filtros (: ' \\)."""
+    s = str(Path(p).resolve()).replace("\\", "/")
+    return s.replace(":", "\\:").replace("'", "\\'")
 
 
 def require_ffmpeg() -> None:
-    for tool in ("ffmpeg", "ffprobe"):
-        if not shutil.which(tool):
-            raise RuntimeError(
-                f"No se encontró '{tool}'. Instálalo (ej. apt install ffmpeg)."
-            )
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return
+    # Windows: buscar en rutas comunes y añadir al PATH del proceso
+    if platform.system() == "Windows":
+        for d in _WIN_FFMPEG_DIRS:
+            if Path(d, "ffmpeg.exe").exists():
+                os.environ["PATH"] += os.pathsep + d
+                if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+                    return
+        raise RuntimeError(
+            "No se encontró ffmpeg. Descarga 'ffmpeg-release-essentials.zip' de "
+            "https://www.gyan.dev/ffmpeg/builds/ y descomprímelo en C:\\ffmpeg "
+            "(debe existir C:\\ffmpeg\\bin\\ffmpeg.exe).")
+    raise RuntimeError(
+        "No se encontró ffmpeg/ffprobe. Instálalo (ej. apt install ffmpeg / "
+        "brew install ffmpeg).")
 
 
 def run_ffmpeg(args: list[str], desc: str = "") -> None:
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise RuntimeError(
             f"ffmpeg falló{f' ({desc})' if desc else ''}:\n{result.stderr[-3000:]}"
@@ -31,7 +102,8 @@ def probe_duration(path: Path) -> float:
     result = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "json", str(path)],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=True,
     )
     return float(json.loads(result.stdout)["format"]["duration"])
 
