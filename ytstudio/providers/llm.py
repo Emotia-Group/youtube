@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 class ClaudeLLM:
+    is_mock = False
+
     def __init__(self, cfg: dict):
         import anthropic
         self.client = anthropic.Anthropic()
@@ -57,6 +59,8 @@ class ClaudeLLM:
 class MockLLM:
     """Respuestas deterministas por fase — permite recorrer el pipeline entero
     (y validar el montaje con ffmpeg) sin ninguna clave de API."""
+
+    is_mock = True
 
     def __init__(self, cfg: dict):
         self.cfg = cfg

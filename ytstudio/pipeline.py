@@ -22,6 +22,21 @@ PHASES: list[tuple[str, object, str]] = [
 
 PHASE_ORDER = [name for name, _, _ in PHASES]
 
+# Etiquetas cortas y humanas para la interfaz
+PHASE_LABELS = {
+    "ingest": "Análisis",
+    "concept": "Concepto",
+    "script": "Guion",
+    "scenes": "Escenas",
+    "voiceover": "Voz",
+    "broll": "Imágenes",
+    "music": "Música",
+    "subtitles": "Subtítulos",
+    "assembly": "Montaje",
+    "metadata": "Metadatos",
+    "publish": "Publicación",
+}
+
 
 def run_pipeline(project, cfg, *, from_phase: str | None = None,
                  to_phase: str | None = None, log=print) -> None:

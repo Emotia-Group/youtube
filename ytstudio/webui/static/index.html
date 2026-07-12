@@ -56,6 +56,14 @@
   .phase.failed{border-color:var(--err);color:var(--err)}
   .phase.running{border-color:var(--run);color:var(--run);animation:pulse 1.2s infinite}
   @keyframes pulse{50%{opacity:.5}}
+  .banner{border:1px solid var(--accent);background:rgba(240,180,41,.08);border-radius:10px;padding:12px 16px;margin:12px 0;font-size:13.5px}
+  .banner b{color:var(--accent)}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:14px 0}
+  .step{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px}
+  .step b{display:block;color:var(--accent);margin-bottom:4px}
+  .radio-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+  .radio-row label{display:flex;gap:6px;align-items:center;cursor:pointer;font-size:14px}
+  .radio-row input{width:auto}
 
   /* log */
   #log{background:#080a0e;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.7 ui-monospace,monospace;max-height:230px;overflow-y:auto;white-space:pre-wrap;display:none}
@@ -132,18 +140,26 @@ function showNew(){
          onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
       <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
     </div>`).join('');
+  const mock=!CAT.keys.ANTHROPIC_API_KEY;
   $('#main').innerHTML=`
-  <h1>Nuevo proyecto</h1><br>
+  <h1>Nuevo proyecto</h1>
+  <p class="muted">Dale una idea o pega tu guion, y el sistema produce un video largo listo para YouTube: concepto, guion, escenas, voz, imágenes, música, subtítulos y montaje.</p>
+  <div class="steps">
+    <div class="step"><b>1 · Tú aportas</b>una idea, un guion, una nota de voz, una imagen o un video de referencia.</div>
+    <div class="step"><b>2 · La IA produce</b>concepto y estilo, guion, guion gráfico por escenas, voz en off, imágenes y música.</div>
+    <div class="step"><b>3 · Se monta</b>todo se une con animación, subtítulos y música: obtienes el video, la miniatura y los metadatos.</div>
+  </div>
+  ${mock?`<div class="banner">⚠ <b>Modo vista previa activo</b> — sin clave de API, el resultado usa contenido de marcador (para ver cómo funciona). Añade <code>ANTHROPIC_API_KEY</code> en <code>.env</code> para calidad real.</div>`:''}
   <div class="card">
-    <label class="f"><span>Nombre del video/proyecto</span>
+    <label class="f"><span>1 · Nombre del proyecto</span>
       <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
-    <label class="f"><span>Tu input — escribe la idea o el guion completo…</span>
-      <textarea id="np-text" rows="6" placeholder="Ej.: Quiero un documental sobre los fareros que salvaron miles de vidas en el siglo XIX…"></textarea></label>
-    <label class="f"><span>…o adjunta un archivo (guion .txt/.md, nota de voz, imagen o video de referencia)</span>
+    <label class="f"><span>2 · Escribe tu idea o pega tu guion completo</span>
+      <textarea id="np-text" rows="7" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
+    <label class="f"><span>…o, en su lugar, adjunta un archivo (guion .txt/.md, nota de voz .mp3/.m4a, imagen o video de referencia)</span>
       <input type="file" id="np-file"></label>
-    <h3>Estilo cinematográfico</h3>
+    <h3>3 · Estilo del video</h3>
     <div class="presets">${presets}</div>
-    <br><button class="btn" onclick="createProject()">Crear proyecto</button>
+    <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
   </div>`;
 }
 async function createProject(){
@@ -166,39 +182,46 @@ async function openProject(slug){
   view='project';current=slug;refreshList();
   await renderProject();startPoll();
 }
+function phaseLabel(name){return (CAT.phases.find(p=>p.name===name)||{}).label||name}
+function phaseChipsHtml(p,curPhase){
+  return CAT.phases.map(ph=>{
+    let st=p.phases[ph.name];
+    const isCur=curPhase===ph.name;
+    const cls=isCur?'running':(st==='done'?'done':st==='failed'?'failed':'');
+    const icon=isCur?'⏳':({done:'✔',failed:'✖'}[st]||'·');
+    return `<div class="phase ${cls}" title="${esc(ph.desc)}">${icon} ${esc(ph.label)}</div>`;
+  }).join('');
+}
 async function renderProject(activeTab){
   const p=await api('/api/projects/'+current);
   const running=p.running;
+  const mock=!CAT.keys.ANTHROPIC_API_KEY;
   const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
-  const phaseChips=CAT.phases.map(ph=>{
-    let st=p.phases[ph.name];
-    if(running&&st==='pending')st='';
-    const icon={done:'✔',failed:'✖'}[st]||'·';
-    return `<div class="phase ${st}${running&&st==='pending'?' running':''}" title="${esc(ph.desc)}">${icon} ${ph.name}</div>`;
-  }).join('');
-  const tabs=['Guion','Storyboard','Video','Concepto'];
+  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Video','▶'],['Concepto','💡']];
   const tab=activeTab||window._tab||'Guion';window._tab=tab;
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between">
     <h1>🎬 ${esc(current)}</h1>
     <div class="row">
-      <select id="run-to" style="width:auto">
-        <option value="">Ejecutar todo</option>
-        <option value="script">Solo hasta el guion (revisar antes)</option>
-        <option value="scenes">Hasta el storyboard</option>
+      <select id="run-to" style="width:auto" title="Hasta dónde generar">
+        <option value="">Generar el video completo</option>
+        <option value="script">Solo el guion (revisar antes)</option>
+        <option value="scenes">Hasta el guion gráfico</option>
       </select>
-      <button class="btn" id="btn-run" ${running?'disabled':''} onclick="runPipeline()">${running?'Ejecutando…':'▶ Ejecutar'}</button>
-      <select id="run-from" style="width:auto" onchange="rerunFrom(this.value)" ${running?'disabled':''}>
-        <option value="">Re-ejecutar desde…</option>
-        ${CAT.phases.map(ph=>`<option value="${ph.name}">${ph.name}</option>`).join('')}
+      <button class="btn" id="btn-run" ${running?'disabled':''} onclick="runPipeline()">${running?'⏳ Generando…':'▶ Generar video'}</button>
+      <select id="run-from" style="width:auto" onchange="rerunFrom(this.value)" ${running?'disabled':''} title="Rehacer desde un paso">
+        <option value="">Rehacer desde…</option>
+        ${CAT.phases.map(ph=>`<option value="${ph.name}">${esc(ph.label)}</option>`).join('')}
       </select>
     </div>
   </div>
-  <div id="phases">${phaseChips}</div>
-  ${p.total_duration?`<div class="muted">Duración: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
-  ${failed?`<div class="card" style="border-color:var(--err)">✖ Falló la fase <b>${failed[0]}</b>: ${esc(p.phase_info[failed[0]]?.error||'')}</div>`:''}
-  <pre id="log"></pre><br>
-  <div class="tabs">${tabs.map(t=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${t}</button>`).join('')}</div>
+  ${mock?`<div class="banner">⚠ <b>Modo vista previa</b> — no hay clave de API configurada (<code>ANTHROPIC_API_KEY</code>), así que el video se generará con contenido de marcador (voz silenciosa, imágenes de relleno). Tu guion <b>sí se respeta</b>. Para calidad real, añade tu clave en el archivo <code>.env</code> y elige los proveedores en ⚙ Configuración.</div>`:''}
+  <div class="muted" style="margin:6px 0 2px">Progreso — se generan 11 pasos en orden${running&&p.phase?`. Ahora: <b style="color:var(--run)">${esc(phaseLabel(p.phase))}</b>`:''}:</div>
+  <div id="phases">${phaseChipsHtml(p,running?p.phase:null)}</div>
+  ${p.total_duration?`<div class="muted">Duración estimada: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
+  ${failed?`<div class="card" style="border-color:var(--err)">✖ Se detuvo en el paso <b>${esc(phaseLabel(failed[0]))}</b>:<br><span class="muted">${esc(p.phase_info[failed[0]]?.error||'')}</span><br><br>Corrige lo indicado y pulsa <b>▶ Generar video</b> para reanudar desde ahí.</div>`:''}
+  <pre id="log"></pre>
+  <div class="tabs" style="margin-top:16px">${tabs.map(([t,ic])=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${ic} ${t}</button>`).join('')}</div>
   <div id="tabbody"></div>`;
   if(running){$('#log').style.display='block'}
   renderTab(tab,p);
@@ -279,7 +302,7 @@ async function runPipeline(){
 }
 async function rerunFrom(phase){
   if(!phase)return;
-  if(!confirm(`Re-ejecutar desde «${phase}»? Se invalidan las fases posteriores.`))return;
+  if(!confirm(`¿Rehacer desde el paso «${phaseLabel(phase)}»? Se regenerarán ese paso y los siguientes.`))return;
   try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:phase})});
     startPoll();renderProject();
   }catch(e){toast('⚠ '+e.message)}
@@ -289,26 +312,23 @@ async function rerunFrom(phase){
 function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
 function startPoll(){
   stopPoll();
-  let lastCount=-1,wasRunning=false;
+  let lastCount=-1,wasRunning=false,lastPhase=null;
   pollTimer=setInterval(async()=>{
     if(view!=='project'||!current){stopPoll();return}
     const log=await api(`/api/projects/${current}/log`);
     const el=$('#log');
     if(el&&(log.running||log.lines.length)){
       el.style.display='block';
-      if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;
-        if(log.running)renderPhasesOnly();}
+      if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;}
+      if(log.running&&log.phase!==lastPhase){lastPhase=log.phase;renderPhasesOnly(log.phase);}
     }
-    if(wasRunning&&!log.running){await renderProject();refreshList();toast(log.error?'⚠ '+log.error:'✅ Pipeline terminado')}
+    if(wasRunning&&!log.running){await renderProject();refreshList();toast(log.error?'⚠ '+log.error:'✅ ¡Video generado!')}
     wasRunning=log.running;
-  },1800);
+  },1500);
 }
-async function renderPhasesOnly(){
+async function renderPhasesOnly(curPhase){
   const p=await api('/api/projects/'+current);
-  const chips=CAT.phases.map(ph=>{
-    const st=p.phases[ph.name];const icon={done:'✔',failed:'✖'}[st]||'·';
-    return `<div class="phase ${st}" title="${esc(ph.desc)}">${icon} ${ph.name}</div>`;}).join('');
-  const el=$('#phases');if(el)el.innerHTML=chips;
+  const el=$('#phases');if(el)el.innerHTML=phaseChipsHtml(p,curPhase);
 }
 
 /* ---------- configuración ---------- */

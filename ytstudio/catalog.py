@@ -249,8 +249,8 @@ STYLE_PRESETS: dict = {
         "music": "upbeat modern electronic, positive energy, driving rhythm",
     },
     "ninguno": {
-        "label": "Sin preset (el LLM decide según el tema)",
-        "description": "El concepto define libremente el estilo a partir del input.",
+        "label": "Automático (la IA decide según el tema)",
+        "description": "El sistema define libremente el estilo a partir de tu idea.",
         "fps": None,
         "visual_direction": "",
         "tone": "",

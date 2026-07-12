@@ -37,12 +37,70 @@ SCENES_SCHEMA = {
 }
 
 
+def _split_sentences(text: str) -> list[str]:
+    import re
+    parts = re.split(r"(?<=[.!?…])\s+", text.strip())
+    return [p for p in parts if p]
+
+
+def _mechanical_scenes(script_md: str, prompt_prefix: str) -> list[dict]:
+    """División del guion sin LLM (modo preview): agrupa frases en escenas de
+    ~25-55 palabras respetando las secciones '## ' y rota las animaciones.
+    Preserva el texto EXACTO del guion del usuario."""
+    animations = ["zoom_in", "pan_right", "zoom_out", "pan_left"]
+    sections: list[tuple[str, list[str]]] = []
+    current = ("Narración", [])
+    for line in script_md.splitlines():
+        if line.startswith("## "):
+            if current[1]:
+                sections.append(current)
+            current = (line[3:].strip() or "Sección", [])
+        elif line.strip():
+            current[1].append(line.strip())
+    if current[1]:
+        sections.append(current)
+
+    scenes: list[dict] = []
+    for section, lines in sections:
+        chunk: list[str] = []
+        words = 0
+        def flush():
+            nonlocal chunk, words
+            if chunk:
+                scenes.append({
+                    "id": len(scenes) + 1,
+                    "section": section,
+                    "narration": " ".join(chunk),
+                    "broll_prompt": f"{prompt_prefix}, {section}".strip(", "),
+                    "broll_type": "image",
+                    "animation": animations[len(scenes) % len(animations)],
+                    "on_screen_text": "",
+                })
+                chunk, words = [], 0
+        for sentence in _split_sentences(" ".join(lines)):
+            chunk.append(sentence)
+            words += len(sentence.split())
+            if words >= 45:
+                flush()
+        flush()
+    return scenes
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
     script_md = load_script(project)
     lang = cfg.get("language", "es")
     videogen_scenes = cfg["providers"]["videogen"].get("max_scenes", 0)
+
+    # Sin LLM real (modo preview): dividir el guion real mecánicamente en vez
+    # de sustituirlo por escenas de ejemplo.
+    if getattr(llm, "is_mock", False):
+        scenes = _mechanical_scenes(
+            script_md, concept["visual_style"]["prompt_prefix"])
+        if scenes:
+            _write_outputs(project, scenes)
+            return
 
     system = (
         f"Eres editor y director de fotografía de videos de YouTube en {lang}. "
@@ -88,7 +146,10 @@ def run(project, cfg) -> None:
     scenes = result["scenes"]
     for i, s in enumerate(scenes, start=1):
         s["id"] = i  # ids consecutivos garantizados
+    _write_outputs(project, scenes)
 
+
+def _write_outputs(project, scenes: list[dict]) -> None:
     project.path("scenes", "scenes.json").write_text(
         json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2), encoding="utf-8")
 

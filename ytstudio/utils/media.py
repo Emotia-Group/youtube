@@ -72,17 +72,26 @@ def filter_path(p: Path | str) -> str:
 def require_ffmpeg() -> None:
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
         return
-    # Windows: buscar en rutas comunes y añadir al PATH del proceso
+    # Windows: buscar en rutas comunes (incluye subcarpetas — el zip de gyan.dev
+    # se extrae a menudo como C:\ffmpeg\ffmpeg-X.Y-essentials_build\bin) y
+    # añadir al PATH del proceso.
     if platform.system() == "Windows":
+        candidates = []
         for d in _WIN_FFMPEG_DIRS:
-            if Path(d, "ffmpeg.exe").exists():
-                os.environ["PATH"] += os.pathsep + d
-                if shutil.which("ffmpeg") and shutil.which("ffprobe"):
-                    return
+            base = Path(d)
+            if (base / "ffmpeg.exe").exists():
+                candidates.append(base)
+        for root in (Path(r"C:\ffmpeg"), Path(r"C:\Program Files\ffmpeg")):
+            if root.exists():
+                candidates += [p.parent for p in root.rglob("ffmpeg.exe")]
+        for d in candidates:
+            os.environ["PATH"] += os.pathsep + str(d)
+            if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+                return
         raise RuntimeError(
             "No se encontró ffmpeg. Descarga 'ffmpeg-release-essentials.zip' de "
             "https://www.gyan.dev/ffmpeg/builds/ y descomprímelo en C:\\ffmpeg "
-            "(debe existir C:\\ffmpeg\\bin\\ffmpeg.exe).")
+            "(debe existir C:\\ffmpeg\\bin\\ffmpeg.exe o similar).")
     raise RuntimeError(
         "No se encontró ffmpeg/ffprobe. Instálalo (ej. apt install ffmpeg / "
         "brew install ffmpeg).")

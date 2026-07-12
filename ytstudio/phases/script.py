@@ -8,6 +8,14 @@ from ytstudio.providers import get_llm
 WORDS_PER_MINUTE = 150  # ritmo medio de narración en español
 
 
+def _normalize_sections(text: str) -> str:
+    """Garantiza que el guion tenga al menos una sección '## ' (las secciones
+    se usan para el storyboard y los capítulos de YouTube)."""
+    if any(line.startswith("## ") for line in text.splitlines()):
+        return text
+    return "## Narración\n" + text
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     brief = project.get("brief")
@@ -15,6 +23,15 @@ def run(project, cfg) -> None:
     lang = cfg.get("language", "es")
     minutes = concept.get("duration_minutes") or cfg["video"].get("target_minutes", 10)
     target_words = minutes * WORDS_PER_MINUTE
+    is_script = brief["input_type"] == "script" or brief.get("detected_type") == "script"
+
+    # El guion del usuario NUNCA se descarta: sin LLM real (modo preview),
+    # se usa tal cual en lugar de sustituirlo por contenido de ejemplo.
+    if is_script and getattr(llm, "is_mock", False):
+        script_md = _normalize_sections(brief["raw_text"].strip())
+        project.path("script", "guion.md").write_text(script_md, encoding="utf-8")
+        project.set("script_words", len(script_md.split()))
+        return
 
     system = (
         f"Eres guionista senior de videos largos de YouTube en {lang}. Escribes "
@@ -25,7 +42,7 @@ def run(project, cfg) -> None:
         "sin marcas de tiempo, sin indicaciones entre corchetes."
     )
 
-    if brief["input_type"] == "script" or brief.get("detected_type") == "script":
+    if is_script:
         prompt = (
             "El creador ya tiene un guion listo. Respétalo al máximo: solo pulir "
             "fluidez oral, dividirlo en secciones con encabezados '## ' según la "

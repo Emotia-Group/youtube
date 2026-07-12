@@ -23,7 +23,7 @@ import yaml
 
 from ytstudio.catalog import CATALOG, STYLE_PRESETS, key_status
 from ytstudio.config import ROOT, load_config
-from ytstudio.pipeline import PHASE_ORDER, PHASES, run_pipeline
+from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
 from ytstudio.project import DIRS, PROJECTS_DIR, Project, slugify
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -121,8 +121,8 @@ def api_project_detail(slug: str) -> dict:
 def api_run(slug: str, body: dict) -> dict:
     with RUNS_LOCK:
         if RUNS.get(slug, {}).get("running"):
-            raise ApiError(409, "El pipeline ya está en ejecución para este proyecto.")
-        state = {"running": True, "lines": [], "error": None}
+            raise ApiError(409, "Ya se está generando este proyecto.")
+        state = {"running": True, "lines": [], "error": None, "phase": None}
         RUNS[slug] = state
 
     from_phase = body.get("from") or None
@@ -130,6 +130,9 @@ def api_run(slug: str, body: dict) -> dict:
 
     def log(msg: str) -> None:
         state["lines"].append(str(msg))
+        m = re.match(r"▶ (\w+)", str(msg))
+        if m:  # fase actualmente en ejecución (para resaltarla en la UI)
+            state["phase"] = m.group(1)
         print(f"[{slug}] {msg}")
 
     def worker() -> None:
@@ -145,6 +148,7 @@ def api_run(slug: str, body: dict) -> dict:
             traceback.print_exc()
         finally:
             state["running"] = False
+            state["phase"] = None
 
     threading.Thread(target=worker, daemon=True).start()
     return {"started": True}
@@ -173,7 +177,8 @@ def api_get_config() -> dict:
         "catalog": CATALOG,
         "style_presets": STYLE_PRESETS,
         "keys": key_status(),
-        "phases": [{"name": n, "desc": d} for n, _, d in PHASES],
+        "phases": [{"name": n, "desc": d, "label": PHASE_LABELS.get(n, n)}
+                   for n, _, d in PHASES],
     }
 
 
@@ -267,8 +272,11 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
                 self._json(api_project_detail(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/log", path):
-                run = RUNS.get(m.group(1), {"running": False, "lines": [], "error": None})
-                self._json({k: run[k] for k in ("running", "lines", "error")})
+                run = RUNS.get(m.group(1),
+                               {"running": False, "lines": [], "error": None,
+                                "phase": None})
+                self._json({k: run.get(k) for k in
+                            ("running", "lines", "error", "phase")})
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_get_script(m.group(1)))
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
