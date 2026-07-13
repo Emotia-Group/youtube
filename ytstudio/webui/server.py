@@ -28,6 +28,23 @@ from ytstudio.project import DIRS, PROJECTS_DIR, Project, slugify
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+
+def get_version() -> dict:
+    """Identifica exactamente qué código está corriendo este servidor —
+    para poder verificar desde la propia UI si un 'git pull' surtió efecto."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%h|%cd", "--date=format:%d %b %H:%M"],
+            cwd=ROOT, capture_output=True, text=True, timeout=3, check=True,
+        ).stdout.strip()
+        commit, date = out.split("|", 1)
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
+                               capture_output=True, text=True, timeout=3).stdout.strip()
+        return {"commit": commit, "date": date, "modified": bool(dirty)}
+    except Exception:
+        return {"commit": "desconocido", "date": "", "modified": False}
+
 # Estado de las ejecuciones en curso: slug -> {running, lines, error}
 RUNS: dict[str, dict] = {}
 RUNS_LOCK = threading.Lock()
@@ -242,6 +259,7 @@ def api_get_config() -> dict:
         "catalog": CATALOG,
         "style_presets": STYLE_PRESETS,
         "keys": key_status(),
+        "version": get_version(),
         "phases": [{"name": n, "desc": d, "label": PHASE_LABELS.get(n, n)}
                    for n, _, d in PHASES],
     }
@@ -285,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length) or b"{}")
 
-    def _serve_file(self, path: Path) -> None:
+    def _serve_file(self, path: Path, no_cache: bool = False) -> None:
         if not path.is_file():
             self._json({"error": "No encontrado"}, 404)
             return
@@ -310,6 +328,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(len(data)))
+        # La SPA (index.html) nunca debe quedar cacheada por el navegador —
+        # si no, un git pull en el servidor puede seguir mostrando la UI
+        # vieja hasta que se fuerce un refresco manual.
+        if no_cache:
+            self.send_header("Cache-Control", "no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(data)
 
@@ -329,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             path = self.path.split("?")[0]
             if path in ("/", "/index.html"):
-                self._serve_file(STATIC_DIR / "index.html")
+                self._serve_file(STATIC_DIR / "index.html", no_cache=True)
             elif path == "/api/catalog" or path == "/api/config":
                 self._json(api_get_config())
             elif path == "/api/projects":

@@ -32,6 +32,9 @@
   .navbtn:hover{background:var(--panel2)}
   .navbtn.active{background:var(--panel2);color:var(--accent)}
   #projlist{flex:1;overflow-y:auto;margin-top:6px}
+  #verinfo{font-size:11px;color:var(--muted);padding:8px 10px;border-top:1px solid var(--line);margin-top:8px}
+  #verinfo b{color:var(--ok)}
+  #verinfo.stale b{color:var(--err)}
   .proj{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px}
   .proj:hover{background:var(--panel2)}
   .proj.active{background:var(--panel2);outline:1px solid var(--line)}
@@ -112,6 +115,7 @@
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
   <h3 style="padding:0 6px">Proyectos</h3>
   <div id="projlist"></div>
+  <div id="verinfo"></div>
 </div>
 
 <div id="main"></div>
@@ -566,9 +570,17 @@ async function saveSettings(){
 }
 
 /* ---------- init ---------- */
+function renderVersion(){
+  const v=CAT.version||{};
+  const el=$('#verinfo');if(!el)return;
+  el.className=v.modified?'stale':'';
+  el.innerHTML=`Versión: <b>${esc(v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
+    +(v.modified?'<br>⚠ hay cambios locales sin actualizar':'');
+}
 (async function(){
   const data=await api('/api/config');
   CAT=data;CFG=data.config;
+  renderVersion();
   await refreshList();
   const projects=await api('/api/projects');
   if(projects.length)openProject(projects[0].slug);else showNew();
