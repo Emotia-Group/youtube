@@ -296,7 +296,8 @@ def _write_outputs(project, scenes: list[dict]) -> None:
 
 
 def load_scenes(project) -> list[dict]:
-    return json.loads(project.path("scenes", "scenes.json").read_text(encoding="utf-8"))["scenes"]
+    from ytstudio.project import read_json_tolerant
+    return read_json_tolerant(project.path("scenes", "scenes.json"))["scenes"]
 
 
 def save_scenes(project, scenes: list[dict]) -> None:

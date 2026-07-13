@@ -36,7 +36,8 @@ def _credentials():
 
 
 def run(project, cfg) -> None:
-    meta = json.loads(project.path("final", "metadata.json").read_text(encoding="utf-8"))
+    from ytstudio.project import read_json_tolerant
+    meta = read_json_tolerant(project.path("final", "metadata.json"))
     video = Path(project.get("final_video"))
 
     if not cfg.get("publish", {}).get("enabled", False):

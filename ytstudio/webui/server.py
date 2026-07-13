@@ -24,7 +24,8 @@ import yaml
 from ytstudio.catalog import CATALOG, STYLE_PRESETS, key_status
 from ytstudio.config import ROOT, load_config
 from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
-from ytstudio.project import DIRS, PROJECTS_DIR, Project, slugify
+from ytstudio.project import (DIRS, PROJECTS_DIR, Project, read_json_tolerant,
+                             slugify)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -35,7 +36,8 @@ def get_version() -> dict:
     import subprocess
     try:
         out = subprocess.run(
-            ["git", "log", "-1", "--format=%h|%cd", "--date=format:%d %b %H:%M"],
+            # format-local: hora del sistema del usuario, no la del commit (UTC)
+            ["git", "log", "-1", "--format=%h|%cd", "--date=format-local:%d %b %H:%M"],
             cwd=ROOT, capture_output=True, text=True, timeout=3, check=True,
         ).stdout.strip()
         commit, date = out.split("|", 1)
@@ -199,14 +201,14 @@ def api_project_detail(slug: str) -> dict:
 
     scenes_file = project.dir / DIRS["scenes"] / "scenes.json"
     if scenes_file.exists():
-        detail["scenes"] = json.loads(scenes_file.read_text(encoding="utf-8"))["scenes"]
+        detail["scenes"] = read_json_tolerant(scenes_file)["scenes"]
     final = project.dir / DIRS["final"] / "video_final.mp4"
     detail["final_video"] = f"{DIRS['final']}/video_final.mp4" if final.exists() else None
     thumb = project.dir / DIRS["final"] / "miniatura.jpg"
     detail["thumbnail"] = f"{DIRS['final']}/miniatura.jpg" if thumb.exists() else None
     meta_file = project.dir / DIRS["final"] / "metadata.json"
     if meta_file.exists():
-        detail["metadata_full"] = json.loads(meta_file.read_text(encoding="utf-8"))
+        detail["metadata_full"] = read_json_tolerant(meta_file)
     return detail
 
 
