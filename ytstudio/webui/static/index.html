@@ -517,7 +517,16 @@ function showSettings(){
           <option value="true" ${CFG.video.burn_subtitles?'selected':''}>Quemados en el video</option>
         </select></label>
       <label class="f"><span>Idioma</span><input id="v-lang" value="${esc(CFG.language)}"></label>
-    </div></div>
+      <label class="f"><span>Ritmo visual — cada cuánto cambia la imagen</span>
+        <select id="v-ritmo">
+          <option value="4" ${CFG.video.scene_seconds<=4?'selected':''}>Muy dinámico — cada ~4 s</option>
+          <option value="6" ${CFG.video.scene_seconds>4&&CFG.video.scene_seconds<=6?'selected':''}>Dinámico — cada ~6 s (recomendado)</option>
+          <option value="8" ${CFG.video.scene_seconds>6&&CFG.video.scene_seconds<=8?'selected':''}>Estándar — cada ~8 s</option>
+          <option value="10" ${CFG.video.scene_seconds>8&&CFG.video.scene_seconds<=10?'selected':''}>Pausado — cada ~10 s</option>
+          <option value="15" ${CFG.video.scene_seconds>10?'selected':''}>Contemplativo — cada ~15 s</option>
+        </select></label>
+    </div>
+    <div class="muted" style="font-size:12px">Escenas más cortas = más imágenes = más costo de generación (pero más dinámico). Aplica tanto a tu narración grabada como a la voz IA.</div></div>
   <h3 style="font-size:15px">Módulo de integraciones — modelos de IA</h3>
   ${cats.map(provCard).join('')}
   <div class="card"><h2>Audio</h2>
@@ -550,6 +559,7 @@ async function saveSettings(){
   const [w,h]=$('#v-res').value.split('x').map(Number);
   cfg.video.width=w;cfg.video.height=h;
   cfg.video.burn_subtitles=$('#v-subs').value==='true';
+  cfg.video.scene_seconds=+$('#v-ritmo').value||6;
   cfg.language=$('#v-lang').value||'es';
   cfg.audio.music_db=+$('#a-db').value; cfg.audio.duck=$('#a-duck').value==='true';
   for(const catKey of Object.keys(CAT.catalog)){

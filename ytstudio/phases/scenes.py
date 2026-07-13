@@ -37,17 +37,27 @@ SCENES_SCHEMA = {
 }
 
 
+WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
+
+
+def scene_seconds(cfg: dict) -> float:
+    """Ritmo visual: cada cuántos segundos cambia la imagen (config)."""
+    return float(cfg.get("video", {}).get("scene_seconds", 6))
+
+
 def _split_sentences(text: str) -> list[str]:
     import re
     parts = re.split(r"(?<=[.!?…])\s+", text.strip())
     return [p for p in parts if p]
 
 
-def _mechanical_scenes(script_md: str, prompt_prefix: str) -> list[dict]:
-    """División del guion sin LLM (modo preview): agrupa frases en escenas de
-    ~25-55 palabras respetando las secciones '## ' y rota las animaciones.
+def _mechanical_scenes(script_md: str, prompt_prefix: str,
+                       target_seconds: float = 6.0) -> list[dict]:
+    """División del guion sin LLM (modo preview): agrupa frases en escenas del
+    ritmo pedido respetando las secciones '## ' y rota las animaciones.
     Preserva el texto EXACTO del guion del usuario."""
     animations = ["zoom_in", "pan_right", "zoom_out", "pan_left"]
+    max_words = max(6, round(target_seconds * WORDS_PER_SECOND))
     sections: list[tuple[str, list[str]]] = []
     current = ("Narración", [])
     for line in script_md.splitlines():
@@ -80,25 +90,55 @@ def _mechanical_scenes(script_md: str, prompt_prefix: str) -> list[dict]:
         for sentence in _split_sentences(" ".join(lines)):
             chunk.append(sentence)
             words += len(sentence.split())
-            if words >= 45:
+            if words >= max_words:
                 flush()
         flush()
     return scenes
 
 
-def _group_narration(segments: list[dict], target_seconds: float = 16.0) -> list[dict]:
-    """Agrupa los segmentos transcritos (con tiempos del audio real) en escenas
-    de ~target_seconds, respetando los límites de segmento. Cada escena lleva
-    su tramo exacto de audio [audio_start, audio_end]."""
+def _atomize(segments: list[dict], target: float) -> list[dict]:
+    """Convierte los segmentos del STT en 'átomos' de como mucho ~target
+    segundos: los segmentos más largos que el ritmo se parten por tiempo,
+    repartiendo su texto por palabras (para el subtítulo). Así la imagen puede
+    cambiar dentro de una frase larga."""
+    atoms: list[dict] = []
+    for seg in segments:
+        dur = seg["end"] - seg["start"]
+        n = max(1, round(dur / target)) if dur > target * 1.4 else 1
+        if n == 1:
+            atoms.append(dict(seg))
+            continue
+        words = seg["text"].split()
+        per = max(1, len(words) // n)
+        for i in range(n):
+            a = seg["start"] + dur * i / n
+            b = seg["start"] + dur * (i + 1) / n
+            chunk = words[i * per: (i + 1) * per] if i < n - 1 else words[i * per:]
+            atoms.append({"start": a, "end": b, "text": " ".join(chunk)})
+    return atoms
+
+
+def _group_narration(segments: list[dict], target_seconds: float = 6.0) -> list[dict]:
+    """Divide la narración transcrita (con tiempos del audio real) en escenas de
+    ~target_seconds. Cada escena lleva su tramo exacto de audio
+    [audio_start, audio_end]; la imagen cambia a ese ritmo."""
+    atoms = _atomize(segments, target_seconds)
     scenes: list[dict] = []
     cur: list[dict] = []
-    for seg in segments:
-        cur.append(seg)
-        if cur[-1]["end"] - cur[0]["start"] >= target_seconds:
+    for a in atoms:
+        cur.append(a)
+        if cur[-1]["end"] - cur[0]["start"] >= target_seconds * 0.85:
             scenes.append(_scene_from_group(cur, len(scenes) + 1))
             cur = []
     if cur:
-        scenes.append(_scene_from_group(cur, len(scenes) + 1))
+        # evita una última escena minúscula: fúndela con la anterior
+        if scenes and cur[-1]["end"] - cur[0]["start"] < target_seconds * 0.4:
+            prev = scenes[-1]
+            prev["narration"] = (prev["narration"] + " "
+                                 + " ".join(s["text"] for s in cur)).strip()
+            prev["audio_end"] = round(cur[-1]["end"], 3)
+        else:
+            scenes.append(_scene_from_group(cur, len(scenes) + 1))
     return scenes
 
 
@@ -182,10 +222,11 @@ def run(project, cfg) -> None:
     lang = cfg.get("language", "es")
     videogen_scenes = cfg["providers"]["videogen"].get("max_scenes", 0)
 
+    target = scene_seconds(cfg)
+
     # MODO NARRACIÓN PROPIA: escenas alineadas al audio real del usuario.
     narration = project.get("narration")
     if narration and narration.get("segments"):
-        target = cfg.get("audio", {}).get("scene_seconds", 16.0)
         scenes = _group_narration(narration["segments"], target)
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
         _write_outputs(project, scenes)
@@ -195,7 +236,7 @@ def run(project, cfg) -> None:
     # de sustituirlo por escenas de ejemplo.
     if getattr(llm, "is_mock", False):
         scenes = _mechanical_scenes(
-            script_md, concept["visual_style"]["prompt_prefix"])
+            script_md, concept["visual_style"]["prompt_prefix"], target)
         if scenes:
             _write_outputs(project, scenes)
             return
@@ -204,34 +245,25 @@ def run(project, cfg) -> None:
         f"Eres editor y director de fotografía de videos de YouTube en {lang}. "
         "Conviertes guiones en storyboards de escenas listos para producción con IA."
     )
+    words = max(6, round(target * WORDS_PER_SECOND))
+    lo, hi = max(4, words - 4), words + 6
+    broll_type_rule = (
+        f"- 'broll_type': usa 'video' solo en las {videogen_scenes} escenas de "
+        "mayor impacto (gancho/clímax); el resto 'image'.\n" if videogen_scenes
+        else "- 'broll_type': siempre 'image'.\n")
     prompt = (
         "Divide este guion en escenas para el montaje. Reglas:\n"
-        "- Cada escena cubre entre 10 y 25 segundos de narración "
-        "(aprox. 25-60 palabras). NO cambies ni recortes el texto del guion: "
-        "el campo 'narration' debe contener el texto EXACTO, y la concatenación "
-        "de todas las escenas debe reconstruir el guion completo.\n"
+        f"- Cada escena cubre ~{target:.0f} segundos de narración "
+        f"(aprox. {lo}-{hi} palabras) — la imagen cambia a ese ritmo. NO cambies "
+        "ni recortes el texto del guion: el campo 'narration' debe contener el "
+        "texto EXACTO, y la concatenación de todas las escenas debe reconstruir "
+        "el guion completo.\n"
         "- 'section': encabezado del guion al que pertenece.\n"
         "- 'broll_prompt': prompt EN INGLÉS para generar la imagen/video IA de "
-        f"fondo. Escríbelo detallado y SIEMPRE comenzando con este prefijo de "
-        f"estilo: \"{concept['visual_style']['prompt_prefix']}\". Sin texto ni "
-        "letras dentro de la imagen, sin personas famosas reales.\n"
-        f"- 'broll_type': usa 'video' solo en las {videogen_scenes} escenas de "
-        "mayor impacto (gancho/clímax); el resto 'image'.\n"
-        if videogen_scenes
-        else
-        "Divide este guion en escenas para el montaje. Reglas:\n"
-        "- Cada escena cubre entre 10 y 25 segundos de narración "
-        "(aprox. 25-60 palabras). NO cambies ni recortes el texto del guion: "
-        "el campo 'narration' debe contener el texto EXACTO, y la concatenación "
-        "de todas las escenas debe reconstruir el guion completo.\n"
-        "- 'section': encabezado del guion al que pertenece.\n"
-        "- 'broll_prompt': prompt EN INGLÉS para generar la imagen IA de fondo. "
-        f"Escríbelo detallado y SIEMPRE comenzando con este prefijo de estilo: "
-        f"\"{concept['visual_style']['prompt_prefix']}\". Sin texto ni letras "
-        "dentro de la imagen, sin personas famosas reales.\n"
-        "- 'broll_type': siempre 'image'.\n"
-    )
-    prompt += (
+        f"fondo, coherente con lo que se dice en esa escena. Detallado y SIEMPRE "
+        f"comenzando con el prefijo de estilo \"{concept['visual_style']['prompt_prefix']}\". "
+        "Sin texto ni letras dentro de la imagen, sin personas famosas reales.\n"
+        + broll_type_rule +
         "- 'animation': varía entre zoom_in, zoom_out, pan_left, pan_right "
         "(evita repetir la misma dos veces seguidas).\n"
         "- 'on_screen_text': texto breve en pantalla (2-5 palabras) solo cuando "
