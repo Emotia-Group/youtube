@@ -73,8 +73,18 @@ def _project_summary(slug: str) -> dict:
 def api_list_projects() -> list[dict]:
     if not PROJECTS_DIR.exists():
         return []
-    return [_project_summary(p.name) for p in sorted(PROJECTS_DIR.iterdir())
-            if (p / "project.json").exists()]
+    out = []
+    for p in sorted(PROJECTS_DIR.iterdir()):
+        if not (p / "project.json").exists():
+            continue
+        try:  # un proyecto dañado no debe tumbar toda la lista
+            out.append(_project_summary(p.name))
+        except Exception as e:
+            traceback.print_exc()
+            out.append({"slug": p.name, "phases": {}, "done": 0,
+                        "total": len(PHASE_ORDER), "running": False,
+                        "error": f"No se pudo leer: {e}"})
+    return out
 
 
 def api_create_project(body: dict) -> dict:

@@ -29,6 +29,20 @@ def slugify(text: str) -> str:
     return re.sub(r"[-\s]+", "-", text).strip("-")[:60] or "proyecto"
 
 
+def _read_json_tolerant(path) -> dict:
+    """Lee un JSON aunque venga en una codificación antigua. Los project.json
+    creados por versiones previas (antes de forzar UTF-8) quedaron en cp1252 en
+    Windows; se leen con fallback y se devuelven como dict."""
+    raw = path.read_bytes()
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return json.loads(raw.decode(enc))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    # Último recurso: reemplazar bytes inválidos para no perder el proyecto
+    return json.loads(raw.decode("utf-8", errors="replace"))
+
+
 class Project:
     def __init__(self, slug: str):
         self.slug = slug
@@ -36,7 +50,12 @@ class Project:
         self.state_path = self.dir / "project.json"
         self.state: dict = {"slug": slug, "phases": {}, "data": {}}
         if self.state_path.exists():
-            self.state = json.loads(self.state_path.read_text(encoding="utf-8"))
+            self.state = _read_json_tolerant(self.state_path)
+            # Re-guardar en UTF-8 para migrar los proyectos antiguos de una vez
+            try:
+                self.save()
+            except Exception:
+                pass
 
     # --- rutas ---
     def path(self, key: str, *parts: str) -> Path:
