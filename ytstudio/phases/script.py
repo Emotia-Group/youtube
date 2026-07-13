@@ -25,6 +25,14 @@ def run(project, cfg) -> None:
     target_words = minutes * WORDS_PER_MINUTE
     is_script = brief["input_type"] == "script" or brief.get("detected_type") == "script"
 
+    # Narración grabada por el usuario: el guion ES la transcripción exacta del
+    # audio (no se reescribe, para que coincida con lo que se oye).
+    if project.get("narration"):
+        script_md = _normalize_sections(brief["raw_text"].strip())
+        project.path("script", "guion.md").write_text(script_md, encoding="utf-8")
+        project.set("script_words", len(script_md.split()))
+        return
+
     # El guion del usuario NUNCA se descarta: sin LLM real (modo preview),
     # se usa tal cual en lugar de sustituirlo por contenido de ejemplo.
     if is_script and getattr(llm, "is_mock", False):

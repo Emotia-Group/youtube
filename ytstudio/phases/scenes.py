@@ -86,12 +86,110 @@ def _mechanical_scenes(script_md: str, prompt_prefix: str) -> list[dict]:
     return scenes
 
 
+def _group_narration(segments: list[dict], target_seconds: float = 16.0) -> list[dict]:
+    """Agrupa los segmentos transcritos (con tiempos del audio real) en escenas
+    de ~target_seconds, respetando los límites de segmento. Cada escena lleva
+    su tramo exacto de audio [audio_start, audio_end]."""
+    scenes: list[dict] = []
+    cur: list[dict] = []
+    for seg in segments:
+        cur.append(seg)
+        if cur[-1]["end"] - cur[0]["start"] >= target_seconds:
+            scenes.append(_scene_from_group(cur, len(scenes) + 1))
+            cur = []
+    if cur:
+        scenes.append(_scene_from_group(cur, len(scenes) + 1))
+    return scenes
+
+
+def _scene_from_group(group: list[dict], idx: int) -> dict:
+    return {
+        "id": idx,
+        "section": "Narración",
+        "narration": " ".join(s["text"] for s in group).strip(),
+        "audio_start": round(group[0]["start"], 3),
+        "audio_end": round(group[-1]["end"], 3),
+        "broll_type": "image",
+        "animation": ["zoom_in", "pan_right", "zoom_out", "pan_left"][(idx - 1) % 4],
+        "on_screen_text": "",
+    }
+
+
+def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
+    """Rellena broll_prompt / on_screen_text / section de escenas ya fijadas por
+    el audio, para que el B-roll sea coherente con lo que se dice en cada tramo.
+    Modifica `scenes` en el sitio."""
+    prefix = concept["visual_style"]["prompt_prefix"]
+    if getattr(llm, "is_mock", False):
+        for s in scenes:
+            s["broll_prompt"] = f"{prefix}, {s['narration'][:60]}".strip(", ")
+        return
+
+    schema = {
+        "type": "object",
+        "properties": {"scenes": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "broll_prompt": {"type": "string"},
+                "broll_type": {"type": "string", "enum": ["image", "video"]},
+                "animation": {"type": "string", "enum": ["zoom_in", "zoom_out",
+                              "pan_left", "pan_right", "static"]},
+                "on_screen_text": {"type": "string"},
+                "section": {"type": "string"},
+            },
+            "required": ["broll_prompt", "broll_type", "animation",
+                         "on_screen_text", "section"],
+            "additionalProperties": False,
+        }}},
+        "required": ["scenes"], "additionalProperties": False,
+    }
+    narr = "\n".join(f"[{s['id']}] {s['narration']}" for s in scenes)
+    system = (f"Eres director de fotografía de un canal de YouTube en {lang}. "
+              "Las escenas y su narración YA están fijadas por el audio del "
+              "narrador; solo diseñas el apoyo visual de cada una.")
+    prompt = (
+        f"Para cada una de estas {len(scenes)} escenas (en el mismo orden y "
+        "cantidad), diseña el B-roll que acompaña a lo que se dice:\n"
+        "- broll_prompt: prompt EN INGLÉS, detallado, que ilustre el contenido "
+        f"de esa narración concreta, comenzando con el prefijo de estilo "
+        f"\"{prefix}\". Sin texto ni letras en la imagen, sin personas reales.\n"
+        f"- broll_type: 'video' solo en las {videogen_scenes} de mayor impacto, "
+        "el resto 'image'.\n" if videogen_scenes else
+        f"- broll_type: siempre 'image'.\n")
+    prompt += (
+        "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
+        "- on_screen_text: 2-4 palabras solo si refuerzan un dato clave; si no, "
+        "cadena vacía.\n"
+        "- section: título temático corto del tramo (para los capítulos).\n\n"
+        f"NARRACIÓN POR ESCENA:\n{narr}")
+    result = llm.complete_json(system, prompt, schema=schema,
+                               max_tokens=32000, purpose="broll_fixed")
+    got = result["scenes"]
+    for i, s in enumerate(scenes):
+        b = got[i] if i < len(got) else {}
+        s["broll_prompt"] = b.get("broll_prompt") or f"{prefix}, {s['narration'][:50]}"
+        s["broll_type"] = b.get("broll_type", "image")
+        s["animation"] = b.get("animation", s["animation"])
+        s["on_screen_text"] = b.get("on_screen_text", "")
+        if b.get("section"):
+            s["section"] = b["section"]
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
     script_md = load_script(project)
     lang = cfg.get("language", "es")
     videogen_scenes = cfg["providers"]["videogen"].get("max_scenes", 0)
+
+    # MODO NARRACIÓN PROPIA: escenas alineadas al audio real del usuario.
+    narration = project.get("narration")
+    if narration and narration.get("segments"):
+        target = cfg.get("audio", {}).get("scene_seconds", 16.0)
+        scenes = _group_narration(narration["segments"], target)
+        _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
+        _write_outputs(project, scenes)
+        return
 
     # Sin LLM real (modo preview): dividir el guion real mecánicamente en vez
     # de sustituirlo por escenas de ejemplo.

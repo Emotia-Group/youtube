@@ -132,6 +132,49 @@ def extract_audio(video: Path, out: Path) -> Path:
     return out
 
 
+def concat_audios(paths: list[Path], out: Path) -> Path:
+    """Une varios audios en uno solo (re-encodeados a un formato común)."""
+    if len(paths) == 1:
+        run_ffmpeg(["-i", str(paths[0]), "-c:a", "libmp3lame", "-q:a", "3",
+                    str(out)], "normalizar audio")
+        return out
+    inputs = []
+    for p in paths:
+        inputs += ["-i", str(p)]
+    n = len(paths)
+    filt = "".join(f"[{i}:a]" for i in range(n)) + f"concat=n={n}:v=0:a=1[a]"
+    run_ffmpeg([*inputs, "-filter_complex", filt, "-map", "[a]",
+                "-c:a", "libmp3lame", "-q:a", "3", str(out)], "unir audios")
+    return out
+
+
+def clean_narration(src: Path, out: Path, *, trim_silence: bool = True,
+                    keep: float = 0.4, threshold_db: int = -35,
+                    lufs: int = -16) -> Path:
+    """Normaliza el volumen de una narración y (opcional) recorta los silencios
+    largos — al inicio, al final y entre frases — dejando pausas uniformes de
+    `keep` segundos. Devuelve la ruta del audio limpio."""
+    filters = []
+    if trim_silence:
+        filters.append(
+            f"silenceremove=start_periods=1:start_duration=0:"
+            f"start_threshold={threshold_db}dB:detection=peak:"
+            f"stop_periods=-1:stop_duration={keep}:"
+            f"stop_threshold={threshold_db}dB:detection=peak")
+    filters.append(f"loudnorm=I={lufs}:TP=-1.5:LRA=11")
+    run_ffmpeg(["-i", str(src), "-af", ",".join(filters),
+                "-c:a", "libmp3lame", "-q:a", "2", str(out)], "limpiar narración")
+    return out
+
+
+def cut_segment(src: Path, start: float, end: float, out: Path) -> Path:
+    """Extrae el tramo [start, end] (segundos) de un audio con corte preciso."""
+    dur = max(0.1, end - start)
+    run_ffmpeg(["-ss", f"{start:.3f}", "-i", str(src), "-t", f"{dur:.3f}",
+                "-c:a", "libmp3lame", "-q:a", "3", str(out)], "cortar segmento")
+    return out
+
+
 def extract_frames(video: Path, out_dir: Path, count: int = 6) -> list[Path]:
     """Extrae `count` fotogramas repartidos a lo largo del video."""
     out_dir.mkdir(parents=True, exist_ok=True)

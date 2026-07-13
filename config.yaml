@@ -34,6 +34,10 @@ audio:
   music_db: -21
   duck: true
   vo_lufs: -16
+  # Modo "narración propia" (cuando subes tu voz grabada):
+  trim_silence: true         # recorta silencios largos de tu grabación
+  silence_keep: 0.4          # deja pausas uniformes de N segundos
+  scene_seconds: 16          # duración objetivo de cada escena alineada al audio
 subtitles:
   max_chars_per_line: 42
   max_lines: 2

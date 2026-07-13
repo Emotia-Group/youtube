@@ -119,7 +119,7 @@ escenas renderizadas) no se regeneran al relanzar.
 |---|---|---|
 | Guion listo | `.txt/.md` largo o `--type script` | Lo respeta; solo pule fluidez oral y lo estructura |
 | Idea en texto | `--text "…"` o `.txt/.md` corto | Desarrolla concepto y guion completos |
-| Nota de voz | `.mp3/.m4a/.wav/.ogg/.opus` | Transcribe (Whisper) y desarrolla la idea |
+| Tu voz / narración | `.mp3/.m4a/.wav/.ogg/.opus` | **Usa tu voz tal cual**: recorta silencios largos, transcribe con tiempos y alinea cada escena a tu narración |
 | Imagen | `.jpg/.png/.webp` | Analiza con visión (Claude) y deriva tema + estilo visual |
 | Video de referencia | `.mp4/.mov/.mkv/.webm` | Transcribe el audio + analiza fotogramas para tema y estilo |
 

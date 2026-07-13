@@ -130,6 +130,7 @@ def run(project, cfg) -> None:
     script_parts: list[str] = []     # candidatos a guion (docs + texto pegado)
     context_parts: list[str] = []    # contexto adicional (transcripciones…)
     frames: list[Path] = []          # imágenes para análisis con visión
+    voice_audios: list[Path] = []    # narración grabada por el usuario
     forced_script = False
 
     text_file = input_dir / "texto.txt"
@@ -143,12 +144,7 @@ def run(project, cfg) -> None:
             script_parts.append(extract_text(path).strip())
             forced_script = True
         elif cat == "voz" and kind == "audio":
-            stt = stt or get_stt(cfg)
-            transcript = stt.transcribe(path)
-            (input_dir / f"transcripcion_{asset['id']:02d}.txt").write_text(
-                transcript, encoding="utf-8")
-            # Sin guion escrito, la narración transcrita ES la base del guion
-            (script_parts if not forced_script else context_parts).append(transcript)
+            voice_audios.append(path)  # se procesan juntos más abajo
         elif cat == "referencia":
             if kind == "image":
                 frames.append(path)
@@ -162,6 +158,26 @@ def run(project, cfg) -> None:
             elif kind == "text":
                 context_parts.append(extract_text(path).strip())
         # broll: no se analiza aquí — se usa directamente en el montaje
+
+    # --- Narración grabada por el usuario: limpiar + transcribir con tiempos ---
+    project.set("narration", None)
+    if voice_audios:
+        from ytstudio.utils.media import clean_narration, concat_audios
+        trim = cfg.get("audio", {}).get("trim_silence", True)
+        keep = cfg.get("audio", {}).get("silence_keep", 0.4)
+        raw = concat_audios(voice_audios, input_dir / "narration_raw.mp3")
+        clean = clean_narration(raw, input_dir / "narration_clean.mp3",
+                                trim_silence=trim, keep=keep,
+                                lufs=cfg.get("audio", {}).get("vo_lufs", -16))
+        stt = stt or get_stt(cfg)
+        segments = stt.transcribe_segments(clean)
+        (input_dir / "narracion.txt").write_text(
+            " ".join(s["text"] for s in segments), encoding="utf-8")
+        project.set("narration", {"file": clean.name, "segments": segments})
+        # La narración transcrita es la base del guion (salvo que haya guion escrito)
+        if not forced_script:
+            script_parts.insert(0, " ".join(s["text"] for s in segments))
+            forced_script = True   # se respeta como guion definitivo
 
     raw_text = "\n\n".join(p for p in script_parts if p)
     broll_count = sum(1 for a in assets if a["category"] == "broll")
