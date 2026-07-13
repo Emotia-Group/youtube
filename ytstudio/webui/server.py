@@ -269,7 +269,9 @@ def api_save_config(body: dict) -> dict:
     cfg = body.get("config")
     if not isinstance(cfg, dict):
         raise ApiError(400, "Config inválida.")
-    (ROOT / "config.yaml").write_text(
+    # Se guarda en config.local.yaml (fuera de Git) — nunca en config.yaml,
+    # que es parte del repositorio y un 'git pull' lo sobreescribiría.
+    (ROOT / "config.local.yaml").write_text(
         yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return {"saved": True}
 

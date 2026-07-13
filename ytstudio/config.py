@@ -35,6 +35,14 @@ def load_config(project_dir: Path | None = None) -> dict:
     load_dotenv()
     cfg_path = ROOT / "config.yaml"
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+
+    # config.local.yaml: tus ajustes guardados desde la interfaz. Vive fuera
+    # de Git (.gitignore) a propósito — así 'git pull' nunca choca con tus
+    # cambios y config.yaml (el de la app) se puede actualizar libremente.
+    local_cfg_path = ROOT / "config.local.yaml"
+    if local_cfg_path.exists():
+        cfg = _deep_merge(cfg, yaml.safe_load(local_cfg_path.read_text(encoding="utf-8")) or {})
+
     if project_dir:
         local = project_dir / "config.yaml"
         if local.exists():
