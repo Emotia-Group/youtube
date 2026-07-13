@@ -23,7 +23,7 @@ providers:
   images:
     name: mock
     model: black-forest-labs/flux-1.1-pro
-    size: 1792x1024
+    size: 1536x1024          # gpt-image-1 horizontal (16:9); solo aplica a openai
   videogen:
     name: none
     model: kwaivgi/kling-v1.6-standard

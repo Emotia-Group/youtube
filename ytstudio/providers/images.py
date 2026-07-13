@@ -6,10 +6,34 @@ from pathlib import Path
 
 
 class OpenAIImages:
+    # gpt-image-1 solo admite estos tamaños; se elige por orientación del video
+    _VALID = {"1024x1024", "1536x1024", "1024x1536", "auto"}
+
     def __init__(self, cfg: dict):
         from openai import OpenAI
         self.client = OpenAI()
-        self.size = cfg["providers"]["images"].get("size", "1792x1024")
+        want = str(cfg["providers"]["images"].get("size", "")).lower()
+        self.size = self._normalize(want, cfg)
+
+    @staticmethod
+    def _normalize(want: str, cfg: dict) -> str:
+        if want in OpenAIImages._VALID:
+            return want
+        # Traducir cualquier tamaño (ej. 1792x1024 de DALL·E 3) al de gpt-image-1
+        # según la orientación del video configurado.
+        w = cfg.get("video", {}).get("width", 1920)
+        h = cfg.get("video", {}).get("height", 1080)
+        if "x" in want:  # respetar la orientación pedida si la trae el tamaño
+            try:
+                w, h = (int(x) for x in want.split("x"))
+            except ValueError:
+                pass
+        ratio = w / h if h else 1.78
+        if ratio > 1.2:
+            return "1536x1024"   # horizontal (16:9)
+        if ratio < 0.83:
+            return "1024x1536"   # vertical (9:16, shorts)
+        return "1024x1024"       # cuadrado
 
     def generate(self, prompt: str, out: Path) -> Path:
         import base64
