@@ -190,6 +190,7 @@ def api_project_detail(slug: str) -> dict:
     project = Project(slug)
     detail = _project_summary(slug)
     detail["phase_info"] = project.state.get("phases", {})
+    detail["warnings"] = project.get("warnings") or []
     detail["assets"] = project.get("assets") or []
     detail["has_text_input"] = bool(project.get("has_text_input"))
     detail["concept"] = project.get("concept")

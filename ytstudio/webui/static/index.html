@@ -274,6 +274,7 @@ async function renderProject(activeTab){
   <div id="phases">${phaseChipsHtml(p,running?p.phase:null)}</div>
   ${p.total_duration?`<div class="muted">Duración estimada: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
   ${failed?`<div class="card" style="border-color:var(--err)">✖ Se detuvo en el paso <b>${esc(phaseLabel(failed[0]))}</b>:<br><span class="muted">${esc(p.phase_info[failed[0]]?.error||'')}</span><br><br>Corrige lo indicado y pulsa <b>▶ Generar video</b> para reanudar desde ahí.</div>`:''}
+  ${(p.warnings||[]).map(w=>`<div class="banner">⚠ ${esc(w)}</div>`).join('')}
   <pre id="log"></pre>
   <div class="tabs" style="margin-top:16px">${tabs.map(([t,ic])=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${ic} ${t}</button>`).join('')}</div>
   <div id="tabbody"></div>`;

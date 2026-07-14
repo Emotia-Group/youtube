@@ -69,6 +69,7 @@ def run(project, cfg) -> None:
                            project, broll_dir)
 
     # 2) IA para las escenas sin material propio
+    videogen_warning = None
     for scene in scenes:
         if scene.get("broll_source") == "user":
             continue
@@ -79,12 +80,24 @@ def run(project, cfg) -> None:
 
         if scene.get("broll_type") == "video" and videogen is not None:
             clip = broll_dir / f"scene_{scene['id']:03d}.mp4"
-            if not clip.exists():
-                # imagen como fotograma inicial → coherencia visual del clip
-                videogen.generate(scene["broll_prompt"], clip, image=img)
-            scene["broll_video"] = clip.name
+            try:
+                if not clip.exists():
+                    # imagen como fotograma inicial → coherencia visual del clip
+                    videogen.generate(scene["broll_prompt"], clip, image=img)
+                scene["broll_video"] = clip.name
+            except Exception as e:
+                # El video generativo (Kling/Wan) es opcional y caro: si falla,
+                # se degrada a la imagen con animación Ken Burns y el video se
+                # completa igual, avisando en vez de detener todo el proyecto.
+                videogen_warning = str(e)
+                videogen = None  # no reintentar en las siguientes escenas
+                scene["broll_type"] = "image"
+                scene.pop("broll_video", None)
         else:
             scene["broll_type"] = "image"
             scene.pop("broll_video", None)
 
+    project.set("warnings", [f"Video generativo desactivado para este render — "
+                             f"se usaron imágenes animadas. {videogen_warning}"]
+                if videogen_warning else [])
     save_scenes(project, scenes)
