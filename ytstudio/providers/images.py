@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from ytstudio.providers.replicate_util import replicate_call
+
 
 class OpenAIImages:
     # gpt-image-1 solo admite estos tamaños; se elige por orientación del video
@@ -53,7 +55,7 @@ class ReplicateImages:
 
     def generate(self, prompt: str, out: Path) -> Path:
         import urllib.request
-        output = self.client.run(self.model, input={
+        output = replicate_call(self.client, self.model, {
             "prompt": prompt, "aspect_ratio": "16:9",
             "output_format": "jpg", "safety_tolerance": 2,
         })

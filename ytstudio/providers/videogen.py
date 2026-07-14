@@ -16,11 +16,12 @@ class ReplicateVideo:
     def generate(self, prompt: str, out: Path, image: Path | None = None) -> Path:
         import contextlib
         import urllib.request
+        from ytstudio.providers.replicate_util import replicate_call
         with contextlib.ExitStack() as stack:
             inputs: dict = {"prompt": prompt, "aspect_ratio": "16:9", "duration": 5}
             if image is not None:
                 inputs["start_image"] = stack.enter_context(open(image, "rb"))
-            output = self.client.run(self.model, input=inputs)
+            output = replicate_call(self.client, self.model, inputs)
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)
         return out

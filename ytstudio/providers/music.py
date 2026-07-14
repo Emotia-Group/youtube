@@ -38,9 +38,10 @@ class ReplicateMusic:
 
     def generate(self, mood: str, seconds: float, out: Path) -> Path:
         import urllib.request
+        from ytstudio.providers.replicate_util import replicate_call
         # MusicGen genera hasta ~30s; se generan y loopean
         raw = out.with_suffix(".raw.mp3")
-        output = self.client.run(self.model, input={
+        output = replicate_call(self.client, self.model, {
             "prompt": f"{mood} instrumental background music for a documentary video, "
                       "no vocals, seamless loop",
             "duration": 30, "output_format": "mp3",
