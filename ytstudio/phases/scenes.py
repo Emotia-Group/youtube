@@ -45,6 +45,27 @@ def scene_seconds(cfg: dict) -> float:
     return float(cfg.get("video", {}).get("scene_seconds", 6))
 
 
+def _assign_video_scenes(scenes: list[dict], cfg: dict) -> None:
+    """Marca deterministamente N escenas como video (broll_type='video'),
+    repartidas uniformemente, según providers.videogen.max_scenes. Así el
+    usuario obtiene EXACTAMENTE el número de escenas de video que pidió, en
+    vez de dejarlo al criterio del modelo. El resto quedan como imagen."""
+    vg = cfg.get("providers", {}).get("videogen", {})
+    n = vg.get("max_scenes", 0) if vg.get("name", "none") != "none" else 0
+    n = min(int(n or 0), len(scenes))
+    if n <= 0:
+        for s in scenes:
+            s["broll_type"] = "image"
+        return
+    if n >= len(scenes):
+        idxs = set(range(len(scenes)))
+    else:  # distribuidas uniformemente, incluyendo la primera (el gancho)
+        idxs = {round(i * (len(scenes) - 1) / (n - 1)) if n > 1 else 0
+                for i in range(n)}
+    for i, s in enumerate(scenes):
+        s["broll_type"] = "video" if i in idxs else "image"
+
+
 def _split_sentences(text: str) -> list[str]:
     import re
     parts = re.split(r"(?<=[.!?…])\s+", text.strip())
@@ -229,6 +250,7 @@ def run(project, cfg) -> None:
     if narration and narration.get("segments"):
         scenes = _group_narration(narration["segments"], target)
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
+        _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
         _write_outputs(project, scenes)
         return
 
@@ -238,6 +260,7 @@ def run(project, cfg) -> None:
         scenes = _mechanical_scenes(
             script_md, concept["visual_style"]["prompt_prefix"], target)
         if scenes:
+            _assign_video_scenes(scenes, cfg)
             _write_outputs(project, scenes)
             return
 
@@ -276,6 +299,7 @@ def run(project, cfg) -> None:
     scenes = result["scenes"]
     for i, s in enumerate(scenes, start=1):
         s["id"] = i  # ids consecutivos garantizados
+    _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
     _write_outputs(project, scenes)
 
 

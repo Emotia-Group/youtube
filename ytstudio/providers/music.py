@@ -34,10 +34,9 @@ class ReplicateMusic:
     def __init__(self, cfg: dict):
         import replicate
         self.client = replicate
-        # meta/musicgen requiere versión pinned en replicate.run (sin ella da 404)
-        self.model = cfg["providers"]["music"].get(
-            "model",
-            "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb")
+        # La versión se resuelve dinámicamente en replicate_call (evita el 404
+        # por hashes caducados), así que basta el slug del modelo.
+        self.model = cfg["providers"]["music"].get("model", "meta/musicgen")
 
     def generate(self, mood: str, seconds: float, out: Path) -> Path:
         import urllib.request
