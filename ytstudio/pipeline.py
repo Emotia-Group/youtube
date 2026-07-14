@@ -46,6 +46,11 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     from ytstudio.utils.media import require_ffmpeg
     require_ffmpeg()
 
+    # Los avisos de espera por límite de velocidad de Replicate se muestran en
+    # el registro de progreso (no solo en la consola).
+    from ytstudio.providers import replicate_util
+    replicate_util.set_progress(log)
+
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 

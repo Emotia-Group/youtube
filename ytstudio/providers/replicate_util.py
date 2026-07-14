@@ -10,6 +10,24 @@ video Kling/Wan, música MusicGen).
 """
 from __future__ import annotations
 
+import threading
+
+# Canal opcional para mostrar avisos (p.ej. esperas por límite de velocidad) en
+# el registro de progreso de la interfaz. Es por-hilo, así que ejecuciones
+# simultáneas de proyectos distintos no se mezclan. Si nadie lo configura, los
+# avisos van a stdout (visible en la consola).
+_progress = threading.local()
+
+
+def set_progress(fn) -> None:
+    """El pipeline lo conecta al log de la ejecución en curso."""
+    _progress.fn = fn
+
+
+def _notify(msg: str) -> None:
+    fn = getattr(_progress, "fn", None)
+    (fn or print)(msg)
+
 
 def _resolve_version(client, model: str) -> str | None:
     """Devuelve el id de versión a usar. Si el modelo ya trae ':hash', lo usa;
@@ -66,7 +84,12 @@ def replicate_call(client, model: str, inputs: dict, max_retries: int = 10):
             is_rate = "429" in msg or "throttled" in low or "rate limit" in low
             if is_rate and attempt < max_retries:
                 wait = _reset_seconds(msg) or 0
-                time.sleep(min(max(wait, 10) + 2, 60))
+                delay = min(max(wait, 10) + 2, 60)
+                _notify(
+                    f"⏳ Replicate limita las peticiones (crédito bajo): "
+                    f"esperando {delay:.0f}s y reintentando "
+                    f"({attempt + 1}/{max_retries})…")
+                time.sleep(delay)
                 continue
             _raise_clear(e, msg, low, model)
 
