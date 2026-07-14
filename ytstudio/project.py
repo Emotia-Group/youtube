@@ -81,6 +81,14 @@ class Project:
         entry.update(info)
         self.save()
 
+    def add_warning(self, msg: str) -> None:
+        """Acumula un aviso no fatal (ej. un proveedor opcional que falló) para
+        mostrarlo en la interfaz sin detener el proyecto."""
+        warnings = self.state["data"].setdefault("warnings", [])
+        if msg not in warnings:
+            warnings.append(msg)
+        self.save()
+
     def reset_from(self, phase: str, order: list[str]) -> None:
         """Invalida una fase y todas las posteriores (para re-ejecutar)."""
         if phase not in order:

@@ -49,6 +49,8 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 
+    project.set("warnings", [])  # avisos frescos por ejecución
+
     for name, module, desc in PHASES:
         if project.phase_status(name) == "done":
             log(f"✔ {name:<10} {desc} (ya completada)")

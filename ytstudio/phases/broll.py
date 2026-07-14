@@ -97,7 +97,7 @@ def run(project, cfg) -> None:
             scene["broll_type"] = "image"
             scene.pop("broll_video", None)
 
-    project.set("warnings", [f"Video generativo desactivado para este render — "
-                             f"se usaron imágenes animadas. {videogen_warning}"]
-                if videogen_warning else [])
+    if videogen_warning:
+        project.add_warning(f"Video generativo desactivado para este render — "
+                            f"se usaron imágenes animadas. {videogen_warning}")
     save_scenes(project, scenes)
