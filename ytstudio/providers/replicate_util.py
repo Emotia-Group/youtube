@@ -26,44 +26,81 @@ def _resolve_version(client, model: str) -> str | None:
     return None  # sin versión → se usará client.run con el slug tal cual
 
 
-def replicate_call(client, model: str, inputs: dict):
-    try:
-        version_id = _resolve_version(client, model)
-        if version_id:
-            # Polling: no sufre el read-timeout de una sola petición larga.
-            pred = client.predictions.create(version=version_id, input=inputs)
-            pred.wait()
-            if pred.status != "succeeded":
-                raise RuntimeError(
-                    f"Replicate no completó la generación (estado: {pred.status})"
-                    + (f": {pred.error}" if getattr(pred, "error", None) else ""))
-            return pred.output
-        return client.run(model, input=inputs)
-    except Exception as e:
-        msg = str(e)
-        low = msg.lower()
-        if "401" in msg or "invalid token" in low or "authentication" in low \
-                or "unauthenticated" in low:
+def _reset_seconds(msg: str) -> float | None:
+    """Extrae el tiempo de espera que indica Replicate en un 429
+    (ej. 'resets in ~4s' o 'retry after 10')."""
+    import re
+    m = re.search(r"resets? in ~?(\d+(?:\.\d+)?)\s*s", msg, re.I) \
+        or re.search(r"retry[- ]after[:=]?\s*(\d+(?:\.\d+)?)", msg, re.I)
+    return float(m.group(1)) if m else None
+
+
+def _once(client, model: str, inputs: dict):
+    version_id = _resolve_version(client, model)
+    if version_id:
+        # Polling: no sufre el read-timeout de una sola petición larga.
+        pred = client.predictions.create(version=version_id, input=inputs)
+        pred.wait()
+        if pred.status != "succeeded":
             raise RuntimeError(
-                "El token de Replicate no es válido. Importante: FLUX, Kling y "
-                "MusicGen se usan A TRAVÉS de Replicate, así que necesitas un "
-                "token de replicate.com — NO la clave de KlingAI ni la de "
-                "OpenAI. Consíguelo en https://replicate.com/account/api-tokens "
-                "(empieza por 'r8_') y pégalo en ⚙ Configuración → Replicate. "
-                "Alternativa rápida: cambia el proveedor de imágenes a OpenAI "
-                "en ⚙ Configuración (tu clave de OpenAI ya está activa)."
-            ) from e
-        if "402" in msg or "payment" in low or "billing" in low \
-                or "insufficient" in low or "spend" in low:
-            raise RuntimeError(
-                "Replicate rechazó la petición por facturación: añade un método "
-                "de pago o saldo en https://replicate.com/account/billing. "
-                "Alternativa: usa OpenAI para imágenes en ⚙ Configuración."
-            ) from e
-        if "404" in msg or "could not be found" in low or "not found" in low:
-            raise RuntimeError(
-                f"El modelo de Replicate '{model}' no se encontró. Revisa el "
-                "nombre en ⚙ Configuración o deja el modelo por defecto. Si es un "
-                "modelo con versión, puede que esa versión ya no exista."
-            ) from e
-        raise
+                f"Replicate no completó la generación (estado: {pred.status})"
+                + (f": {pred.error}" if getattr(pred, "error", None) else ""))
+        return pred.output
+    return client.run(model, input=inputs)
+
+
+def replicate_call(client, model: str, inputs: dict, max_retries: int = 6):
+    import time
+    for attempt in range(max_retries + 1):
+        try:
+            return _once(client, model, inputs)
+        except Exception as e:
+            msg = str(e)
+            low = msg.lower()
+            # Límite de velocidad (429): esperar el tiempo indicado y reintentar.
+            # Con <$5 de crédito Replicate limita a 6 peticiones/min, así que se
+            # espacian las escenas automáticamente en vez de fallar.
+            is_rate = "429" in msg or "throttled" in low or "rate limit" in low
+            if is_rate and attempt < max_retries:
+                wait = _reset_seconds(msg)
+                # margen extra: con <$5 el límite real es ~1 cada 10s
+                time.sleep(min((wait or 2 ** attempt) + 2, 30))
+                continue
+            _raise_clear(e, msg, low, model)
+
+
+def _raise_clear(e, msg, low, model):
+    if "429" in msg or "throttled" in low or "rate limit" in low:
+        raise RuntimeError(
+            "Replicate está limitando las peticiones porque tu crédito es "
+            "bajo (menos de $5): permite solo 6 imágenes por minuto y aún "
+            "así se agotó tras varios reintentos. Opciones: añade saldo en "
+            "https://replicate.com/account/billing, reduce el nº de escenas "
+            "(ritmo visual más pausado en ⚙ Configuración), o usa OpenAI "
+            "para imágenes (no tiene ese límite)."
+        ) from e
+    if "401" in msg or "invalid token" in low or "authentication" in low \
+            or "unauthenticated" in low:
+        raise RuntimeError(
+            "El token de Replicate no es válido. Importante: FLUX, Kling y "
+            "MusicGen se usan A TRAVÉS de Replicate, así que necesitas un "
+            "token de replicate.com — NO la clave de KlingAI ni la de "
+            "OpenAI. Consíguelo en https://replicate.com/account/api-tokens "
+            "(empieza por 'r8_') y pégalo en ⚙ Configuración → Replicate. "
+            "Alternativa rápida: cambia el proveedor de imágenes a OpenAI "
+            "en ⚙ Configuración (tu clave de OpenAI ya está activa)."
+        ) from e
+    if "402" in msg or "payment" in low or "billing" in low \
+            or "insufficient" in low or "spend" in low:
+        raise RuntimeError(
+            "Replicate rechazó la petición por facturación: añade un método "
+            "de pago o saldo en https://replicate.com/account/billing. "
+            "Alternativa: usa OpenAI para imágenes en ⚙ Configuración."
+        ) from e
+    if "404" in msg or "could not be found" in low or "not found" in low:
+        raise RuntimeError(
+            f"El modelo de Replicate '{model}' no se encontró. Revisa el "
+            "nombre en ⚙ Configuración o deja el modelo por defecto. Si es un "
+            "modelo con versión, puede que esa versión ya no exista."
+        ) from e
+    raise
