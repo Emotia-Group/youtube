@@ -49,7 +49,7 @@ def _once(client, model: str, inputs: dict):
     return client.run(model, input=inputs)
 
 
-def replicate_call(client, model: str, inputs: dict, max_retries: int = 6):
+def replicate_call(client, model: str, inputs: dict, max_retries: int = 10):
     import time
     for attempt in range(max_retries + 1):
         try:
@@ -58,13 +58,15 @@ def replicate_call(client, model: str, inputs: dict, max_retries: int = 6):
             msg = str(e)
             low = msg.lower()
             # Límite de velocidad (429): esperar el tiempo indicado y reintentar.
-            # Con <$5 de crédito Replicate limita a 6 peticiones/min, así que se
-            # espacian las escenas automáticamente en vez de fallar.
+            # Con <$5 de crédito Replicate limita a ~6 peticiones/min (1 cada
+            # ~10 s), así que las escenas se espacian solas en vez de fallar.
+            # El "resets in ~Ns" que informa Replicate suele quedarse corto, por
+            # eso se aplica un suelo de 12 s: total ~2 min de reintentos, más
+            # que suficiente para atravesar el límite reducido.
             is_rate = "429" in msg or "throttled" in low or "rate limit" in low
             if is_rate and attempt < max_retries:
-                wait = _reset_seconds(msg)
-                # margen extra: con <$5 el límite real es ~1 cada 10s
-                time.sleep(min((wait or 2 ** attempt) + 2, 30))
+                wait = _reset_seconds(msg) or 0
+                time.sleep(min(max(wait, 10) + 2, 60))
                 continue
             _raise_clear(e, msg, low, model)
 
