@@ -11,6 +11,8 @@ video:
   burn_subtitles: false
   scene_seconds: 6           # ritmo visual: cada cuántos segundos cambia la imagen
                              # 5-6 dinámico · 8-10 estándar · 14+ contemplativo
+  overlays: true             # rótulos cinematográficos en los momentos clave
+  overlay_accent: E8C46B     # color de acento de los rótulos (dorado cine)
 providers:
   llm:
     name: anthropic
@@ -36,6 +38,10 @@ audio:
   music_db: -21
   duck: true
   vo_lufs: -16
+  intensity_db: 8            # cuánto sube/baja la música según la intensidad
+                             # dramática de cada escena (dB de recorrido)
+  sfx: true                  # efectos incidentales (whoosh/riser/boom) en cortes
+  sfx_db: -18                # volumen de los efectos (propios en assets/sfx)
   # Modo "narración propia" (cuando subes tu voz grabada):
   trim_silence: true         # recorta silencios largos de tu grabación
   silence_keep: 0.4          # deja pausas uniformes de N segundos

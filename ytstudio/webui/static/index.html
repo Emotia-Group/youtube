@@ -305,7 +305,8 @@ async function renderTab(tab,p){
             ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}</div>
           <p style="margin:6px 0">${esc(s.narration)}</p>
           <div class="muted" style="font-size:12px">🎨 ${esc(s.broll_prompt)}</div>
-          ${s.on_screen_text?`<div class="muted">🔤 Texto en pantalla: <b>${esc(s.on_screen_text)}</b></div>`:''}
+          ${s.overlay?`<div class="muted">🔤 Rótulo <span class="badge">${esc(s.overlay.type)}</span> ${s.overlay.kicker?`<small>${esc(s.overlay.kicker)} · </small>`:''}<b>${esc(s.overlay.text)}</b></div>`:(s.on_screen_text?`<div class="muted">🔤 Texto en pantalla: <b>${esc(s.on_screen_text)}</b></div>`:'')}
+          ${(s.sfx||s.pause_after)?`<div class="muted" style="font-size:12px">${s.sfx?`🔊 ${esc(s.sfx)} `:''}${s.pause_after?`⏸ respiro ${s.pause_after}s`:''}</div>`:''}
           ${s.vo_file?`<audio controls preload="none" src="/files/${current}/05_voiceover/${s.vo_file}"></audio>`:''}
         </div>
       </div>`).join('');

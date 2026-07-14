@@ -38,6 +38,25 @@ _FONT_CANDIDATES = {
     ],
 }
 
+# Fuentes serif (negrita) para rótulos cinematográficos: nombres de
+# personajes y conclusiones. Si no hay ninguna, se degrada a la sans.
+_SERIF_CANDIDATES = {
+    "Windows": [
+        r"C:\Windows\Fonts\georgiab.ttf",
+        r"C:\Windows\Fonts\constanb.ttf",   # Constantia
+        r"C:\Windows\Fonts\timesbd.ttf",
+    ],
+    "Darwin": [
+        "/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf",
+    ],
+    "Linux": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSerif-Bold.ttf",
+    ],
+}
+
 # Ubicaciones típicas de ffmpeg en Windows cuando no está en el PATH
 _WIN_FFMPEG_DIRS = [
     r"C:\ffmpeg\bin",
@@ -46,8 +65,18 @@ _WIN_FFMPEG_DIRS = [
 ]
 
 
-def find_font(bold: bool = True) -> str | None:
-    """Ruta de una fuente del sistema (negrita o regular), o None."""
+def find_font(bold: bool = True, serif: bool = False) -> str | None:
+    """Ruta de una fuente del sistema (negrita o regular; serif opcional para
+    rótulos cinematográficos), o None."""
+    if serif:
+        for path in _SERIF_CANDIDATES.get(platform.system(), []):
+            if Path(path).exists():
+                return path
+        for paths in _SERIF_CANDIDATES.values():
+            for path in paths:
+                if Path(path).exists():
+                    return path
+        # sin serif en el sistema → sans negrita
     for bold_path, regular_path in _FONT_CANDIDATES.get(platform.system(), []):
         path = bold_path if bold else regular_path
         if Path(path).exists():

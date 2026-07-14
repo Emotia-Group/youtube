@@ -8,6 +8,23 @@ import json
 from ytstudio.phases.script import load_script
 from ytstudio.providers import get_llm
 
+# Campos creativos por escena (dirección de arte + banda sonora):
+# - overlay_*: rótulo cinematográfico SOLO en momentos clave (tipado: el
+#   montaje le da un diseño distinto a cada tipo).
+# - music_intensity: arco dramático de la música (0 = mínima, 1 = clímax).
+# - pause_after: respiro dramático tras la escena (la música sube en él).
+# - sfx: efecto de sonido incidental en el corte de entrada de la escena.
+_CREATIVE_PROPS = {
+    "overlay_type": {"type": "string",
+                     "enum": ["ninguno", "personaje", "lugar", "fecha",
+                              "dato", "lista", "conclusion"]},
+    "overlay_text": {"type": "string"},
+    "overlay_kicker": {"type": "string"},
+    "music_intensity": {"type": "number"},
+    "pause_after": {"type": "number"},
+    "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
+}
+
 SCENES_SCHEMA = {
     "type": "object",
     "properties": {
@@ -24,10 +41,10 @@ SCENES_SCHEMA = {
                     "animation": {"type": "string",
                                   "enum": ["zoom_in", "zoom_out", "pan_left",
                                            "pan_right", "static"]},
-                    "on_screen_text": {"type": "string"},
+                    **_CREATIVE_PROPS,
                 },
                 "required": ["id", "section", "narration", "broll_prompt",
-                             "broll_type", "animation", "on_screen_text"],
+                             "broll_type", "animation", *_CREATIVE_PROPS],
                 "additionalProperties": False,
             },
         },
@@ -35,6 +52,44 @@ SCENES_SCHEMA = {
     "required": ["scenes"],
     "additionalProperties": False,
 }
+
+# Reglas de dirección creativa compartidas por los dos flujos con LLM
+# (guion nuevo y narración propia). Criterio de documental/serie: los rótulos
+# son un acento, no un hábito; la música cuenta el arco; el silencio es un
+# recurso.
+CREATIVE_RULES = """\
+RÓTULOS EN PANTALLA (overlay_*): son acentos cinematográficos, NO subtítulos.
+- Úsalos SOLO en momentos clave: como máximo en 1 de cada 3-4 escenas. En el
+  resto: overlay_type='ninguno' y textos vacíos.
+- Momentos que SÍ merecen rótulo: primera aparición de un personaje relevante;
+  un lugar o una fecha que sitúan la acción; una cifra o dato crucial; los
+  ítems de una enumeración ("Razón 1…"); la conclusión más importante de una
+  sección o del video.
+- overlay_text: el dato en sí, 1-5 palabras (ej. "Alejandro Magno", "331 a. C.",
+  "40 000 soldados").
+- overlay_kicker: contexto en 1-3 palabras que se muestra pequeño encima
+  (ej. kicker "REY DE MACEDONIA" + text "Alejandro Magno"; kicker "BATALLA DE
+  GAUGAMELA" + text "331 a. C."; kicker "RAZÓN 2" + text "La logística").
+  Puede ir vacío si el texto se explica solo.
+- overlay_type: personaje | lugar | fecha | dato | lista | conclusion — elige
+  el que corresponda al contenido (cada tipo tiene un diseño distinto).
+
+MÚSICA (music_intensity, 0.0-1.0): dibuja el arco dramático de la historia.
+- Gancho inicial 0.65-0.8 · desarrollo/exposición 0.35-0.55 · tensión creciente
+  0.6-0.75 · clímax 0.85-1.0 · cierre 0.45-0.6.
+- Cambia de forma gradual (±0.15 entre escenas contiguas); reserva los saltos
+  bruscos para golpes dramáticos reales.
+
+RESPIROS (pause_after, segundos): silencio de la voz tras la escena, donde la
+música respira y sube — recurso cinematográfico, úsalo con intención.
+- 0 en la mayoría de escenas. 0.8-1.6 tras una revelación, una pregunta al
+  espectador, o el final de una sección. Máximo en 1 de cada 6 escenas.
+
+EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
+- 'whoosh' al cambiar de sección/lugar/tiempo · 'riser' en la escena que
+  desemboca en el clímax (crea anticipación) · 'boom' en una revelación
+  impactante · 'ninguno' en el resto (máximo 1 de cada 4 escenas).
+"""
 
 
 WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
@@ -64,6 +119,49 @@ def _assign_video_scenes(scenes: list[dict], cfg: dict) -> None:
                 for i in range(n)}
     for i, s in enumerate(scenes):
         s["broll_type"] = "video" if i in idxs else "image"
+
+
+def _default_intensity(i: int, n: int) -> float:
+    """Arco musical por defecto (sin criterio del LLM): gancho fuerte, valle de
+    desarrollo, clímax hacia el 85 % y cierre suave. Interpolación lineal."""
+    keys = [(0.0, 0.7), (0.2, 0.45), (0.6, 0.55), (0.85, 0.9), (1.0, 0.5)]
+    x = i / (n - 1) if n > 1 else 0.5
+    for (x0, y0), (x1, y1) in zip(keys, keys[1:]):
+        if x <= x1:
+            return round(y0 + (y1 - y0) * (x - x0) / (x1 - x0), 2)
+    return keys[-1][1]
+
+
+_OVERLAY_TYPES = {"personaje", "lugar", "fecha", "dato", "lista", "conclusion"}
+
+
+def _normalize_creative(scenes: list[dict]) -> None:
+    """Valida y compacta los campos creativos: los flat overlay_* del esquema
+    se convierten en un objeto `overlay` (o None), y los valores numéricos se
+    acotan. `on_screen_text` se mantiene sincronizado para la interfaz y los
+    proyectos antiguos."""
+    n = len(scenes)
+    for i, s in enumerate(scenes):
+        o_type = s.pop("overlay_type", None) or "ninguno"
+        o_text = (s.pop("overlay_text", "") or "").strip()[:48]
+        o_kicker = (s.pop("overlay_kicker", "") or "").strip()[:36]
+        if o_type in _OVERLAY_TYPES and o_text:
+            s["overlay"] = {"type": o_type, "text": o_text, "kicker": o_kicker}
+        else:
+            s["overlay"] = None
+        s["on_screen_text"] = o_text if s["overlay"] else ""
+
+        mi = s.get("music_intensity")
+        if not isinstance(mi, (int, float)):
+            mi = _default_intensity(i, n)
+        s["music_intensity"] = round(min(1.0, max(0.0, float(mi))), 2)
+
+        pa = s.get("pause_after")
+        pa = float(pa) if isinstance(pa, (int, float)) else 0.0
+        s["pause_after"] = round(min(2.0, max(0.0, pa)), 2)
+
+        s["sfx"] = s.get("sfx") if s.get("sfx") in ("whoosh", "riser", "boom") \
+            else None
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -195,34 +293,35 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
                 "broll_type": {"type": "string", "enum": ["image", "video"]},
                 "animation": {"type": "string", "enum": ["zoom_in", "zoom_out",
                               "pan_left", "pan_right", "static"]},
-                "on_screen_text": {"type": "string"},
                 "section": {"type": "string"},
+                **_CREATIVE_PROPS,
             },
-            "required": ["broll_prompt", "broll_type", "animation",
-                         "on_screen_text", "section"],
+            "required": ["broll_prompt", "broll_type", "animation", "section",
+                         *_CREATIVE_PROPS],
             "additionalProperties": False,
         }}},
         "required": ["scenes"], "additionalProperties": False,
     }
     narr = "\n".join(f"[{s['id']}] {s['narration']}" for s in scenes)
-    system = (f"Eres director de fotografía de un canal de YouTube en {lang}. "
-              "Las escenas y su narración YA están fijadas por el audio del "
-              "narrador; solo diseñas el apoyo visual de cada una.")
+    system = (
+        f"Eres a la vez director de fotografía, editor senior y director "
+        f"creativo de documentales y videos largos de YouTube en {lang}. Las "
+        "escenas y su narración YA están fijadas por el audio del narrador; tú "
+        "diseñas el apoyo visual, los rótulos y la dirección de la banda "
+        "sonora de cada una con criterio cinematográfico.")
     prompt = (
         f"Para cada una de estas {len(scenes)} escenas (en el mismo orden y "
-        "cantidad), diseña el B-roll que acompaña a lo que se dice:\n"
+        "cantidad), diseña el apoyo audiovisual de lo que se dice:\n"
         "- broll_prompt: prompt EN INGLÉS, detallado, que ilustre el contenido "
         f"de esa narración concreta, comenzando con el prefijo de estilo "
         f"\"{prefix}\". Sin texto ni letras en la imagen, sin personas reales.\n"
-        f"- broll_type: 'video' solo en las {videogen_scenes} de mayor impacto, "
-        "el resto 'image'.\n" if videogen_scenes else
-        f"- broll_type: siempre 'image'.\n")
-    prompt += (
-        "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
-        "- on_screen_text: 2-4 palabras solo si refuerzan un dato clave; si no, "
-        "cadena vacía.\n"
+        + (f"- broll_type: 'video' solo en las {videogen_scenes} de mayor "
+           "impacto, el resto 'image'.\n" if videogen_scenes else
+           "- broll_type: siempre 'image'.\n")
+        + "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
         "- section: título temático corto del tramo (para los capítulos).\n\n"
-        f"NARRACIÓN POR ESCENA:\n{narr}")
+        + CREATIVE_RULES
+        + f"\nNARRACIÓN POR ESCENA:\n{narr}")
     result = llm.complete_json(system, prompt, schema=schema,
                                max_tokens=32000, purpose="broll_fixed")
     got = result["scenes"]
@@ -231,9 +330,11 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
         s["broll_prompt"] = b.get("broll_prompt") or f"{prefix}, {s['narration'][:50]}"
         s["broll_type"] = b.get("broll_type", "image")
         s["animation"] = b.get("animation", s["animation"])
-        s["on_screen_text"] = b.get("on_screen_text", "")
         if b.get("section"):
             s["section"] = b["section"]
+        for key in _CREATIVE_PROPS:
+            if key in b:
+                s[key] = b[key]
 
 
 def run(project, cfg) -> None:
@@ -251,6 +352,7 @@ def run(project, cfg) -> None:
         scenes = _group_narration(narration["segments"], target)
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
+        _normalize_creative(scenes)
         _write_outputs(project, scenes)
         return
 
@@ -261,12 +363,16 @@ def run(project, cfg) -> None:
             script_md, concept["visual_style"]["prompt_prefix"], target)
         if scenes:
             _assign_video_scenes(scenes, cfg)
+            _normalize_creative(scenes)
             _write_outputs(project, scenes)
             return
 
     system = (
-        f"Eres editor y director de fotografía de videos de YouTube en {lang}. "
-        "Conviertes guiones en storyboards de escenas listos para producción con IA."
+        f"Eres a la vez editor senior, director de fotografía y director "
+        f"creativo de documentales, series y videos largos de YouTube en {lang}. "
+        "Conviertes guiones en storyboards listos para producción con IA, con "
+        "criterio cinematográfico: los rótulos son acentos puntuales, la música "
+        "dibuja el arco dramático y el silencio es un recurso narrativo."
     )
     words = max(6, round(target * WORDS_PER_SECOND))
     lo, hi = max(4, words - 4), words + 6
@@ -288,10 +394,9 @@ def run(project, cfg) -> None:
         "Sin texto ni letras dentro de la imagen, sin personas famosas reales.\n"
         + broll_type_rule +
         "- 'animation': varía entre zoom_in, zoom_out, pan_left, pan_right "
-        "(evita repetir la misma dos veces seguidas).\n"
-        "- 'on_screen_text': texto breve en pantalla (2-5 palabras) solo cuando "
-        "refuerce un dato clave; cadena vacía en el resto.\n\n"
-        f"GUION:\n<<<\n{script_md}\n>>>"
+        "(evita repetir la misma dos veces seguidas).\n\n"
+        + CREATIVE_RULES
+        + f"\nGUION:\n<<<\n{script_md}\n>>>"
     )
 
     result = llm.complete_json(system, prompt, schema=SCENES_SCHEMA,
@@ -300,6 +405,7 @@ def run(project, cfg) -> None:
     for i, s in enumerate(scenes, start=1):
         s["id"] = i  # ids consecutivos garantizados
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
+    _normalize_creative(scenes)
     _write_outputs(project, scenes)
 
 
@@ -312,8 +418,16 @@ def _write_outputs(project, scenes: list[dict]) -> None:
         md += [f"## Escena {s['id']} — {s['section']} ({s['animation']}, {s['broll_type']})",
                f"**Narración:** {s['narration']}",
                f"**B-roll:** {s['broll_prompt']}"]
-        if s["on_screen_text"]:
-            md.append(f"**Texto en pantalla:** {s['on_screen_text']}")
+        o = s.get("overlay")
+        if o:
+            kick = f" ({o['kicker']})" if o.get("kicker") else ""
+            md.append(f"**Rótulo [{o['type']}]:** {o['text']}{kick}")
+        extras = [f"música {s['music_intensity']:.2f}" if "music_intensity" in s else ""]
+        if s.get("pause_after"):
+            extras.append(f"respiro {s['pause_after']:.1f}s")
+        if s.get("sfx"):
+            extras.append(f"sfx {s['sfx']}")
+        md.append(f"*({', '.join(x for x in extras if x)})*")
         md.append("")
     project.path("scenes", "storyboard.md").write_text("\n".join(md), encoding="utf-8")
     project.set("scene_count", len(scenes))

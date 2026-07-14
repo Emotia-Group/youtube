@@ -27,14 +27,15 @@ def run(project, cfg) -> None:
             if not out.exists():
                 cut_segment(narration_file, scene["audio_start"],
                             scene["audio_end"], out)
-            scene_pad = padding
         else:
             # Voz sintética (TTS) desde el texto de la escena
             if tts is None:
                 tts = get_tts(cfg)
             if not out.exists():
                 tts.synthesize(scene["narration"], out)
-            scene_pad = padding
+        # Respiro dramático: el silencio extra queda dentro de la escena; la
+        # música sube sola en él (ducking) — recurso cinematográfico.
+        scene_pad = padding + float(scene.get("pause_after") or 0.0)
         scene["vo_file"] = out.name
         scene["vo_duration"] = round(probe_duration(out), 3)
         scene["duration"] = round(scene["vo_duration"] + scene_pad, 3)
