@@ -276,6 +276,7 @@ async function renderProject(activeTab){
   <div class="muted" style="margin:6px 0 2px">Progreso — se generan 11 pasos en orden${running&&p.phase?`. Ahora: <b style="color:var(--run)">${esc(phaseLabel(p.phase))}</b>`:''}:</div>
   <div id="phases">${phaseChipsHtml(p,running?p.phase:null)}</div>
   ${p.total_duration?`<div class="muted">Duración estimada: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
+  <div id="estimate"></div>
   ${failed&&!running?`<div class="card" style="border-color:var(--err)">✖ Se detuvo en el paso <b>${esc(phaseLabel(failed[0]))}</b>:<br><span class="muted">${esc(p.phase_info[failed[0]]?.error||'')}</span><br><br>Corrige lo indicado y pulsa <b>▶ Generar video</b> para reanudar desde ahí.</div>`:''}
   ${(p.warnings||[]).map(w=>`<div class="banner">⚠ ${esc(w)}</div>`).join('')}
   <pre id="log"></pre>
@@ -283,8 +284,36 @@ async function renderProject(activeTab){
   <div id="tabbody"></div>`;
   if(running){$('#log').style.display='block'}
   renderTab(tab,p);
+  loadEstimate(current);
 }
 function switchTab(t){window._tab=t;renderProject(t)}
+
+async function loadEstimate(slug){
+  const el=$('#estimate');if(!el)return;
+  try{
+    const e=await api(`/api/projects/${slug}/estimate`);
+    if(!el.isConnected)return;
+    const money=r=>r[1]===0?'<span class="muted">gratis</span>':`$${r[0].toFixed(2)} – $${r[1].toFixed(2)}`;
+    const mins=r=>r[0]===r[1]?`${r[1]} min`:`${r[0]} – ${r[1]} min`;
+    el.innerHTML=`<div class="card" style="font-size:13px">
+      <b>💰 Antes de generar — costo y tiempo estimados</b>
+      <span class="muted">(${e.escenas} escenas · ~${e.duracion_min} min de video)</span>
+      <table style="width:100%;margin-top:8px;border-collapse:collapse">
+        ${e.items.map(i=>`<tr>
+          <td style="padding:3px 8px 3px 0">${esc(i.fase)}<br><span class="muted" style="font-size:11px">${esc(i.detalle)}</span></td>
+          <td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:3px">${money(i.costo)}</td>
+          <td style="text-align:right;white-space:nowrap;vertical-align:top;padding:3px 0 0 12px" class="muted">${mins(i.minutos)}</td>
+        </tr>`).join('')}
+        <tr><td colspan="3" style="border-top:1px solid rgba(128,128,128,.35);padding:0"></td></tr>
+        <tr style="font-weight:bold">
+          <td style="padding-top:5px">Total aproximado</td>
+          <td style="text-align:right;white-space:nowrap;padding-top:5px">$${e.total_costo[0].toFixed(2)} – $${e.total_costo[1].toFixed(2)}</td>
+          <td style="text-align:right;white-space:nowrap;padding:5px 0 0 12px">${e.total_minutos[0]} – ${e.total_minutos[1]} min</td></tr>
+      </table>
+      ${e.notas.map(n=>`<div class="muted" style="font-size:11px;margin-top:5px">ℹ ${esc(n)}</div>`).join('')}
+    </div>`;
+  }catch(err){el.innerHTML=''}
+}
 
 async function renderTab(tab,p){
   const el=$('#tabbody');
@@ -589,8 +618,31 @@ function renderVersion(){
   const v=CAT.version||{};
   const el=$('#verinfo');if(!el)return;
   el.className=v.modified?'stale':'';
-  el.innerHTML=`Versión: <b>${esc(v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
+  el.style.cursor='pointer';
+  el.title='Ver qué cambió en cada versión';
+  el.onclick=showChangelog;
+  el.innerHTML=`Versión: <b>${esc(v.version||v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
+    +`<span class="muted" style="font-size:11px"> · novedades 📋</span>`
     +(v.modified?'<br>⚠ hay cambios locales sin actualizar':'');
+}
+async function showChangelog(){
+  let md='';
+  try{md=(await api('/api/changelog')).content}catch(e){toast('⚠ '+e.message);return}
+  const html=md.split('\n').map(l=>{
+    if(l.startsWith('## '))return `<h3 style="margin:14px 0 4px">${esc(l.slice(3))}</h3>`;
+    if(l.startsWith('# '))return `<h2 style="margin:0 0 6px">${esc(l.slice(2))}</h2>`;
+    if(l.startsWith('- '))return `<div style="margin:2px 0 2px 14px">• ${esc(l.slice(2))}</div>`;
+    return l.trim()?`<div style="margin:2px 0 2px 14px">${esc(l.trim())}</div>`:'';
+  }).join('');
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;display:flex;align-items:center;justify-content:center';
+  ov.onclick=e=>{if(e.target===ov)ov.remove()};
+  ov.innerHTML=`<div class="card" style="max-width:640px;max-height:80vh;overflow:auto;margin:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>Registro de cambios</b>
+      <button class="btn sec small" onclick="this.closest('div[style*=fixed]')?.remove()||this.parentElement.parentElement.parentElement.remove()">✕ Cerrar</button>
+    </div><div style="font-size:13px;line-height:1.5">${html}</div></div>`;
+  document.body.appendChild(ov);
 }
 (async function(){
   const data=await api('/api/config');

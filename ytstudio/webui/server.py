@@ -32,8 +32,18 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 def get_version() -> dict:
     """Identifica exactamente qué código está corriendo este servidor —
-    para poder verificar desde la propia UI si un 'git pull' surtió efecto."""
+    para poder verificar desde la propia UI si un 'git pull' surtió efecto.
+    El número consecutivo (v14, v15…) sale de la primera entrada de
+    CHANGELOG.md; el commit y la hora local, de git."""
+    import re
     import subprocess
+    version = ""
+    try:
+        head = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")[:2000]
+        m = re.search(r"^## (v\d+)", head, re.M)
+        version = m.group(1) if m else ""
+    except Exception:
+        pass
     try:
         out = subprocess.run(
             # format-local: hora del sistema del usuario, no la del commit (UTC)
@@ -43,9 +53,23 @@ def get_version() -> dict:
         commit, date = out.split("|", 1)
         dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
                                capture_output=True, text=True, timeout=3).stdout.strip()
-        return {"commit": commit, "date": date, "modified": bool(dirty)}
+        return {"version": version, "commit": commit, "date": date,
+                "modified": bool(dirty)}
     except Exception:
-        return {"commit": "desconocido", "date": "", "modified": False}
+        return {"version": version, "commit": "desconocido", "date": "",
+                "modified": False}
+
+
+def api_changelog() -> dict:
+    path = ROOT / "CHANGELOG.md"
+    return {"content": path.read_text(encoding="utf-8") if path.exists() else ""}
+
+
+def api_estimate(slug: str) -> dict:
+    from ytstudio.estimate import estimate
+    project = Project(slug)
+    cfg = load_config(project.dir)
+    return estimate(project, cfg)
 
 # Estado de las ejecuciones en curso: slug -> {running, lines, error}
 RUNS: dict[str, dict] = {}
@@ -386,6 +410,10 @@ class Handler(BaseHTTPRequestHandler):
                             ("running", "lines", "error", "phase")})
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_get_script(m.group(1)))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/estimate", path):
+                self._json(api_estimate(m.group(1)))
+            elif path == "/api/changelog":
+                self._json(api_changelog())
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
                 self._project_file(m.group(1), m.group(2))
             else:
