@@ -170,7 +170,9 @@ function showNew(){
       <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
     <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
     ${uploadCatsHtml()}
-    <h3>4 · Estilo del video</h3>
+    <label class="f"><span>4 · Enlaces de referencia (opcional) — videos de YouTube, Vimeo, Wistia o artículos cuyo estilo/fórmula quieres replicar (uno por línea)</span>
+      <textarea id="np-links" rows="2" placeholder="https://www.youtube.com/watch?v=…&#10;https://vimeo.com/…"></textarea></label>
+    <h3>5 · Estilo del video</h3>
     <div class="presets">${presets}</div>
     <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
   </div>`;
@@ -181,7 +183,7 @@ const UPLOAD_CATS=[
   ['guion','📄 Guion o idea','Documentos con tu guion: PDF, Word (.docx), PowerPoint, Excel, .txt, .md','.txt,.md,.pdf,.docx,.doc,.pptx,.xlsx,.xls'],
   ['voz','🎙 Tu voz / narración','Si subes tu narración grabada, se usa TAL CUAL en el video: se recortan los silencios largos y cada escena se alinea a lo que dices (mp3, wav, m4a…)','audio/*'],
   ['broll','🎬 Tu B-roll (imágenes y videos)','Tus propias imágenes/videos: se usan directamente en el montaje del video','image/*,video/*'],
-  ['referencia','🎨 Referencia de estilo','Imagen o video cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*'],
+  ['referencia','🎨 Referencia de estilo','Imagen, video o documento (PDF, docx…) cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*,.pdf,.docx,.doc,.pptx,.txt,.md'],
 ];
 function uploadCatsHtml(){
   return `<div class="upcats">${UPLOAD_CATS.map(([k,label,hint,accept])=>`
@@ -213,9 +215,10 @@ function renderChips(){
 function readB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f)})}
 async function createProject(){
   const slug=$('#np-slug').value.trim(), text=$('#np-text').value.trim();
+  const links=($('#np-links')?.value||'').split(/\s+/).map(s=>s.trim()).filter(s=>/^https?:\/\//.test(s));
   const pending=window._pending||[];
   if(!slug){toast('Ponle un nombre al proyecto');return}
-  if(!text&&!pending.length){toast('Escribe una idea/guion o sube al menos un archivo');return}
+  if(!text&&!pending.length&&!links.length){toast('Escribe una idea/guion, sube un archivo o añade un enlace');return}
   const btn=document.querySelector('button.btn[onclick="createProject()"]');
   if(btn){btn.disabled=true;btn.textContent='Subiendo…'}
   try{
@@ -224,7 +227,7 @@ async function createProject(){
       files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
     }
     const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
-      {slug,text,files,style_preset:document.querySelector('.preset.sel')?.dataset.k})});
+      {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k})});
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
   }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}

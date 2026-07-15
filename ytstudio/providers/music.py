@@ -1,6 +1,7 @@
 """Proveedores de música de fondo."""
 from __future__ import annotations
 
+import json
 import random
 from pathlib import Path
 
@@ -9,11 +10,45 @@ from ytstudio.utils.media import run_ffmpeg
 
 
 class LibraryMusic:
-    """Elige una pista de una carpeta local (assets/music). Si el nombre del
-    archivo contiene el mood pedido, se prioriza."""
+    """Elige una pista de una carpeta local (assets/music). La fase de música
+    puede elegir la pista con IA (por título/nombre frente al concepto del
+    video) vía generate_track; generate() mantiene el criterio simple (mood en
+    el nombre del archivo, o aleatoria)."""
 
     def __init__(self, cfg: dict):
         self.dir = ROOT / cfg["providers"]["music"].get("library_dir", "assets/music")
+
+    def list_tracks(self) -> list[dict]:
+        """Pistas disponibles con sus metadatos (título/artista del ID3)."""
+        import subprocess
+        tracks = []
+        for p in sorted(self.dir.glob("*")):
+            if p.suffix.lower() not in (".mp3", ".wav", ".m4a", ".flac", ".ogg"):
+                continue
+            info = {"file": p.name, "path": p}
+            try:
+                r = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries",
+                     "format_tags=title,artist:format=duration", "-of", "json",
+                     str(p)], capture_output=True, text=True, encoding="utf-8",
+                    errors="replace", timeout=30)
+                fmt = json.loads(r.stdout).get("format", {})
+                tags = {k.lower(): v for k, v in (fmt.get("tags") or {}).items()}
+                info["title"] = tags.get("title", "")
+                info["artist"] = tags.get("artist", "")
+                info["seconds"] = round(float(fmt.get("duration", 0)))
+            except Exception:
+                pass
+            tracks.append(info)
+        return tracks
+
+    def generate_track(self, track: Path, seconds: float, out: Path) -> Path:
+        """Loop de una pista CONCRETA hasta cubrir la duración pedida."""
+        run_ffmpeg(["-stream_loop", "-1", "-i", str(track), "-vn",
+                    "-t", f"{seconds:.2f}",
+                    "-c:a", "libmp3lame", "-q:a", "4", str(out)],
+                   "música library", timeout=300)
+        return out
 
     def generate(self, mood: str, seconds: float, out: Path) -> Path:
         tracks = [p for p in self.dir.glob("*")
@@ -24,15 +59,7 @@ class LibraryMusic:
                 "o cambia providers.music.name en config.yaml.")
         preferred = [t for t in tracks if mood.lower() in t.stem.lower()]
         track = random.choice(preferred or tracks)
-        # Loop hasta cubrir la duración total y recorte exacto. -vn es CRÍTICO:
-        # los mp3 con carátula incrustada (Suno, iTunes…) traen un stream de
-        # video (la imagen) que con -stream_loop -1 nunca alcanza la duración
-        # de corte → ffmpeg se queda en bucle infinito. Timeout de respaldo.
-        run_ffmpeg(["-stream_loop", "-1", "-i", str(track), "-vn",
-                    "-t", f"{seconds:.2f}",
-                    "-c:a", "libmp3lame", "-q:a", "4", str(out)],
-                   "música library", timeout=300)
-        return out
+        return self.generate_track(track, seconds, out)
 
 
 class ReplicateMusic:

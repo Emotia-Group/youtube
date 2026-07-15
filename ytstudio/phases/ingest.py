@@ -119,6 +119,73 @@ def _migrate_legacy_input(project) -> None:
         add_asset(project, old, category)
 
 
+def _describe_broll(project, llm, assets, input_dir, lang: str) -> None:
+    """Describe con visión IA cada imagen/video de B-roll del usuario (1-2
+    frases: contenido, ambiente, época). La descripción se guarda en el asset
+    (cache: no se re-analiza al reanudar) y es la base para colocar cada
+    material EXACTAMENTE en la escena del guion a la que corresponde."""
+    pending = [a for a in assets if a["category"] == "broll"
+               and a["kind"] in ("image", "video") and not a.get("description")]
+    if not pending:
+        return
+    if getattr(llm, "is_mock", False):
+        for a in pending:  # sin IA: el nombre del archivo como pista
+            a["description"] = Path(a["name"]).stem.replace("-", " ").replace("_", " ")
+        project.set("assets", assets)
+        return
+
+    schema = {
+        "type": "object",
+        "properties": {"descriptions": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"id": {"type": "integer"},
+                           "description": {"type": "string"}},
+            "required": ["id", "description"], "additionalProperties": False,
+        }}},
+        "required": ["descriptions"], "additionalProperties": False,
+    }
+    for chunk_start in range(0, len(pending), 8):  # tandas de 8 assets
+        chunk = pending[chunk_start:chunk_start + 8]
+        images: list[Path] = []
+        manifest: list[str] = []
+        for a in chunk:
+            path = input_dir / a["file"]
+            try:
+                if a["kind"] == "image":
+                    images.append(path)
+                    manifest.append(f"- id {a['id']}: imagen '{a['name']}' (1 imagen)")
+                else:
+                    fr = extract_frames(path, input_dir / f"bframes_{a['id']:02d}",
+                                        count=2)
+                    images += fr
+                    manifest.append(f"- id {a['id']}: video '{a['name']}' "
+                                    f"({len(fr)} fotogramas)")
+            except Exception as e:
+                project.add_warning(f"No se pudo analizar el B-roll "
+                                    f"'{a['name']}': {e}")
+        if not images:
+            continue
+        try:
+            result = llm.complete_json(
+                "Eres documentalista de archivo audiovisual. Describes material "
+                f"de B-roll para poder colocarlo en el guion correcto. Responde en {lang}.",
+                "Las imágenes adjuntas corresponden, EN ORDEN, a estos materiales:\n"
+                + "\n".join(manifest) +
+                "\n\nDescribe cada material (por su id) en 1-2 frases: qué se ve, "
+                "ambiente/época, tono. Sé concreto: la descripción se usará para "
+                "emparejarlo con la parte del guion que le corresponde.",
+                schema=schema, images=images, purpose="broll_describe")
+            got = {d["id"]: d["description"] for d in result["descriptions"]}
+            for a in chunk:
+                if got.get(a["id"]):
+                    a["description"] = got[a["id"]].strip()[:400]
+        except Exception as e:
+            project.add_warning(f"Análisis con visión del B-roll no disponible "
+                                f"(se usará reparto uniforme): {e}")
+            return
+    project.set("assets", assets)
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
@@ -157,7 +224,24 @@ def run(project, cfg) -> None:
                                          count=4)
             elif kind == "text":
                 context_parts.append(extract_text(path).strip())
-        # broll: no se analiza aquí — se usa directamente en el montaje
+        # broll: se describe con visión más abajo (para colocarlo por contexto)
+
+    # --- Enlaces web de referencia (YouTube, Vimeo, Wistia, artículos…) ---
+    from ytstudio.utils.web import fetch_link_info, link_summary
+    link_infos: list[dict] = []
+    for url in (project.get("links") or []):
+        info = fetch_link_info(url)
+        link_infos.append(info)
+        if info.get("error"):
+            project.add_warning(f"Enlace de referencia no accesible ({url}): "
+                                f"{info['error']}")
+        else:
+            context_parts.append("Video/página de referencia (analiza su "
+                                 "estilo, fórmula y tema para replicarlos):\n"
+                                 + link_summary(info))
+
+    # --- B-roll propio: descripción con visión para asignarlo por contexto ---
+    _describe_broll(project, llm, assets, input_dir, lang)
 
     # --- Narración grabada por el usuario: limpiar + transcribir con tiempos ---
     project.set("narration", None)
@@ -195,9 +279,11 @@ def run(project, cfg) -> None:
             "Analiza también las imágenes adjuntas (referencia visual o fotogramas "
             "del video de referencia) y extrae estilo, tema y elementos clave.")
     if broll_count:
+        descs = [f"- {a['name']}: {a.get('description', 'sin describir')}"
+                 for a in assets if a["category"] == "broll"]
         prompt_parts.append(
             f"El creador aporta {broll_count} archivos propios de B-roll que se "
-            "usarán en el montaje.")
+            "usarán en el montaje:\n" + "\n".join(descs))
     if not prompt_parts:
         raise RuntimeError("El proyecto no tiene ningún material de entrada.")
     prompt_parts.append(
@@ -215,6 +301,7 @@ def run(project, cfg) -> None:
         "input_type": analysis["detected_type"],
         "raw_text": raw_text,
         "reference_frames": [str(f) for f in frames],
+        "links": link_infos,
         **analysis,
     }
     (input_dir / "brief.json").write_text(

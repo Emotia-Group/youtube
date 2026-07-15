@@ -100,12 +100,16 @@ def api_create_project(body: dict) -> dict:
 
     text = (body.get("text") or "").strip()
     files = body.get("files") or []  # [{name, data_base64, category}]
-    if not text and not files:
+    links = [u.strip() for u in (body.get("links") or [])
+             if u.strip().startswith(("http://", "https://"))]
+    if not text and not files and not links:
         raise ApiError(400, "Escribe un texto o adjunta al menos un archivo.")
 
     project = Project.create(slug)
     if text:
         set_text_input(project, text)
+    if links:
+        project.set("links", links)
     for f in files:
         try:
             add_asset(project, Path(Path(f["name"]).name),
