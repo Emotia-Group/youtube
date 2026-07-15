@@ -83,7 +83,8 @@ def run(project, cfg) -> None:
             try:
                 if not clip.exists():
                     # imagen como fotograma inicial → coherencia visual del clip
-                    videogen.generate(scene["broll_prompt"], clip, image=img)
+                    videogen.generate(scene["broll_prompt"], clip, image=img,
+                                      seconds=float(scene.get("duration", 5)))
                 scene["broll_video"] = clip.name
             except Exception as e:
                 # El video generativo (Kling/Wan) es opcional y caro: si falla,

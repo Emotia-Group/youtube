@@ -42,6 +42,7 @@ audio:
                              # dramática de cada escena (dB de recorrido)
   sfx: true                  # efectos incidentales (whoosh/riser/boom) en cortes
   sfx_db: -18                # volumen de los efectos (propios en assets/sfx)
+  end_fade: 3                # fundido de cierre del audio al final (segundos)
   # Modo "narración propia" (cuando subes tu voz grabada):
   trim_silence: true         # recorta silencios largos de tu grabación
   silence_keep: 0.4          # deja pausas uniformes de N segundos

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import unicodedata
+
 from ytstudio.phases.scenes import load_scenes
-from ytstudio.utils.media import (filter_path, find_font, require_ffmpeg,
-                                  run_ffmpeg)
+from ytstudio.utils.media import (filter_path, find_font, probe_duration,
+                                  require_ffmpeg, run_ffmpeg)
 
 FADE = 0.3  # fundido de entrada/salida por escena (s)
 
@@ -44,6 +46,34 @@ def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
 def _spaced(text: str) -> str:
     """Versalitas con tracking (espaciado entre letras), estilo documental."""
     return " ".join(text.upper())
+
+
+def _norm_txt(s: str) -> str:
+    """minúsculas y sin tildes, para buscar el rótulo dentro de la narración."""
+    return "".join(c for c in unicodedata.normalize("NFD", s.lower())
+                   if unicodedata.category(c) != "Mn")
+
+
+def _narration_moment(scene: dict, dur: float) -> float | None:
+    """Momento (s) en que el narrador dice el texto del rótulo, estimado por la
+    posición de ese texto dentro de la narración (el ritmo de habla es ~uniforme
+    dentro de una escena). Si el texto no aparece, None (timing por defecto)."""
+    overlay = scene.get("overlay") or {}
+    narr = _norm_txt(scene.get("narration") or "")
+    if not narr:
+        return None
+    vo = float(scene.get("vo_duration") or dur)
+    cand = _norm_txt(overlay.get("text") or "")
+    idx = narr.find(cand) if cand else -1
+    if idx < 0:  # sin match exacto: la palabra significativa más larga
+        for w in sorted((w for w in cand.split() if len(w) >= 4),
+                        key=len, reverse=True):
+            idx = narr.find(w)
+            if idx >= 0:
+                break
+    if idx < 0:
+        return None
+    return vo * idx / max(1, len(narr))
 
 
 def _fit(size: int, text: str) -> int:
@@ -112,6 +142,11 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     sans = find_font(bold=True)
     if not sans:
         return []  # sin fuentes localizables se omite el rótulo, no se falla
+
+    # La conclusión se compone como declaración tipográfica a gran tamaño
+    if overlay["type"] == "conclusion":
+        return _statement_filters(scene, overlay, dur, cfg, out_dir, accent)
+
     main_font = find_font(bold=True, serif=True) if lay["serif"] else sans
 
     text = overlay["text"].strip()
@@ -119,10 +154,16 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     if lay["upper"]:
         text = _spaced(text)
 
-    # Tiempos: aparece poco después del corte, se sostiene y se despide antes
-    # del final. En escenas cortas se comprime.
+    # Tiempos: SINCRONIZADO con la narración — el rótulo entra un instante
+    # (gabela) antes de que el narrador diga esas palabras. Si no se localiza
+    # el momento, entra poco después del corte. Se sostiene y se despide antes
+    # del final; en escenas cortas se comprime.
     slow = lay["slow"]
-    t0 = 0.45 if dur > 4 else 0.25
+    moment = _narration_moment(scene, dur)
+    if moment is not None:
+        t0 = max(0.25, min(moment - 0.35, dur - 2.2))
+    else:
+        t0 = 0.45 if dur > 4 else 0.25
     fi = 0.8 if slow else 0.5
     fo = 0.9 if slow else 0.6
     hold = 6.0 if slow else 4.8
@@ -164,6 +205,88 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     return filters
 
 
+def _wrap_lines(text: str, max_chars: int = 13) -> list[str]:
+    """Parte la frase en líneas cortas (1-3 palabras) para apilarlas en bloque,
+    al estilo de los cierres tipográficos de documentales."""
+    lines: list[str] = []
+    cur = ""
+    for word in text.split():
+        cand = f"{cur} {word}".strip()
+        if cur and len(cand) > max_chars:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = cand
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
+                       out_dir: Path, accent: str) -> list[str]:
+    """Conclusión como declaración tipográfica: bloque de líneas apiladas en
+    mayúsculas a la izquierda, mezcla de pesos (la línea con la palabra clave
+    va en negrita), entrada escalonada línea a línea y salida conjunta."""
+    w, h = cfg["video"]["width"], cfg["video"]["height"]
+    regular = find_font(bold=False) or find_font(bold=True)
+    bold = find_font(bold=True)
+    if not regular or not bold:
+        return []
+
+    text = overlay["text"].strip().upper()
+    lines = _wrap_lines(text)
+    emphasis = _norm_txt(overlay.get("emphasis") or "")
+    if not emphasis:  # sin indicación: la palabra más larga carga el peso
+        emphasis = _norm_txt(max(text.split(), key=len))
+
+    # Cuerpo: grande, pero acotado por el ancho (línea más larga) y el alto
+    longest = max(len(ln) for ln in lines)
+    size = min(int(h * 0.085), int(w * 0.80 / (longest * 0.62)),
+               int(h * 0.52 / (len(lines) * 1.18)))
+    lh = int(size * 1.18)
+    x0 = int(w * 0.08)
+    kicker = (overlay.get("kicker") or "").strip()
+    block_h = len(lines) * lh + (int(h * 0.05) if kicker else 0)
+    y0 = max(int(h * 0.12), int((h - block_h) * 0.44))
+
+    # Tiempos: sincronizado con la narración si se encuentra el momento; las
+    # líneas entran escalonadas y el bloque se despide junto.
+    moment = _narration_moment(scene, dur)
+    stagger = 0.22
+    lead_all = stagger * (len(lines) - 1)
+    if moment is not None:
+        t0 = max(0.3, min(moment - 0.35, dur - 2.6 - lead_all))
+    else:
+        t0 = max(0.3, min(0.6, dur - 2.6 - lead_all))
+    fi, fo = 0.55, 0.9
+    t1 = min(dur - 0.85, t0 + lead_all + 6.5)
+    if t1 < t0 + lead_all + fi + 0.4:
+        t1 = max(t0 + lead_all + fi + 0.4, dur - 0.4)
+
+    filters: list[str] = []
+    if kicker:
+        kfile = out_dir / f"ostext_{scene['id']:03d}_kick.txt"
+        kfile.write_text(_spaced(kicker)[:120], encoding="utf-8")
+        alpha = (f"if(lt(t,{t0:.2f}),0,if(lt(t,{t0 + fi:.2f}),"
+                 f"(t-{t0:.2f})/{fi:.2f},if(lt(t,{t1:.2f}),1,"
+                 f"max(0,1-(t-{t1:.2f})/{fo:.2f}))))")
+        filters.append(_drawtext(bold, kfile, int(h * 0.026), accent,
+                                 str(x0), str(y0 - int(h * 0.05)), alpha))
+
+    for i, line in enumerate(lines):
+        lfile = out_dir / f"ostext_{scene['id']:03d}_l{i}.txt"
+        lfile.write_text(line, encoding="utf-8")
+        ti = t0 + i * stagger
+        alpha = (f"if(lt(t,{ti:.2f}),0,if(lt(t,{ti + fi:.2f}),"
+                 f"(t-{ti:.2f})/{fi:.2f},if(lt(t,{t1:.2f}),1,"
+                 f"max(0,1-(t-{t1:.2f})/{fo:.2f}))))")
+        x_expr = f"{x0}-30*max(0,1-(t-{ti:.2f})/0.9)"
+        is_bold = emphasis and emphasis in _norm_txt(line)
+        filters.append(_drawtext(bold if is_bold else regular, lfile, size,
+                                 "white", x_expr, str(y0 + i * lh), alpha))
+    return filters
+
+
 def _render_scene(scene: dict, project, cfg, out: Path) -> None:
     w, h, fps = cfg["video"]["width"], cfg["video"]["height"], cfg["video"]["fps"]
     dur = scene["duration"]
@@ -174,10 +297,24 @@ def _render_scene(scene: dict, project, cfg, out: Path) -> None:
     filters = []
 
     if scene.get("broll_video"):
-        inputs = ["-stream_loop", "-1",
-                  "-i", str(project.path("broll", scene["broll_video"]))]
-        filters.append(f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-                       f"crop={w}:{h},fps={fps},setsar=1[v0]")
+        vid = project.path("broll", scene["broll_video"])
+        try:
+            vid_dur = probe_duration(vid)
+        except Exception:
+            vid_dur = None
+        if vid_dur and vid_dur < dur - 0.05:
+            # Clip más corto que la escena → cámara lenta sutil hasta cubrirla
+            # (nunca repetir el clip en bucle: el salto se nota y abarata).
+            inputs = ["-i", str(vid)]
+            factor = dur / vid_dur
+            filters.append(
+                f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},setpts={factor:.5f}*PTS,fps={fps},setsar=1[v0]")
+        else:
+            inputs = ["-i", str(vid)]
+            filters.append(
+                f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},fps={fps},setsar=1[v0]")
     else:
         inputs = ["-i", str(project.path("broll", scene["broll_image"]))]
         filters.append(f"[0:v]{_kenburns(scene['animation'], frames, w, h, fps)}[v0]")
@@ -343,8 +480,14 @@ def run(project, cfg) -> None:
     afilters += sfx_filters
     mix_in = f"[0:a][{music_label}]" + (f"[{sfx_label}]" if sfx_label else "")
     n_mix = 3 if sfx_label else 2
+    # Cierre: fundido de salida del audio completo (tras loudnorm, para que la
+    # normalización no lo contrarreste) — el final deja de sentirse abrupto.
+    end_fade = float(cfg["audio"].get("end_fade", 3.0))
+    total = probe_duration(body)
+    fade = (f",afade=t=out:st={max(0.0, total - end_fade):.2f}:d={end_fade:.2f}"
+            if end_fade > 0 else "")
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"
-                    "loudnorm=I=-14:TP=-1.5:LRA=11[aout]")
+                    f"loudnorm=I=-14:TP=-1.5:LRA=11{fade}[aout]")
 
     output = final_dir / "video_final.mp4"
     args = ["-i", str(body), "-i", str(music), *sfx_args]

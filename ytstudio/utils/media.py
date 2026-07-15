@@ -196,10 +196,22 @@ def clean_narration(src: Path, out: Path, *, trim_silence: bool = True,
     return out
 
 
-def cut_segment(src: Path, start: float, end: float, out: Path) -> Path:
-    """Extrae el tramo [start, end] (segundos) de un audio con corte preciso."""
+def cut_segment(src: Path, start: float, end: float, out: Path,
+                lead: float = 0.12) -> Path:
+    """Extrae el tramo [start, end] (segundos) de un audio.
+
+    Corte preciso en dos etapas: un seek rápido aproximado ANTES del input y el
+    ajuste fino DESPUÉS (el seek de entrada solo, en mp3, cae en el frame
+    anterior o siguiente y se comía el arranque de la primera palabra). Además
+    se adelanta `lead` segundos — cabe en la pausa que deja clean_narration —
+    para no cortar el ataque de la voz, con un microfundido anticlic."""
+    start = max(0.0, start - lead)
     dur = max(0.1, end - start)
-    run_ffmpeg(["-ss", f"{start:.3f}", "-i", str(src), "-t", f"{dur:.3f}",
+    coarse = max(0.0, start - 1.0)
+    fine = start - coarse
+    run_ffmpeg(["-ss", f"{coarse:.3f}", "-i", str(src),
+                "-ss", f"{fine:.3f}", "-t", f"{dur:.3f}",
+                "-af", "afade=t=in:st=0:d=0.02",
                 "-c:a", "libmp3lame", "-q:a", "3", str(out)], "cortar segmento")
     return out
 

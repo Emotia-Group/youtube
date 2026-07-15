@@ -20,6 +20,7 @@ _CREATIVE_PROPS = {
                               "dato", "lista", "conclusion"]},
     "overlay_text": {"type": "string"},
     "overlay_kicker": {"type": "string"},
+    "overlay_emphasis": {"type": "string"},
     "music_intensity": {"type": "number"},
     "pause_after": {"type": "number"},
     "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
@@ -66,13 +67,19 @@ RÓTULOS EN PANTALLA (overlay_*): son acentos cinematográficos, NO subtítulos.
   ítems de una enumeración ("Razón 1…"); la conclusión más importante de una
   sección o del video.
 - overlay_text: el dato en sí, 1-5 palabras (ej. "Alejandro Magno", "331 a. C.",
-  "40 000 soldados").
+  "40 000 soldados"). EXCEPCIÓN conclusion: puede ser una frase corta completa
+  de hasta 8 palabras (ej. "El veredicto es tuyo") — se compone en pantalla
+  como una declaración tipográfica grande.
 - overlay_kicker: contexto en 1-3 palabras que se muestra pequeño encima
   (ej. kicker "REY DE MACEDONIA" + text "Alejandro Magno"; kicker "BATALLA DE
   GAUGAMELA" + text "331 a. C."; kicker "RAZÓN 2" + text "La logística").
   Puede ir vacío si el texto se explica solo.
+- overlay_emphasis: LA palabra de overlay_text que carga el peso dramático
+  (se destaca en negrita, ej. "veredicto"). Vacío si no aplica.
 - overlay_type: personaje | lugar | fecha | dato | lista | conclusion — elige
   el que corresponda al contenido (cada tipo tiene un diseño distinto).
+- IMPORTANTE: usa palabras que aparezcan en la narración de ESA escena (el
+  rótulo se sincroniza con el momento en que el narrador las dice).
 
 MÚSICA (music_intensity, 0.0-1.0): dibuja el arco dramático de la historia.
 - Gancho inicial 0.65-0.8 · desarrollo/exposición 0.35-0.55 · tensión creciente
@@ -143,10 +150,13 @@ def _normalize_creative(scenes: list[dict]) -> None:
     n = len(scenes)
     for i, s in enumerate(scenes):
         o_type = s.pop("overlay_type", None) or "ninguno"
-        o_text = (s.pop("overlay_text", "") or "").strip()[:48]
+        max_len = 70 if o_type == "conclusion" else 48
+        o_text = (s.pop("overlay_text", "") or "").strip()[:max_len]
         o_kicker = (s.pop("overlay_kicker", "") or "").strip()[:36]
+        o_emph = (s.pop("overlay_emphasis", "") or "").strip()[:24]
         if o_type in _OVERLAY_TYPES and o_text:
-            s["overlay"] = {"type": o_type, "text": o_text, "kicker": o_kicker}
+            s["overlay"] = {"type": o_type, "text": o_text, "kicker": o_kicker,
+                            "emphasis": o_emph}
         else:
             s["overlay"] = None
         s["on_screen_text"] = o_text if s["overlay"] else ""
