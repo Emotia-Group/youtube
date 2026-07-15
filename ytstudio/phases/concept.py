@@ -86,6 +86,13 @@ def run(project, cfg) -> None:
     if frames:
         prompt += ("\n\nHay imágenes de referencia adjuntas: el visual_style debe "
                    "ser coherente con ellas.")
+    if any((l or {}).get("transcript_excerpt") or (l or {}).get("rhythm")
+           for l in brief.get("links", [])):
+        prompt += (
+            "\n\nEl brief incluye el ANÁLISIS de un video de referencia "
+            "(transcripción, ritmo de cortes, capítulos, estilo): REPLICA su "
+            "fórmula — tipo de gancho, estructura, tono, ritmo y estilo "
+            "visual — adaptada al tema nuevo. No copies frases literales.")
 
     concept = llm.complete_json(system, prompt, schema=CONCEPT_SCHEMA,
                                 images=frames or None, purpose="concept")

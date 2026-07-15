@@ -102,8 +102,20 @@ EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
 WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
 
 
-def scene_seconds(cfg: dict) -> float:
-    """Ritmo visual: cada cuántos segundos cambia la imagen (config)."""
+def scene_seconds(cfg: dict, project=None) -> float:
+    """Ritmo visual: cada cuántos segundos cambia la imagen. Si hay un video
+    de referencia analizado (yt-dlp), se replica SU ritmo de plano medio;
+    si no, el de la configuración."""
+    if project is not None:
+        for link in (project.get("brief") or {}).get("links", []):
+            rhythm = (link or {}).get("rhythm") or {}
+            avg = rhythm.get("avg_shot_seconds")
+            if avg:
+                target = min(15.0, max(3.5, float(avg)))
+                project.add_warning(
+                    f"ℹ Ritmo visual tomado del video de referencia: "
+                    f"~{target:.0f} s por plano.")
+                return target
     return float(cfg.get("video", {}).get("scene_seconds", 6))
 
 
@@ -354,7 +366,7 @@ def run(project, cfg) -> None:
     lang = cfg.get("language", "es")
     videogen_scenes = cfg["providers"]["videogen"].get("max_scenes", 0)
 
-    target = scene_seconds(cfg)
+    target = scene_seconds(cfg, project)
 
     # MODO NARRACIÓN PROPIA: escenas alineadas al audio real del usuario.
     narration = project.get("narration")

@@ -227,9 +227,37 @@ def run(project, cfg) -> None:
         # broll: se describe con visión más abajo (para colocarlo por contexto)
 
     # --- Enlaces web de referencia (YouTube, Vimeo, Wistia, artículos…) ---
+    # Con yt-dlp instalado se hace el análisis PROFUNDO: guion/transcripción,
+    # ritmo de cortes, capítulos y fotogramas para visión. Sin yt-dlp (o si el
+    # video no es descargable) se usan los metadatos públicos de la página.
+    from ytstudio.utils import refvideo
     from ytstudio.utils.web import fetch_link_info, link_summary
     link_infos: list[dict] = []
-    for url in (project.get("links") or []):
+    deep_ok = refvideo.available()
+    for i, url in enumerate(project.get("links") or []):
+        if deep_ok:
+            ref_dir = input_dir / f"ref_{i:02d}"
+            done = ref_dir / "analysis.json"
+            try:
+                if done.exists():  # cache al reanudar (no re-descargar)
+                    analysis = json.loads(done.read_text(encoding="utf-8"))
+                else:
+                    stt = stt or get_stt(cfg)
+                    analysis = refvideo.analyze_reference_video(
+                        url, ref_dir, cfg, stt=stt)
+                link_infos.append(analysis)
+                context_parts.append(
+                    "ANÁLISIS COMPLETO DEL VIDEO DE REFERENCIA (replica su "
+                    "fórmula: estructura, gancho, ritmo, tono y estilo — "
+                    "adaptándola al tema nuevo, sin copiar frases):\n"
+                    + refvideo.analysis_summary(analysis))
+                frames += [Path(f) for f in analysis.get("frames", [])
+                           if Path(f).exists()][:6]
+                continue
+            except Exception as e:
+                project.add_warning(
+                    f"No se pudo descargar el video de referencia ({url}) — "
+                    f"se usan solo sus metadatos públicos. {e}")
         info = fetch_link_info(url)
         link_infos.append(info)
         if info.get("error"):
@@ -239,6 +267,11 @@ def run(project, cfg) -> None:
             context_parts.append("Video/página de referencia (analiza su "
                                  "estilo, fórmula y tema para replicarlos):\n"
                                  + link_summary(info))
+    if (project.get("links")) and not deep_ok:
+        project.add_warning(
+            "Análisis profundo de videos de referencia desactivado: instala "
+            "yt-dlp (ejecuta actualizar.bat o «py -m pip install yt-dlp») para "
+            "analizar guion, ritmo de cortes y estilo del video enlazado.")
 
     # --- B-roll propio: descripción con visión para asignarlo por contexto ---
     _describe_broll(project, llm, assets, input_dir, lang)
@@ -297,11 +330,20 @@ def run(project, cfg) -> None:
     if forced_script:
         analysis["detected_type"] = "script"
 
+    # En el brief los enlaces van compactos (la transcripción completa queda
+    # en 01_input/ref_XX/analysis.json): el brief viaja en varios prompts.
+    brief_links = []
+    for li in link_infos:
+        c = {k: v for k, v in li.items() if k not in ("transcript", "frames")}
+        if li.get("transcript"):
+            c["transcript_excerpt"] = li["transcript"][:1200]
+        brief_links.append(c)
+
     brief = {
         "input_type": analysis["detected_type"],
         "raw_text": raw_text,
         "reference_frames": [str(f) for f in frames],
-        "links": link_infos,
+        "links": brief_links,
         **analysis,
     }
     (input_dir / "brief.json").write_text(

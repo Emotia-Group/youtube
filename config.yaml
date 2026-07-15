@@ -34,6 +34,9 @@ providers:
     name: mock
     model: meta/musicgen
     library_dir: assets/music
+reference:
+  max_minutes: 12            # minutos a descargar/analizar del video de referencia
+  video_height: 480          # resolución de análisis (baja = rápido y suficiente)
 audio:
   music_db: -21
   duck: true
