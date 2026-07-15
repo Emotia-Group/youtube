@@ -126,10 +126,18 @@ def require_ffmpeg() -> None:
         "brew install ffmpeg).")
 
 
-def run_ffmpeg(args: list[str], desc: str = "") -> None:
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args]
-    result = subprocess.run(cmd, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace")
+def run_ffmpeg(args: list[str], desc: str = "",
+               timeout: float | None = None) -> None:
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-loglevel", "error",
+           "-y", *args]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace",
+                                timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"ffmpeg tardó demasiado{f' ({desc})' if desc else ''} "
+            f"(>{timeout:.0f}s) y se canceló para no bloquear el proyecto.")
     if result.returncode != 0:
         raise RuntimeError(
             f"ffmpeg falló{f' ({desc})' if desc else ''}:\n{result.stderr[-3000:]}"
@@ -164,7 +172,7 @@ def extract_audio(video: Path, out: Path) -> Path:
 def concat_audios(paths: list[Path], out: Path) -> Path:
     """Une varios audios en uno solo (re-encodeados a un formato común)."""
     if len(paths) == 1:
-        run_ffmpeg(["-i", str(paths[0]), "-c:a", "libmp3lame", "-q:a", "3",
+        run_ffmpeg(["-i", str(paths[0]), "-vn", "-c:a", "libmp3lame", "-q:a", "3",
                     str(out)], "normalizar audio")
         return out
     inputs = []
@@ -191,7 +199,7 @@ def clean_narration(src: Path, out: Path, *, trim_silence: bool = True,
             f"stop_periods=-1:stop_duration={keep}:"
             f"stop_threshold={threshold_db}dB:detection=peak")
     filters.append(f"loudnorm=I={lufs}:TP=-1.5:LRA=11")
-    run_ffmpeg(["-i", str(src), "-af", ",".join(filters),
+    run_ffmpeg(["-i", str(src), "-vn", "-af", ",".join(filters),
                 "-c:a", "libmp3lame", "-q:a", "2", str(out)], "limpiar narración")
     return out
 
@@ -209,7 +217,7 @@ def cut_segment(src: Path, start: float, end: float, out: Path,
     dur = max(0.1, end - start)
     coarse = max(0.0, start - 1.0)
     fine = start - coarse
-    run_ffmpeg(["-ss", f"{coarse:.3f}", "-i", str(src),
+    run_ffmpeg(["-ss", f"{coarse:.3f}", "-i", str(src), "-vn",
                 "-ss", f"{fine:.3f}", "-t", f"{dur:.3f}",
                 "-af", "afade=t=in:st=0:d=0.02",
                 "-c:a", "libmp3lame", "-q:a", "3", str(out)], "cortar segmento")

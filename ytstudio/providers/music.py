@@ -24,9 +24,14 @@ class LibraryMusic:
                 "o cambia providers.music.name en config.yaml.")
         preferred = [t for t in tracks if mood.lower() in t.stem.lower()]
         track = random.choice(preferred or tracks)
-        # Loop hasta cubrir la duración total y recorte exacto
-        run_ffmpeg(["-stream_loop", "-1", "-i", str(track), "-t", f"{seconds:.2f}",
-                    "-c:a", "libmp3lame", "-q:a", "4", str(out)], "música library")
+        # Loop hasta cubrir la duración total y recorte exacto. -vn es CRÍTICO:
+        # los mp3 con carátula incrustada (Suno, iTunes…) traen un stream de
+        # video (la imagen) que con -stream_loop -1 nunca alcanza la duración
+        # de corte → ffmpeg se queda en bucle infinito. Timeout de respaldo.
+        run_ffmpeg(["-stream_loop", "-1", "-i", str(track), "-vn",
+                    "-t", f"{seconds:.2f}",
+                    "-c:a", "libmp3lame", "-q:a", "4", str(out)],
+                   "música library", timeout=300)
         return out
 
 
@@ -51,8 +56,10 @@ class ReplicateMusic:
         })
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), raw)
-        run_ffmpeg(["-stream_loop", "-1", "-i", str(raw), "-t", f"{seconds:.2f}",
-                    "-c:a", "libmp3lame", "-q:a", "4", str(out)], "loop música")
+        run_ffmpeg(["-stream_loop", "-1", "-i", str(raw), "-vn",
+                    "-t", f"{seconds:.2f}",
+                    "-c:a", "libmp3lame", "-q:a", "4", str(out)],
+                   "loop música", timeout=300)
         raw.unlink(missing_ok=True)
         return out
 
