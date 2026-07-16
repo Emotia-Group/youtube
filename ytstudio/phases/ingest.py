@@ -14,6 +14,7 @@ import json
 import shutil
 from pathlib import Path
 
+from ytstudio.progress import notify
 from ytstudio.providers import get_llm, get_stt
 from ytstudio.utils.extract import extract_text
 from ytstudio.utils.media import extract_audio, extract_frames
@@ -274,6 +275,9 @@ def run(project, cfg) -> None:
             "analizar guion, ritmo de cortes y estilo del video enlazado.")
 
     # --- B-roll propio: descripción con visión para asignarlo por contexto ---
+    if any(a["category"] == "broll" and a["kind"] in ("image", "video")
+           and not a.get("description") for a in assets):
+        notify("👁 Analizando tu material de B-roll con visión IA…")
     _describe_broll(project, llm, assets, input_dir, lang)
 
     # --- Narración grabada por el usuario: limpiar + transcribir con tiempos ---

@@ -72,19 +72,34 @@ def analyze_reference_video(url: str, work_dir: Path, cfg: dict,
     import yt_dlp
 
     ref_cfg = cfg.get("reference") or {}
+    from ytstudio.progress import notify
+
     max_min = float(ref_cfg.get("max_minutes", 12))
     height = int(ref_cfg.get("video_height", 480))
+    # socket_timeout evita que una conexión atascada con YouTube cuelgue la
+    # fase para siempre: si un fragmento no responde, falla y el llamador
+    # degrada a los metadatos públicos.
+    sock_timeout = float(ref_cfg.get("timeout_seconds", 45))
     lang = cfg.get("language", "es")
     work_dir.mkdir(parents=True, exist_ok=True)
+    base_opts = {
+        "quiet": True, "no_warnings": True, "noplaylist": True,
+        "socket_timeout": sock_timeout, "retries": 3, "fragment_retries": 3,
+    }
 
     # Metadatos primero (sin descargar): duración real para decidir el recorte
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
-                           "noplaylist": True}) as ydl:
+    notify(f"🔎 Consultando el video de referencia… ({url})")
+    with yt_dlp.YoutubeDL(base_opts) as ydl:
         meta = ydl.extract_info(url, download=False)
     duration = meta.get("duration") or 0
+    title = meta.get("title") or url
+    mins = f"{duration / 60:.0f} min" if duration else "duración desconocida"
+    cap = f", se analizarán los primeros {max_min:.0f} min" if duration > max_min * 60 else ""
+    notify(f"⬇ Descargando referencia «{title}» ({mins}{cap}) a {height}p… "
+           "esto puede tardar varios minutos.")
 
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True,
+        **base_opts,
         "format": f"bv*[height<={height}]+ba/b[height<={height}]/b",
         "outtmpl": str(work_dir / "ref.%(ext)s"),
         "writesubtitles": True, "writeautomaticsub": True,
@@ -123,14 +138,17 @@ def analyze_reference_video(url: str, work_dir: Path, cfg: dict,
     transcript = ""
     subs = sorted(work_dir.glob("ref.*.vtt")) + sorted(work_dir.glob("ref.*.srt"))
     if subs:
+        notify("📝 Leyendo los subtítulos del video de referencia…")
         transcript = _parse_vtt(subs[0])
     elif video is not None and stt is not None:
+        notify("🎧 El video no trae subtítulos: transcribiendo su audio…")
         audio = extract_audio(video, work_dir / "ref_audio.mp3")
         transcript = stt.transcribe(audio)
     analysis["transcript"] = transcript[:20000]
 
     if video is not None:
         try:
+            notify("🎬 Midiendo el ritmo de edición del video de referencia…")
             analysis["rhythm"] = detect_cut_rhythm(video)
         except Exception:
             pass

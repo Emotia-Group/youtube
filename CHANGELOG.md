@@ -3,6 +3,20 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v15 — 2026-07-16
+- Transiciones entre escenas variadas: ya no todas hacen el mismo fundido.
+  El video abre y cierra con fundido; entre escenas alterna corte seco (sin
+  transición) y fundido breve según la historia (cambios de sección, saltos
+  de tiempo/lugar y momentos dramáticos). Configurable: video.transition =
+  auto (por defecto) · fade (todas) · none (todas corte). No altera la
+  duración: los subtítulos siguen alineados.
+- Reajustar las transiciones (o los rótulos) ahora SÍ se ve al reanudar el
+  montaje: las escenas se re-renderizan cuando cambia algo visual.
+- Arreglado el "congelamiento" en la Ingesta con enlaces de referencia: ahora
+  muestra el progreso paso a paso (consultando, descargando, transcribiendo,
+  midiendo ritmo) y la descarga tiene límite de tiempo — si YouTube se atasca,
+  falla y degrada a los metadatos en vez de quedarse colgado.
+
 ## v14 — 2026-07-15
 - Estimación de costo y tiempo ANTES de generar: panel en cada proyecto con
   el desglose por fase (IA, voz, imágenes, video, música, montaje), rangos en

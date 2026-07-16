@@ -6,15 +6,19 @@ y se acentúa con efectos incidentales (whoosh/riser/boom) en los cortes clave.
 Termina normalizando a -14 LUFS y aplicando los subtítulos."""
 from __future__ import annotations
 
-from pathlib import Path
-
+import hashlib
+import json
+import shutil
 import unicodedata
+from pathlib import Path
 
 from ytstudio.phases.scenes import load_scenes
 from ytstudio.utils.media import (filter_path, find_font, probe_duration,
                                   require_ffmpeg, run_ffmpeg)
 
-FADE = 0.3  # fundido de entrada/salida por escena (s)
+FADE = 0.3        # fundido corto (corte suave entre escenas)
+FADE_OPEN = 0.6   # apertura y cierre del video (un poco más largo)
+FADE_SLOW = 0.55  # fundido dramático (tras un respiro/pausa)
 
 # Códigos ISO-639-2 para la pista de subtítulos del mp4
 _LANG3 = {"es": "spa", "en": "eng", "pt": "por", "fr": "fra", "de": "deu",
@@ -287,11 +291,65 @@ def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
     return filters
 
 
-def _render_scene(scene: dict, project, cfg, out: Path) -> None:
+def _plan_transitions(scenes: list[dict], cfg: dict) -> list[dict]:
+    """Decide, para cada escena, si entra/sale con fundido a negro y con qué
+    duración — para que las transiciones VARÍEN en vez de ser todas iguales,
+    sin perder el aire cinematográfico:
+
+    - El video ABRE y CIERRA con un fundido (apertura/cierre desde/hacia negro).
+    - Entre escenas la transición se decide por escena (campo 'transition') o,
+      si no lo trae, por el ritmo de la historia: fundido al cambiar de sección
+      o tras un respiro dramático; corte seco (sin transición) en el resto.
+    - El fundido de una frontera es simétrico: si una escena entra con fundido,
+      la anterior sale con fundido (breve caída a negro compartida).
+    El modo global (video.transition) puede forzar 'fade' (todas) o 'none'
+    (ninguna); 'auto' (por defecto) aplica la lógica anterior."""
+    mode = cfg.get("video", {}).get("transition", "auto")
+    n = len(scenes)
+
+    def wants_fade(i: int) -> bool:
+        """¿La escena i entra con fundido (frontera con la i-1)?"""
+        if i <= 0:
+            return False
+        if mode == "fade":
+            return True
+        if mode == "none":
+            return False
+        tr = scenes[i].get("transition")
+        if tr in ("corte", "fundido"):
+            return tr == "fundido"
+        # Fallback sin criterio del modelo: fundido al cambiar de sección o
+        # tras un respiro dramático de la escena anterior.
+        if scenes[i - 1].get("pause_after"):
+            return True
+        return scenes[i].get("section") != scenes[i - 1].get("section")
+
+    plans: list[dict] = []
+    for i, s in enumerate(scenes):
+        fin = fout = False
+        fin_d = fout_d = FADE
+        if mode != "none":
+            if i == 0:
+                fin, fin_d = True, FADE_OPEN
+            if i == n - 1:
+                fout, fout_d = True, FADE_OPEN
+        if i > 0 and wants_fade(i):
+            fin = True
+            if scenes[i - 1].get("pause_after"):
+                fin_d = FADE_SLOW
+        if i < n - 1 and wants_fade(i + 1):
+            fout = True
+            if s.get("pause_after"):
+                fout_d = FADE_SLOW
+        plans.append({"fin": fin, "fin_d": round(fin_d, 3),
+                      "fout": fout, "fout_d": round(fout_d, 3)})
+    return plans
+
+
+def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     w, h, fps = cfg["video"]["width"], cfg["video"]["height"], cfg["video"]["fps"]
     dur = scene["duration"]
     frames = max(1, round(dur * fps))
-    use_fade = cfg["video"].get("transition", "fade") == "fade"
 
     vo = project.path("voiceover", scene["vo_file"])
     filters = []
@@ -323,9 +381,15 @@ def _render_scene(scene: dict, project, cfg, out: Path) -> None:
     for i, dt in enumerate(_overlay_filters(scene, dur, cfg, out.parent), start=1):
         filters.append(f"[{label}]{dt}[t{i}]")
         label = f"t{i}"
-    if use_fade:
-        filters.append(f"[{label}]fade=t=in:st=0:d={FADE},"
-                       f"fade=t=out:st={max(0.0, dur - FADE):.3f}:d={FADE}[v2]")
+    # Transición variable por escena (fundido de entrada/salida independientes)
+    segs = []
+    if fade.get("fin"):
+        segs.append(f"fade=t=in:st=0:d={fade['fin_d']}")
+    if fade.get("fout"):
+        fo_d = fade["fout_d"]
+        segs.append(f"fade=t=out:st={max(0.0, dur - fo_d):.3f}:d={fo_d}")
+    if segs:
+        filters.append(f"[{label}]{','.join(segs)}[v2]")
         label = "v2"
     filters.append("[1:a]aresample=44100,aformat=channel_layouts=stereo,apad[a]")
 
@@ -433,6 +497,27 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
     return args, filters, "sfx"
 
 
+def _render_signature(scenes, plans, cfg) -> str:
+    """Huella de todo lo que afecta al render de cada escena (imagen/video,
+    animación, duración, rótulo, transición y ajustes de video). Si cambia, se
+    re-renderizan las escenas aunque el .mp4 exista — así reajustar las
+    transiciones (o los rótulos) SÍ se ve al reanudar el montaje."""
+    v = cfg.get("video", {})
+    payload = {
+        "video": {k: v.get(k) for k in
+                  ("width", "height", "fps", "transition", "overlays",
+                   "overlay_accent")},
+        "scenes": [{
+            "id": s["id"], "img": s.get("broll_image"),
+            "vid": s.get("broll_video"), "anim": s.get("animation"),
+            "dur": s.get("duration"), "overlay": s.get("overlay"),
+            "ost": s.get("on_screen_text"), "fade": p,
+        } for s, p in zip(scenes, plans)],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
 def run(project, cfg) -> None:
     require_ffmpeg()
     scenes = load_scenes(project)
@@ -440,11 +525,21 @@ def run(project, cfg) -> None:
     scenes_dir = final_dir / "escenas"
     scenes_dir.mkdir(exist_ok=True)
 
+    plans = _plan_transitions(scenes, cfg)
+
+    # Si algo visual cambió desde el último render, limpiar las escenas
+    # cacheadas (si no, un reajuste de transiciones/rótulos no se vería).
+    sig = _render_signature(scenes, plans, cfg)
+    if project.get("assembly_sig") != sig:
+        for old in scenes_dir.glob("scene_*.mp4"):
+            old.unlink(missing_ok=True)
+        project.set("assembly_sig", sig)
+
     # 1) Render de cada escena (reanudable)
-    for scene in scenes:
+    for scene, plan in zip(scenes, plans):
         out = scenes_dir / f"scene_{scene['id']:03d}.mp4"
         if not out.exists():
-            _render_scene(scene, project, cfg, out)
+            _render_scene(scene, project, cfg, out, plan)
 
     # 2) Concatenación de escenas (rutas con '/' también en Windows)
     concat_list = scenes_dir / "list.txt"

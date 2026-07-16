@@ -24,6 +24,7 @@ _CREATIVE_PROPS = {
     "music_intensity": {"type": "number"},
     "pause_after": {"type": "number"},
     "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
+    "transition": {"type": "string", "enum": ["corte", "fundido"]},
 }
 
 SCENES_SCHEMA = {
@@ -96,6 +97,15 @@ EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
 - 'whoosh' al cambiar de sección/lugar/tiempo · 'riser' en la escena que
   desemboca en el clímax (crea anticipación) · 'boom' en una revelación
   impactante · 'ninguno' en el resto (máximo 1 de cada 4 escenas).
+
+TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
+- 'corte': corte seco, sin transición (por defecto). Da ritmo y es lo más
+  común en documentales; úsalo en la mayoría de escenas, sobre todo en
+  secuencias rápidas, enumeraciones y acción encadenada.
+- 'fundido': breve caída a negro compartida con la escena anterior. Resérvalo
+  para los CAMBIOS de sección, saltos de tiempo/lugar y los momentos
+  dramáticos (tras una revelación o un respiro). Que NO sean todas iguales:
+  como mucho 1 de cada 3-4 escenas.
 """
 
 
@@ -184,6 +194,9 @@ def _normalize_creative(scenes: list[dict]) -> None:
 
         s["sfx"] = s.get("sfx") if s.get("sfx") in ("whoosh", "riser", "boom") \
             else None
+
+        s["transition"] = s.get("transition") if s.get("transition") in \
+            ("corte", "fundido") else None
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -445,6 +458,8 @@ def _write_outputs(project, scenes: list[dict]) -> None:
             kick = f" ({o['kicker']})" if o.get("kicker") else ""
             md.append(f"**Rótulo [{o['type']}]:** {o['text']}{kick}")
         extras = [f"música {s['music_intensity']:.2f}" if "music_intensity" in s else ""]
+        if s.get("transition"):
+            extras.append(f"entra: {s['transition']}")
         if s.get("pause_after"):
             extras.append(f"respiro {s['pause_after']:.1f}s")
         if s.get("sfx"):

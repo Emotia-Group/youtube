@@ -50,6 +50,9 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     # el registro de progreso (no solo en la consola).
     from ytstudio.providers import replicate_util
     replicate_util.set_progress(log)
+    # Canal de progreso general (descargas, análisis de referencia, etc.)
+    from ytstudio import progress
+    progress.set_sink(log)
 
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
