@@ -112,6 +112,7 @@
 <div id="sidebar">
   <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
   <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
+  <button class="navbtn" onclick="showLibrary()">📺 Canales y estilos</button>
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
   <h3 style="padding:0 6px">Proyectos</h3>
   <div id="projlist"></div>
@@ -146,8 +147,9 @@ async function refreshList(){
 }
 
 /* ---------- nuevo proyecto ---------- */
-function showNew(){
+async function showNew(){
   view='new';current=null;stopPoll();refreshList();
+  window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
   const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
     <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
          onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
@@ -172,11 +174,30 @@ function showNew(){
     ${uploadCatsHtml()}
     <label class="f"><span>4 · Enlaces de referencia (opcional) — videos de YouTube, Vimeo, Wistia… cuyo estilo quieres replicar (uno por línea). Se analiza el video completo: guion, ritmo de cortes, estructura y estilo visual</span>
       <textarea id="np-links" rows="2" placeholder="https://www.youtube.com/watch?v=…&#10;https://vimeo.com/…"></textarea></label>
-    <h3>5 · Estilo del video</h3>
+    <h3>5 · Canal y estilo guardado (opcional) — reutiliza un estilo de tu biblioteca sin re-analizar nada</h3>
+    <div class="row">
+      <select id="np-channel" style="width:auto" onchange="fillStyleOptions()">
+        <option value="">Sin canal</option>
+        ${(window._lib.channels||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
+      </select>
+      <select id="np-style" style="width:auto"></select>
+      <span class="muted" style="font-size:12px">Gestiónalos en «📺 Canales y estilos»</span>
+    </div>
+    <h3>6 · Estilo del video (se ignora si elegiste un estilo guardado)</h3>
     <div class="presets">${presets}</div>
     <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
   </div>`;
   window._pending=[];
+  fillStyleOptions();
+}
+function fillStyleOptions(){
+  const sel=$('#np-style');if(!sel)return;
+  const ch=$('#np-channel')?.value||'';
+  const styles=(window._lib?.styles||[]).filter(s=>!ch||s.channel_id===ch);
+  sel.innerHTML=`<option value="">Sin estilo guardado (se crea uno nuevo)</option>`
+    +styles.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  // si el canal tiene un único estilo, preseleccionarlo
+  if(ch&&styles.length===1)sel.value=styles[0].id;
 }
 
 const UPLOAD_CATS=[
@@ -227,7 +248,8 @@ async function createProject(){
       files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
     }
     const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
-      {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k})});
+      {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k,
+       channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
   }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}
@@ -384,6 +406,10 @@ async function renderTab(tab,p){
     const c=p.concept;
     if(!c){el.innerHTML='<div class="card muted">El concepto se genera en la fase 2.</div>';return}
     el.innerHTML=`<div class="card">
+      <div class="row" style="justify-content:space-between">
+        <span class="muted">Estilo y fórmula de este proyecto — guárdalos como plantilla para reutilizarlos en proyectos futuros sin re-analizar (ahorra tiempo y tokens).</span>
+        <button class="btn small" onclick="saveStyleModal()">💾 Guardar estilo</button>
+      </div>
       <h3>Títulos propuestos</h3>${(c.title_options||[]).map(t=>`<div>• ${esc(t)}</div>`).join('')}
       <div class="grid2" style="margin-top:14px">
         <div><h3>Ángulo</h3>${esc(c.angle)}</div><div><h3>Audiencia</h3>${esc(c.audience)}</div>
@@ -611,6 +637,125 @@ async function saveSettings(){
   try{await api('/api/config',{method:'PUT',body:JSON.stringify({config:cfg})});
     CFG=cfg;toast('✅ Configuración guardada');
   }catch(e){toast('⚠ '+e.message)}
+}
+
+/* ---------- canales y estilos ---------- */
+async function showLibrary(){
+  view='library';current=null;stopPoll();refreshList();
+  const lib=window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
+  const groups=[...lib.channels,{id:'',name:'Estilos sin canal',description:''}];
+  $('#main').innerHTML=`
+  <h1>📺 Canales y estilos</h1>
+  <p class="muted">Guarda el estilo de un proyecto que te gustó (botón «💾 Guardar estilo» en la pestaña Concepto de cada proyecto) o crea estilos desde cero. Agrúpalos por canal y elígelos al crear un proyecto nuevo: el video sale con esa dirección de arte, tono, música y ritmo — sin re-analizar referencias (ahorro de tiempo y tokens).</p>
+  <div class="card">
+    <h3>Nuevo canal</h3>
+    <div class="row">
+      <input id="ch-name" placeholder="Nombre del canal (ej. Historia Épica)" style="width:260px">
+      <input id="ch-desc" placeholder="Descripción (opcional)" style="flex:1">
+      <button class="btn small" onclick="createChannel()">＋ Crear canal</button>
+    </div>
+  </div>
+  ${groups.map(ch=>{
+    const styles=lib.styles.filter(s=>(s.channel_id||'')===(ch.id||''));
+    if(!ch.id&&!styles.length)return '';
+    return `<div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><b>${ch.id?'📺 ':''}${esc(ch.name)}</b> <span class="muted">${esc(ch.description||'')}</span></div>
+        ${ch.id?`<button class="btn sec small" onclick="deleteChannel('${esc(ch.id)}')">🗑 Borrar canal</button>`:''}
+      </div>
+      ${styles.length?styles.map(s=>styleCard(s)).join(''):'<div class="muted" style="margin-top:6px">Sin estilos aún — guárdalos desde un proyecto o créalos abajo.</div>'}
+    </div>`}).join('')}
+  <div class="card"><h3>Nuevo estilo desde cero</h3>${styleForm(null)}</div>
+  <div id="style-edit"></div>`;
+}
+function styleCard(s){
+  return `<div class="scene" style="margin-top:8px"><div style="flex:1">
+    <b>🎨 ${esc(s.name)}</b> <span class="muted" style="font-size:12px">${s.source_project?`del proyecto ${esc(s.source_project)}`:'creado a mano'} · ${esc(s.created_at||'')}</span>
+    <div class="muted" style="font-size:12px">${esc((s.visual_description||'').slice(0,150))}</div>
+    <div class="row" style="margin-top:4px">${(s.palette||[]).map(h=>`<span style="background:${esc(h)};width:22px;height:14px;border-radius:3px;display:inline-block" title="${esc(h)}"></span>`).join('')}
+      ${s.scene_seconds?`<span class="badge">ritmo ${s.scene_seconds}s</span>`:''}
+      ${s.music_mood?`<span class="badge">♪ ${esc(s.music_mood)}</span>`:''}
+      ${s.transition?`<span class="badge">transición ${esc(s.transition)}</span>`:''}</div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sec small" onclick="editStyle('${esc(s.id)}')">✎ Editar</button>
+      <button class="btn sec small" onclick="deleteStyle('${esc(s.id)}')">🗑 Borrar</button>
+    </div></div></div>`;
+}
+function styleForm(s){
+  const v=k=>esc(s?.[k]??'');
+  const chOpts=`<option value="">Sin canal</option>`+(window._lib?.channels||[]).map(c=>`<option value="${esc(c.id)}" ${s?.channel_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  const id=s?`sf-${s.id}`:'sf-new';
+  return `<div id="${id}" class="grid2" data-style="${esc(s?.id||'')}">
+    <label class="f"><span>Nombre</span><input data-f="name" value="${v('name')}"></label>
+    <label class="f"><span>Canal</span><select data-f="channel_id">${chOpts}</select></label>
+    <label class="f" style="grid-column:1/-1"><span>Descripción visual (cómo se ve el contenido de este canal)</span><textarea data-f="visual_description" rows="2">${v('visual_description')}</textarea></label>
+    <label class="f" style="grid-column:1/-1"><span>Prefijo de prompts EN INGLÉS (se antepone a cada imagen IA para mantener el look)</span><input data-f="prompt_prefix" value="${v('prompt_prefix')}" placeholder="cinematic documentary photo, warm dramatic lighting, film grain"></label>
+    <label class="f"><span>Paleta (colores hex separados por coma)</span><input data-f="palette" value="${esc((s?.palette||[]).join(', '))}" placeholder="#1a1a2e, #e8c46b, #0f3460"></label>
+    <label class="f"><span>Tono de narración</span><input data-f="tone" value="${v('tone')}" placeholder="épico y reflexivo, en segunda persona"></label>
+    <label class="f"><span>Mood musical (inglés, 1-3 palabras)</span><input data-f="music_mood" value="${v('music_mood')}" placeholder="cinematic dark tension"></label>
+    <label class="f"><span>Descripción musical</span><input data-f="music_description" value="${v('music_description')}"></label>
+    <label class="f"><span>Ritmo visual (segundos por plano; vacío = el de Configuración)</span><input data-f="scene_seconds" type="number" min="3" max="20" step="0.5" value="${s?.scene_seconds??''}"></label>
+    <label class="f"><span>Transiciones</span><select data-f="transition">
+      <option value="" ${!s?.transition?'selected':''}>auto (varían según la historia)</option>
+      <option value="fade" ${s?.transition==='fade'?'selected':''}>fade (todas con fundido)</option>
+      <option value="none" ${s?.transition==='none'?'selected':''}>none (todas corte seco)</option></select></label>
+    <label class="f" style="grid-column:1/-1"><span>Fórmula narrativa (gancho, estructura, reglas del canal — la IA la replica adaptada a cada tema)</span><textarea data-f="formula" rows="3">${v('formula')}</textarea></label>
+    <div><button class="btn small" onclick="submitStyleForm('${id}')">${s?'💾 Guardar cambios':'＋ Crear estilo'}</button></div>
+  </div>`;
+}
+async function submitStyleForm(id){
+  const root=document.getElementById(id);
+  const out={};root.querySelectorAll('[data-f]').forEach(el=>out[el.dataset.f]=el.value);
+  try{
+    const body=JSON.stringify(out);
+    if(root.dataset.style)await api(`/api/styles/${root.dataset.style}`,{method:'POST',body});
+    else await api('/api/styles',{method:'POST',body});
+    toast(root.dataset.style?'Estilo actualizado':'✅ Estilo creado');showLibrary();
+  }catch(e){toast('⚠ '+e.message)}
+}
+function editStyle(id){
+  const s=(window._lib?.styles||[]).find(x=>x.id===id);if(!s)return;
+  $('#style-edit').innerHTML=`<div class="card"><h3>Editar estilo — ${esc(s.name)}</h3>${styleForm(s)}</div>`;
+  $('#style-edit').scrollIntoView({behavior:'smooth'});
+}
+async function createChannel(){
+  try{
+    await api('/api/channels',{method:'POST',body:JSON.stringify({name:$('#ch-name').value,description:$('#ch-desc').value})});
+    toast('✅ Canal creado');showLibrary();
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function deleteChannel(id){
+  if(!confirm('¿Borrar este canal? Sus estilos NO se borran (quedan «sin canal»).'))return;
+  await api(`/api/channels/${id}`,{method:'DELETE'});toast('Canal borrado');showLibrary();
+}
+async function deleteStyle(id){
+  if(!confirm('¿Borrar este estilo? Los proyectos ya generados no se ven afectados.'))return;
+  await api(`/api/styles/${id}`,{method:'DELETE'});toast('Estilo borrado');showLibrary();
+}
+async function saveStyleModal(){
+  const lib=await api('/api/library').catch(()=>({channels:[]}));
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;display:flex;align-items:center;justify-content:center';
+  ov.onclick=e=>{if(e.target===ov)ov.remove()};
+  ov.innerHTML=`<div class="card" style="max-width:440px;margin:20px;width:90%">
+    <b>💾 Guardar el estilo de este proyecto</b>
+    <div class="muted" style="font-size:12px;margin-top:4px">Se capturan: dirección visual, prefijo de prompts, paleta, tono, música, ritmo y fórmula — para reutilizarlos en proyectos nuevos.</div>
+    <label class="f" style="margin-top:10px"><span>Nombre del estilo</span><input id="ss-name" value="${esc(current||'')}"></label>
+    <label class="f"><span>Canal</span><select id="ss-channel"><option value="">Sin canal</option>
+      ${(lib.channels||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
+    <div class="row" style="margin-top:10px">
+      <button class="btn small" id="ss-save">Guardar</button>
+      <button class="btn sec small" id="ss-cancel">Cancelar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#ss-cancel').onclick=()=>ov.remove();
+  ov.querySelector('#ss-save').onclick=async()=>{
+    try{
+      await api(`/api/projects/${current}/save-style`,{method:'POST',
+        body:JSON.stringify({name:ov.querySelector('#ss-name').value,channel_id:ov.querySelector('#ss-channel').value||null})});
+      ov.remove();toast('✅ Estilo guardado en tu biblioteca (📺 Canales y estilos)');
+    }catch(e){toast('⚠ '+e.message)}
+  };
 }
 
 /* ---------- init ---------- */

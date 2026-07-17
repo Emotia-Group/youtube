@@ -3,6 +3,7 @@ __pycache__/
 .env
 projects/*
 !projects/.gitkeep
+data/
 config.local.yaml
 assets/music/*
 !assets/music/README.md

@@ -39,7 +39,10 @@ def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
         "static": ("1.001", cx, cy),
     }
     z, x, y = presets.get(animation, presets["zoom_in"])
-    return (f"scale=3840:-2,setsar=1,"
+    # Sobreescala a 2560 (no 3840): con zoom máximo 1.14 sobre salida 1920
+    # bastan ~2200 px — las imágenes fuente son de 1536, así que 3840 solo
+    # añadía cómputo sin ganar detalle. Render ~2x más rápido, misma calidad.
+    return (f"scale=2560:-2,setsar=1,"
             f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={fps}")
 
 
@@ -291,7 +294,8 @@ def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
     return filters
 
 
-def _plan_transitions(scenes: list[dict], cfg: dict) -> list[dict]:
+def _plan_transitions(scenes: list[dict], cfg: dict,
+                      mode_override: str | None = None) -> list[dict]:
     """Decide, para cada escena, si entra/sale con fundido a negro y con qué
     duración — para que las transiciones VARÍEN en vez de ser todas iguales,
     sin perder el aire cinematográfico:
@@ -304,7 +308,7 @@ def _plan_transitions(scenes: list[dict], cfg: dict) -> list[dict]:
       la anterior sale con fundido (breve caída a negro compartida).
     El modo global (video.transition) puede forzar 'fade' (todas) o 'none'
     (ninguna); 'auto' (por defecto) aplica la lógica anterior."""
-    mode = cfg.get("video", {}).get("transition", "auto")
+    mode = mode_override or cfg.get("video", {}).get("transition", "auto")
     n = len(scenes)
 
     def wants_fade(i: int) -> bool:
@@ -525,7 +529,12 @@ def run(project, cfg) -> None:
     scenes_dir = final_dir / "escenas"
     scenes_dir.mkdir(exist_ok=True)
 
-    plans = _plan_transitions(scenes, cfg)
+    style_transition = None
+    if project.get("style_id"):
+        from ytstudio.library import load_style
+        style_transition = (load_style(project.get("style_id")) or {}).get(
+            "transition")
+    plans = _plan_transitions(scenes, cfg, style_transition)
 
     # Si algo visual cambió desde el último render, limpiar las escenas
     # cacheadas (si no, un reajuste de transiciones/rótulos no se vería).
@@ -535,11 +544,27 @@ def run(project, cfg) -> None:
             old.unlink(missing_ok=True)
         project.set("assembly_sig", sig)
 
-    # 1) Render de cada escena (reanudable)
-    for scene, plan in zip(scenes, plans):
-        out = scenes_dir / f"scene_{scene['id']:03d}.mp4"
-        if not out.exists():
-            _render_scene(scene, project, cfg, out, plan)
+    # 1) Render de cada escena — EN PARALELO (reanudable). Cada escena es un
+    #    ffmpeg independiente; 2-3 a la vez aprovechan los núcleos del CPU.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from ytstudio.progress import notify
+
+    jobs = [(s, p) for s, p in zip(scenes, plans)
+            if not (scenes_dir / f"scene_{s['id']:03d}.mp4").exists()]
+    workers = max(1, int(cfg.get("performance", {}).get("parallel_render", 2)))
+    if jobs:
+        notify(f"🎬 Montando {len(jobs)} escenas ({workers} en paralelo)…")
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_render_scene, s, project, cfg,
+                            scenes_dir / f"scene_{s['id']:03d}.mp4", p): s
+                for s, p in jobs}
+            done = 0
+            for future in as_completed(futures):
+                future.result()  # un fallo detiene la fase (reanudable)
+                done += 1
+                if done % 5 == 0 or done == len(jobs):
+                    notify(f"🎬 Escena {done}/{len(jobs)} montada")
 
     # 2) Concatenación de escenas (rutas con '/' también en Windows)
     concat_list = scenes_dir / "list.txt"

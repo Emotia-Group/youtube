@@ -38,6 +38,11 @@ providers:
 reference:
   max_minutes: 12            # minutos a descargar/analizar del video de referencia
   video_height: 480          # resolución de análisis (baja = rápido y suficiente)
+performance:
+  parallel_images: 4         # imágenes IA generadas a la vez
+  parallel_video: 2          # clips de video IA a la vez (corren en el servidor)
+  parallel_tts: 4            # voces por escena a la vez
+  parallel_render: 2         # escenas montadas a la vez (según tu CPU: 2-4)
 audio:
   music_db: -21
   duck: true

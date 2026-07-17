@@ -163,14 +163,18 @@ def estimate(project, cfg: dict) -> dict:
             0.2, 1)
 
     # --- Imágenes ------------------------------------------------------------
+    perf = cfg.get("performance", {})
     if n_ai_images and img_name in IMG_COST:
         c = IMG_COST[img_name]
         s = IMG_SECONDS[img_name]
+        iw = max(1, int(perf.get("parallel_images", 4)))
+        if img_name == "replicate":
+            iw = min(iw, 2)
         add(f"Imágenes IA ({img_name})",
             f"{n_ai_images} imágenes (de {n_scenes} escenas, "
-            f"{user_broll} con tu material)",
+            f"{user_broll} con tu material) · {iw} en paralelo",
             n_ai_images * c[0], n_ai_images * c[1],
-            n_ai_images * s[0] / 60, n_ai_images * s[1] / 60)
+            n_ai_images * s[0] / 60 / iw, n_ai_images * s[1] / 60 / iw)
         if img_name == "replicate":
             notes.append("Replicate con menos de $5 de crédito limita a 6 "
                          "imágenes/min: el tiempo puede alargarse.")
@@ -183,11 +187,13 @@ def estimate(project, cfg: dict) -> dict:
         long_clips = 1 if scene_secs > 7.5 else 0
         cost_lo = n_video_scenes * VIDEO_COST_5S[0] * (2 if long_clips else 1)
         cost_hi = n_video_scenes * VIDEO_COST_5S[1] * 2
+        vw = max(1, int(perf.get("parallel_video", 2)))
         add("Video IA (Kling vía Replicate)",
-            f"{n_video_scenes} clips de {'10' if scene_secs > 7.5 else '5'} s",
+            f"{n_video_scenes} clips de {'10' if scene_secs > 7.5 else '5'} s "
+            f"· {vw} en paralelo",
             cost_lo, cost_hi,
-            n_video_scenes * VIDEO_SECONDS[0] / 60,
-            n_video_scenes * VIDEO_SECONDS[1] / 60)
+            n_video_scenes * VIDEO_SECONDS[0] / 60 / vw,
+            n_video_scenes * VIDEO_SECONDS[1] / 60 / vw)
 
     # --- Música ---------------------------------------------------------------
     if music_name == "library":
@@ -209,9 +215,13 @@ def estimate(project, cfg: dict) -> dict:
             0, stt_hi, len(links) * 1, len(links) * 5)
 
     # --- Montaje (local, gratis) ------------------------------------------------
+    rw = max(1, int(perf.get("parallel_render", 2)))
+    render_speed = 1 + (rw - 1) * 0.6  # los ffmpeg en paralelo comparten CPU
     add("Montaje y subtítulos (tu PC)",
-        f"{n_scenes} escenas · {video_minutes:.0f} min de video",
-        0, 0, video_minutes * 0.4, video_minutes * 1.2 + 1)
+        f"{n_scenes} escenas · {video_minutes:.0f} min de video · "
+        f"{rw} en paralelo",
+        0, 0, video_minutes * 0.3 / render_speed,
+        (video_minutes * 0.9 + 1) / render_speed + 0.5)
 
     if missing_key:
         notes.append("Algún proveedor configurado no tiene clave de API "

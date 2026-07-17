@@ -130,37 +130,85 @@ def run(project, cfg) -> None:
         _assign_user_asset(scenes[scene_idx], user_assets[asset_idx],
                            project, broll_dir)
 
-    # 2) IA para las escenas sin material propio
-    videogen_warning = None
-    for scene in scenes:
-        if scene.get("broll_source") == "user":
-            continue
+    # 2) IA para las escenas sin material propio — EN PARALELO: cada imagen o
+    #    clip es una llamada de red independiente; generarlos en serie era el
+    #    mayor cuello de botella del pipeline (mismo costo, mucho menos tiempo).
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from ytstudio.progress import notify
+
+    perf = cfg.get("performance", {})
+    img_workers = max(1, int(perf.get("parallel_images", 4)))
+    if cfg["providers"]["images"].get("name") == "replicate":
+        # con crédito bajo Replicate limita a 6/min: más hilos solo generan 429
+        img_workers = min(img_workers, 2)
+    vid_workers = max(1, int(perf.get("parallel_video", 2)))
+
+    ai_scenes = [s for s in scenes if s.get("broll_source") != "user"]
+
+    # 2a) Imágenes (obligatorias: un fallo detiene la fase, reanudable)
+    def _gen_image(scene: dict) -> None:
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
         if not img.exists():  # reanudable
             images.generate(scene["broll_prompt"], img)
-        scene["broll_image"] = img.name
 
-        if scene.get("broll_type") == "video" and videogen is not None:
+    todo_imgs = [s for s in ai_scenes
+                 if not (broll_dir / f"scene_{s['id']:03d}.jpg").exists()]
+    if todo_imgs:
+        notify(f"🖼 Generando {len(todo_imgs)} imágenes "
+               f"({img_workers} en paralelo)…")
+        with ThreadPoolExecutor(max_workers=img_workers) as pool:
+            futures = {pool.submit(_gen_image, s): s for s in todo_imgs}
+            done = 0
+            for future in as_completed(futures):
+                future.result()  # un fallo real detiene la fase (reanudable)
+                done += 1
+                notify(f"🖼 Imagen {done}/{len(todo_imgs)} lista "
+                       f"(escena {futures[future]['id']})")
+    for s in ai_scenes:
+        s["broll_image"] = f"scene_{s['id']:03d}.jpg"
+
+    # 2b) Clips de video IA (opcionales: cada fallo degrada ESA escena a
+    #     imagen animada, sin detener el proyecto)
+    video_scenes = [s for s in ai_scenes if s.get("broll_type") == "video"]
+    videogen_warning = None
+    if video_scenes and videogen is not None:
+        def _gen_clip(scene: dict) -> None:
             clip = broll_dir / f"scene_{scene['id']:03d}.mp4"
-            try:
-                if not clip.exists():
-                    # imagen como fotograma inicial → coherencia visual del clip
-                    videogen.generate(scene["broll_prompt"], clip, image=img,
-                                      seconds=float(scene.get("duration", 5)))
-                scene["broll_video"] = clip.name
-            except Exception as e:
-                # El video generativo (Kling/Wan) es opcional y caro: si falla,
-                # se degrada a la imagen con animación Ken Burns y el video se
-                # completa igual, avisando en vez de detener todo el proyecto.
-                videogen_warning = str(e)
-                videogen = None  # no reintentar en las siguientes escenas
-                scene["broll_type"] = "image"
-                scene.pop("broll_video", None)
+            if not clip.exists():
+                # imagen como fotograma inicial → coherencia visual del clip
+                videogen.generate(scene["broll_prompt"], clip,
+                                  image=broll_dir / scene["broll_image"],
+                                  seconds=float(scene.get("duration", 5)))
+
+        todo_clips = [s for s in video_scenes
+                      if not (broll_dir / f"scene_{s['id']:03d}.mp4").exists()]
+        if todo_clips:
+            notify(f"🎥 Generando {len(todo_clips)} clips de video "
+                   f"({vid_workers} en paralelo — Kling tarda varios minutos "
+                   "por clip)…")
+        with ThreadPoolExecutor(max_workers=vid_workers) as pool:
+            futures = {pool.submit(_gen_clip, s): s for s in todo_clips}
+            for future in as_completed(futures):
+                s = futures[future]
+                try:
+                    future.result()
+                    notify(f"🎥 Clip de video listo (escena {s['id']})")
+                except Exception as e:
+                    videogen_warning = str(e)
+                    notify(f"⚠ Clip de la escena {s['id']} falló — esa escena "
+                           "usará imagen animada.")
+    for s in video_scenes:
+        if (broll_dir / f"scene_{s['id']:03d}.mp4").exists():
+            s["broll_video"] = f"scene_{s['id']:03d}.mp4"
         else:
-            scene["broll_type"] = "image"
-            scene.pop("broll_video", None)
+            s["broll_type"] = "image"
+            s.pop("broll_video", None)
+    for s in ai_scenes:
+        if s.get("broll_type") != "video":
+            s["broll_type"] = "image"
+            s.pop("broll_video", None)
 
     if videogen_warning:
-        project.add_warning(f"Video generativo desactivado para este render — "
-                            f"se usaron imágenes animadas. {videogen_warning}")
+        project.add_warning(f"Algunos clips de video IA fallaron — esas "
+                            f"escenas usan imagen animada. {videogen_warning}")
     save_scenes(project, scenes)

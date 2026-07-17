@@ -3,6 +3,21 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v16 — 2026-07-16
+- CANALES Y ESTILOS (📺 en el menú): guarda el estilo de un proyecto que te
+  gustó (botón «💾 Guardar estilo» en la pestaña Concepto) o crea estilos
+  desde cero; agrúpalos por canal de YouTube y elígelos al crear un proyecto
+  nuevo. El video sale con esa dirección visual, tono, música, ritmo y
+  fórmula EXACTOS — sin re-analizar referencias: ahorro directo de tiempo y
+  tokens en cada proyecto del mismo canal.
+- GENERACIÓN EN PARALELO (misma calidad, mismos tokens, mucho menos tiempo):
+  imágenes IA de 4 en 4, clips de video de 2 en 2 (corren en el servidor de
+  Kling — esperarlos uno a uno era puro desperdicio), voces de 4 en 4 y
+  montaje de escenas de 2 en 2. Configurable en config.yaml → performance.
+- Ken Burns optimizado (sobreescala 2560 en vez de 3840): montaje ~2× más
+  rápido sin pérdida de calidad (las imágenes fuente son de 1536 px).
+- La estimación de tiempo ahora refleja el paralelismo.
+
 ## v15 — 2026-07-16
 - Transiciones entre escenas variadas: ya no todas hacen el mismo fundido.
   El video abre y cierra con fundido; entre escenas alterna corte seco (sin

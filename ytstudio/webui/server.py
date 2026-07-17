@@ -71,6 +71,70 @@ def api_estimate(slug: str) -> dict:
     cfg = load_config(project.dir)
     return estimate(project, cfg)
 
+
+# --- Canales y estilos ------------------------------------------------------
+
+def api_library() -> dict:
+    from ytstudio import library
+    return {"channels": library.list_channels(),
+            "styles": library.list_styles()}
+
+
+def api_channel_create(body: dict) -> dict:
+    from ytstudio import library
+    try:
+        return library.create_channel(body.get("name", ""),
+                                      body.get("description", ""))
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_channel_update(channel_id: str, body: dict) -> dict:
+    from ytstudio import library
+    try:
+        return library.update_channel(channel_id, body.get("name"),
+                                      body.get("description"))
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_channel_delete(channel_id: str) -> dict:
+    from ytstudio import library
+    library.delete_channel(channel_id)
+    return {"deleted": True}
+
+
+def api_style_create(body: dict) -> dict:
+    from ytstudio import library
+    try:
+        return library.create_style(body)
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_style_update(style_id: str, body: dict) -> dict:
+    from ytstudio import library
+    try:
+        return library.update_style(style_id, body)
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_style_delete(style_id: str) -> dict:
+    from ytstudio import library
+    library.delete_style(style_id)
+    return {"deleted": True}
+
+
+def api_save_style_from_project(slug: str, body: dict) -> dict:
+    from ytstudio import library
+    project = Project(slug)
+    try:
+        return library.save_style_from_project(
+            project, body.get("name", ""), body.get("channel_id"))
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
 # Estado de las ejecuciones en curso: slug -> {running, lines, error}
 RUNS: dict[str, dict] = {}
 RUNS_LOCK = threading.Lock()
@@ -134,6 +198,10 @@ def api_create_project(body: dict) -> dict:
         set_text_input(project, text)
     if links:
         project.set("links", links)
+    if body.get("channel_id"):
+        project.set("channel_id", body["channel_id"])
+    if body.get("style_id"):
+        project.set("style_id", body["style_id"])
     for f in files:
         try:
             add_asset(project, Path(Path(f["name"]).name),
@@ -414,6 +482,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_estimate(m.group(1)))
             elif path == "/api/changelog":
                 self._json(api_changelog())
+            elif path == "/api/library":
+                self._json(api_library())
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
                 self._project_file(m.group(1), m.group(2))
             else:
@@ -433,6 +503,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_run(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/assets", path):
                 self._json(api_add_assets(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
+                self._json(api_save_style_from_project(m.group(1), self._body()))
+            elif path == "/api/channels":
+                self._json(api_channel_create(self._body()), 201)
+            elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
+                self._json(api_channel_update(m.group(1), self._body()))
+            elif path == "/api/styles":
+                self._json(api_style_create(self._body()), 201)
+            elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
+                self._json(api_style_update(m.group(1), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
@@ -463,6 +543,10 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
                 self._json(api_delete_asset(m.group(1), int(m.group(2))))
+            elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
+                self._json(api_channel_delete(m.group(1)))
+            elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
+                self._json(api_style_delete(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
                 self._json(api_delete_project(m.group(1)))
             else:

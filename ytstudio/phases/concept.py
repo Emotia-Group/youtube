@@ -75,7 +75,18 @@ def run(project, cfg) -> None:
         "y description\n"
         f"- duration_minutes: duración final recomendada (cercana a {target})"
     )
-    if preset:
+    # Estilo guardado del canal: manda sobre el preset y evita re-inventar
+    # (y re-pagar) la dirección de arte en cada proyecto.
+    saved_style = None
+    if project.get("style_id"):
+        from ytstudio.library import load_style, style_prompt_block
+        saved_style = load_style(project.get("style_id"))
+        if saved_style:
+            prompt += "\n\n" + style_prompt_block(saved_style)
+        else:
+            project.add_warning("El estilo guardado del proyecto ya no existe "
+                                "— se genera un estilo nuevo.")
+    if preset and not saved_style:
         prompt += (
             f"\n\nEl creador eligió el preset de estilo «{preset['label']}». "
             "Adáptalo al tema del video (no lo copies literal):\n"
@@ -96,6 +107,11 @@ def run(project, cfg) -> None:
 
     concept = llm.complete_json(system, prompt, schema=CONCEPT_SCHEMA,
                                 images=frames or None, purpose="concept")
+    if saved_style:
+        # Garantía dura: el estilo del canal se aplica EXACTO (el LLM aporta
+        # títulos, ángulo y estructura; el estilo no se negocia).
+        from ytstudio.library import apply_style_to_concept
+        concept = apply_style_to_concept(saved_style, concept)
     project.path("concept", "concept.json").write_text(
         json.dumps(concept, ensure_ascii=False, indent=2), encoding="utf-8")
     project.set("concept", concept)

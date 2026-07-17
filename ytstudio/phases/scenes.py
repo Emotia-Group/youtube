@@ -113,9 +113,9 @@ WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
 
 
 def scene_seconds(cfg: dict, project=None) -> float:
-    """Ritmo visual: cada cuántos segundos cambia la imagen. Si hay un video
-    de referencia analizado (yt-dlp), se replica SU ritmo de plano medio;
-    si no, el de la configuración."""
+    """Ritmo visual: cada cuántos segundos cambia la imagen. Prioridad:
+    referencia analizada en ESTE proyecto > estilo guardado del canal >
+    configuración."""
     if project is not None:
         for link in (project.get("brief") or {}).get("links", []):
             rhythm = (link or {}).get("rhythm") or {}
@@ -124,6 +124,15 @@ def scene_seconds(cfg: dict, project=None) -> float:
                 target = min(15.0, max(3.5, float(avg)))
                 project.add_warning(
                     f"ℹ Ritmo visual tomado del video de referencia: "
+                    f"~{target:.0f} s por plano.")
+                return target
+        if project.get("style_id"):
+            from ytstudio.library import load_style
+            style = load_style(project.get("style_id")) or {}
+            if style.get("scene_seconds"):
+                target = float(style["scene_seconds"])
+                project.add_warning(
+                    f"ℹ Ritmo visual del estilo «{style.get('name', '')}»: "
                     f"~{target:.0f} s por plano.")
                 return target
     return float(cfg.get("video", {}).get("scene_seconds", 6))
