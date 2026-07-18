@@ -186,18 +186,20 @@ def concat_audios(paths: list[Path], out: Path) -> Path:
 
 
 def clean_narration(src: Path, out: Path, *, trim_silence: bool = True,
-                    keep: float = 0.4, threshold_db: int = -35,
+                    keep: float = 0.4, threshold_db: int = -42,
                     lufs: int = -16) -> Path:
     """Normaliza el volumen de una narración y (opcional) recorta los silencios
     largos — al inicio, al final y entre frases — dejando pausas uniformes de
-    `keep` segundos. Devuelve la ruta del audio limpio."""
+    `keep` segundos. Detección por RMS con umbral conservador (-42 dB): solo
+    recorta silencio real, sin comerse respiraciones ni sílabas suaves (con
+    pico a -35 dB los finales de palabra podían sonar cortados)."""
     filters = []
     if trim_silence:
         filters.append(
             f"silenceremove=start_periods=1:start_duration=0:"
-            f"start_threshold={threshold_db}dB:detection=peak:"
+            f"start_threshold={threshold_db}dB:detection=rms:"
             f"stop_periods=-1:stop_duration={keep}:"
-            f"stop_threshold={threshold_db}dB:detection=peak")
+            f"stop_threshold={threshold_db}dB:detection=rms")
     filters.append(f"loudnorm=I={lufs}:TP=-1.5:LRA=11")
     run_ffmpeg(["-i", str(src), "-vn", "-af", ",".join(filters),
                 "-c:a", "libmp3lame", "-q:a", "2", str(out)], "limpiar narración")

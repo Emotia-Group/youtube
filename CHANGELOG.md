@@ -3,6 +3,25 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v18 — 2026-07-18
+- SOLUCIÓN DEFINITIVA de los saltos de voz en narración propia. La causa
+  real: los tiempos de Whisper traen huecos entre segmentos (pausas,
+  respiraciones) y esos huecos se DESCARTABAN de la línea de tiempo — el
+  video quedaba más corto que la voz, se desincronizaba progresivamente y el
+  final se truncaba. Ahora las fronteras de escena son puntos de corte sobre
+  una línea de tiempo CONTINUA (la primera escena arranca en 0 y la última
+  termina en el final real del audio): no se pierde ni un milisegundo.
+- Cada corte de escena cae en un cuadro de video exacto (sin deriva
+  acumulada): sincronía precisa de escenas y subtítulos con la voz.
+- Los clips de voz cacheados de versiones anteriores se regeneran solos si
+  sus fronteras cambiaron (reanudar un proyecto viejo queda bien).
+- Limpieza de silencios más suave (detección RMS, umbral -42 dB): ya no se
+  come respiraciones ni sílabas suaves al preparar tu grabación (aplica a
+  proyectos nuevos o al rehacer desde Análisis).
+- El registro muestra «🎙 Narración propia: línea de tiempo continua…» y
+  «🎙 Voz: usando tu narración CONTINUA…» para confirmar que el modo correcto
+  está activo.
+
 ## v17 — 2026-07-17
 - ARREGLO GRAVE del audio en narración propia: tu voz grabada ya NO se pica
   con silencios entre escenas. Antes se insertaba relleno (0.35s) y pausas

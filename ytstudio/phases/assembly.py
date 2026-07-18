@@ -601,6 +601,8 @@ def run(project, cfg) -> None:
     afilters: list[str] = []
 
     if use_user_voice:
+        notify("🎙 Voz: usando tu narración CONTINUA como pista única "
+               "(sin cortes por escena).")
         narr_idx = 2 + (len(sfx_args) // 2)
         args += ["-i", str(project.path("input", narration["file"]))]
         base = (f"[{narr_idx}:a]aresample=44100,aformat=channel_layouts=stereo,"

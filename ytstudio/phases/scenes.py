@@ -302,6 +302,13 @@ def _group_narration(segments: list[dict], target_seconds: float = 6.0) -> list[
             prev["audio_end"] = round(cur[-1]["end"], 3)
         else:
             scenes.append(_scene_from_group(cur, len(scenes) + 1))
+    # Fronteras CONTINUAS: el fin de cada escena es el inicio de la siguiente.
+    # Whisper deja huecos entre segmentos (pausas, respiraciones); si se
+    # descartaran, el video quedaría más corto que la narración y la voz se
+    # desincronizaría. La fase de voz ancla además la primera escena a 0 y la
+    # última al final real del audio.
+    for a, b in zip(scenes, scenes[1:]):
+        a["audio_end"] = b["audio_start"]
     return scenes
 
 
