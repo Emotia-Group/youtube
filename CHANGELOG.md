@@ -3,6 +3,22 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v19 — 2026-07-18
+- RESPIRACIÓN ESTILO DOCUMENTAL en narración propia: los espacios en blanco
+  se insertan SOLO dentro de las pausas naturales de tu grabación (donde hay
+  silencio real) — la voz jamás se corta a destiempo. Entre escenas hay un
+  respiro (audio.scene_breath, 0.3s) y las pausas dramáticas del director
+  creativo (pause_after) vuelven a aplicarse, siempre en pausas reales.
+  Donde el corte visual cae a mitad de frase, la voz fluye a través del
+  corte (muy documental) sin insertar nada.
+- AIRE DE ENTRADA (audio.intro_seconds, 0.8s): el video abre, entra la
+  música y luego la primera palabra.
+- COLA DE CIERRE (audio.outro_seconds, 3.5s): tras la última palabra, la
+  imagen y la música respiran — el fundido final NUNCA toca la voz (adiós al
+  desvanecimiento al filo del cierre). Aplica también con voz IA (TTS).
+- La pista de voz se compila como WAV sin pérdidas (narration_timeline.wav):
+  cortes solo en silencios reales, sin el padding del codificador mp3.
+
 ## v18 — 2026-07-18
 - SOLUCIÓN DEFINITIVA de los saltos de voz en narración propia. La causa
   real: los tiempos de Whisper traen huecos entre segmentos (pausas,

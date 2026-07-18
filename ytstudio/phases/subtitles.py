@@ -41,7 +41,8 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int) -> list[dict]
         blocks = _chunks(scene["narration"], max_chars, max_lines)
         vo = scene["vo_duration"]
         total_chars = sum(len(b) for b in blocks) or 1
-        offset = 0.0
+        # la voz puede empezar con un pequeño aire dentro de la escena (intro)
+        offset = float(scene.get("vo_offset") or 0.0)
         for block in blocks:
             dur = vo * len(block) / total_chars
             cues.append({"start": t + offset, "end": t + offset + dur, "text": block})

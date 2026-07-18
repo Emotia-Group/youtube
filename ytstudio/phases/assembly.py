@@ -80,7 +80,7 @@ def _narration_moment(scene: dict, dur: float) -> float | None:
                 break
     if idx < 0:
         return None
-    return vo * idx / max(1, len(narr))
+    return float(scene.get("vo_offset") or 0.0) + vo * idx / max(1, len(narr))
 
 
 def _fit(size: int, text: str) -> int:
@@ -602,9 +602,13 @@ def run(project, cfg) -> None:
 
     if use_user_voice:
         notify("🎙 Voz: usando tu narración CONTINUA como pista única "
-               "(sin cortes por escena).")
+               "(con respiros solo en tus pausas naturales).")
         narr_idx = 2 + (len(sfx_args) // 2)
-        args += ["-i", str(project.path("input", narration["file"]))]
+        tl = project.get("voice_timeline")
+        tl_path = project.path("voiceover", tl) if tl else None
+        voice_src = (tl_path if tl_path and tl_path.exists()
+                     else project.path("input", narration["file"]))
+        args += ["-i", str(voice_src)]
         base = (f"[{narr_idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
                 f"atrim=0:{total:.3f},apad=whole_dur={total:.3f}")
         if duck:  # se consume 2 veces (sidechain + mezcla) → asplit obligatorio
