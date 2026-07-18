@@ -586,33 +586,59 @@ def run(project, cfg) -> None:
     duck = cfg["audio"].get("duck", True)
     burn = cfg["video"].get("burn_subtitles", False)
 
+    total = probe_duration(body)
+
+    # Voz: en narración propia se usa la grabación CONTINUA del usuario como
+    # pista única (alineada desde t=0 y ajustada a la duración del video), en
+    # vez de los trozos por escena — así suena exactamente como la grabó, sin
+    # cortes ni silencios entre escenas. En TTS se usa el audio del cuerpo.
+    narration = project.get("narration")
+    use_user_voice = bool(narration and any("audio_start" in s for s in scenes))
+
+    sfx_args, sfx_filters, sfx_label = _sfx_graph(scenes, cfg, final_dir,
+                                                  first_input=2)
+    args = ["-i", str(body), "-i", str(music), *sfx_args]
+    afilters: list[str] = []
+
+    if use_user_voice:
+        narr_idx = 2 + (len(sfx_args) // 2)
+        args += ["-i", str(project.path("input", narration["file"]))]
+        base = (f"[{narr_idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
+                f"atrim=0:{total:.3f},apad=whole_dur={total:.3f}")
+        if duck:  # se consume 2 veces (sidechain + mezcla) → asplit obligatorio
+            afilters.append(f"{base},asplit=2[vsc][vmx]")
+            voice_sc, voice_mx = "vsc", "vmx"
+        else:
+            afilters.append(f"{base}[vmx]")
+            voice_sc, voice_mx = None, "vmx"
+        next_idx = narr_idx + 1
+    else:
+        voice_sc = voice_mx = "0:a"  # ffmpeg auto-divide los pads de entrada
+        next_idx = 2 + (len(sfx_args) // 2)
+
     envelope = _music_envelope(scenes, music_db, swing_db)
-    afilters = [f"[1:a]volume='{envelope}':eval=frame[m]"]
+    afilters.append(f"[1:a]volume='{envelope}':eval=frame[m]")
     if duck:
-        afilters.append("[m][0:a]sidechaincompress=threshold=0.05:ratio=8:"
-                        "attack=80:release=400[md]")
+        afilters.append(f"[m][{voice_sc}]sidechaincompress=threshold=0.05:"
+                        "ratio=8:attack=80:release=400[md]")
         music_label = "md"
     else:
         music_label = "m"
 
-    sfx_args, sfx_filters, sfx_label = _sfx_graph(scenes, cfg, final_dir,
-                                                  first_input=2)
     afilters += sfx_filters
-    mix_in = f"[0:a][{music_label}]" + (f"[{sfx_label}]" if sfx_label else "")
+    mix_in = f"[{voice_mx}][{music_label}]" + (f"[{sfx_label}]" if sfx_label else "")
     n_mix = 3 if sfx_label else 2
     # Cierre: fundido de salida del audio completo (tras loudnorm, para que la
     # normalización no lo contrarreste) — el final deja de sentirse abrupto.
     end_fade = float(cfg["audio"].get("end_fade", 3.0))
-    total = probe_duration(body)
     fade = (f",afade=t=out:st={max(0.0, total - end_fade):.2f}:d={end_fade:.2f}"
             if end_fade > 0 else "")
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"
                     f"loudnorm=I=-14:TP=-1.5:LRA=11{fade}[aout]")
 
     output = final_dir / "video_final.mp4"
-    args = ["-i", str(body), "-i", str(music), *sfx_args]
     graph = list(afilters)
-    sub_input = 2 + (len(sfx_args) // 2)
+    sub_input = next_idx
 
     if burn:
         ass = project.path("subtitles", "subtitulos.ass")

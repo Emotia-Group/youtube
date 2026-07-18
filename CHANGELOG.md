@@ -3,6 +3,22 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v17 — 2026-07-17
+- ARREGLO GRAVE del audio en narración propia: tu voz grabada ya NO se pica
+  con silencios entre escenas. Antes se insertaba relleno (0.35s) y pausas
+  entre cada trozo — muy notorio con ritmos rápidos. Ahora el montaje usa tu
+  grabación CONTINUA como pista única de voz: suena exactamente como la
+  grabaste, sin cortes ni huecos. Las duraciones de escena son exactas, así
+  que los subtítulos quedan perfectamente alineados.
+- ARREGLO de las transiciones que no variaban: «Guardar configuración»
+  congelaba TODOS los ajustes (incl. el viejo «transition: fade») en tu
+  archivo local y tapaba los nuevos valores por defecto. Ahora solo se guarda
+  lo que la interfaz controla, y al arrancar se limpian los defaults
+  congelados de versiones antiguas. Efecto inmediato: las transiciones vuelven
+  a variar (auto) y otros ajustes nuevos (paralelismo, etc.) dejan de quedar
+  tapados. No pierdes tus preferencias reales (idioma, resolución, ritmo,
+  proveedores, etc.).
+
 ## v16 — 2026-07-16
 - CANALES Y ESTILOS (📺 en el menú): guarda el estilo de un proyecto que te
   gustó (botón «💾 Guardar estilo» en la pestaña Concepto) o crea estilos

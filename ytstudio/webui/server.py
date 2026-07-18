@@ -374,14 +374,71 @@ def api_get_config() -> dict:
     }
 
 
+# SOLO estos ajustes los controla la interfaz de Configuración. Guardar en
+# config.local.yaml cualquier otra cosa congelaba los valores por defecto de
+# ese momento y anulaba mejoras futuras (p.ej. dejaba 'transition: fade' fijo
+# aunque el nuevo defecto sea 'auto'). Se guarda solo esta lista; el resto
+# fluye siempre desde config.yaml (el del repo, actualizable con git pull).
+_UI_CONFIG_PATHS = (
+    ("language",),
+    ("style", "preset"),
+    ("video", "target_minutes"), ("video", "width"), ("video", "height"),
+    ("video", "burn_subtitles"), ("video", "scene_seconds"),
+    ("audio", "music_db"), ("audio", "duck"),
+    ("providers",),  # el usuario elige proveedores/modelos
+)
+
+
+def _prune_to_ui(cfg: dict) -> dict:
+    """Extrae de `cfg` solo las rutas que gestiona la interfaz."""
+    out: dict = {}
+    for path in _UI_CONFIG_PATHS:
+        src = cfg
+        ok = True
+        for key in path:
+            if isinstance(src, dict) and key in src:
+                src = src[key]
+            else:
+                ok = False
+                break
+        if not ok:
+            continue
+        dst = out
+        for key in path[:-1]:
+            dst = dst.setdefault(key, {})
+        dst[path[-1]] = src
+    return out
+
+
+def migrate_local_config() -> None:
+    """Al arrancar: recorta config.local.yaml a lo que controla la UI, para
+    liberar defaults congelados por versiones antiguas (transiciones,
+    rendimiento, overlays, audio avanzado…)."""
+    path = ROOT / "config.local.yaml"
+    if not path.exists():
+        return
+    try:
+        current = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return
+    pruned = _prune_to_ui(current)
+    if pruned != current:
+        path.write_text(
+            yaml.safe_dump(pruned, allow_unicode=True, sort_keys=False),
+            encoding="utf-8")
+
+
 def api_save_config(body: dict) -> dict:
     cfg = body.get("config")
     if not isinstance(cfg, dict):
         raise ApiError(400, "Config inválida.")
     # Se guarda en config.local.yaml (fuera de Git) — nunca en config.yaml,
-    # que es parte del repositorio y un 'git pull' lo sobreescribiría.
+    # que es parte del repositorio y un 'git pull' lo sobreescribiría. Solo se
+    # persiste lo que la UI controla (ver _UI_CONFIG_PATHS): así los defaults
+    # nuevos del programa nunca quedan tapados por un guardado antiguo.
     (ROOT / "config.local.yaml").write_text(
-        yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        yaml.safe_dump(_prune_to_ui(cfg), allow_unicode=True, sort_keys=False),
+        encoding="utf-8")
     return {"saved": True}
 
 
@@ -559,6 +616,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(port: int = 8765, open_browser: bool = True) -> None:
+    migrate_local_config()  # libera defaults congelados de versiones antiguas
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}"
     print(f"🎬 ytstudio UI → {url}")

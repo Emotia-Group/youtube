@@ -23,16 +23,24 @@ def run(project, cfg) -> None:
     narration_file = (project.path("input", narration["file"])
                       if use_user_voice else None)
 
+    def _is_user_voice(scene: dict) -> bool:
+        return "audio_start" in scene and narration_file is not None
+
     # Generación EN PARALELO (cada clip es independiente); la medición de
     # duraciones y la suma total van después, en orden.
     def _make_vo(scene: dict) -> None:
         out = vo_dir / f"vo_{scene['id']:03d}.mp3"
         if out.exists():  # reanudable
             return
-        if "audio_start" in scene and narration_file is not None:
-            # Voz REAL del usuario: cortar su tramo del audio limpio
+        if _is_user_voice(scene):
+            # Voz REAL del usuario: cortar su tramo del audio limpio. Los
+            # tramos son CONTIGUOS (fin de una escena = inicio de la
+            # siguiente), así que se cortan SIN el margen de solape (lead=0):
+            # concatenados reproducen la narración continua tal cual, sin
+            # stutter ni palabras repetidas. El corte de dos etapas ya es
+            # preciso, así que no recorta el arranque de las palabras.
             cut_segment(narration_file, scene["audio_start"],
-                        scene["audio_end"], out)
+                        scene["audio_end"], out, lead=0.0)
         else:
             # Voz sintética (TTS) desde el texto de la escena
             tts.synthesize(scene["narration"], out)
@@ -50,12 +58,23 @@ def run(project, cfg) -> None:
     total = 0.0
     for scene in scenes:
         out = vo_dir / f"vo_{scene['id']:03d}.mp3"
-        # Respiro dramático: el silencio extra queda dentro de la escena; la
-        # música sube sola en él (ducking) — recurso cinematográfico.
-        scene_pad = padding + float(scene.get("pause_after") or 0.0)
         scene["vo_file"] = out.name
-        scene["vo_duration"] = round(probe_duration(out), 3)
-        scene["duration"] = round(scene["vo_duration"] + scene_pad, 3)
+        if _is_user_voice(scene):
+            # Narración propia: la duración de la escena es EXACTAMENTE su tramo
+            # de audio (audio_end - audio_start), NO la del mp3 (que añade
+            # ~38 ms de padding del codificador y desalinearía subtítulos y voz).
+            # Sin relleno ni pausas: la grabación ya tiene su ritmo natural. En
+            # el montaje se usa la grabación CONTINUA como voz, así que la
+            # narración suena exactamente como la grabaste, sin cortes.
+            exact = float(scene["audio_end"]) - float(scene["audio_start"])
+            scene["vo_duration"] = round(exact, 3)
+            scene["duration"] = round(exact, 3)
+        else:
+            # Voz sintética (TTS): se deja un respiro entre escenas y la pausa
+            # dramática (la música sube en él con el ducking).
+            scene_pad = padding + float(scene.get("pause_after") or 0.0)
+            scene["vo_duration"] = round(probe_duration(out), 3)
+            scene["duration"] = round(scene["vo_duration"] + scene_pad, 3)
         total += scene["duration"]
 
     save_scenes(project, scenes)
