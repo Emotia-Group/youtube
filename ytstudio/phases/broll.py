@@ -145,20 +145,28 @@ def _semantic_map(llm, scenes: list[dict], assets: list[dict],
     return mapping
 
 
+def _copy_fresh(src: Path, dest: Path) -> bool:
+    """Copia src→dest salvo que dest ya sea la MISMA copia (mismo tamaño).
+    Un simple `if not dest.exists()` dejaba pegado material viejo cuando el
+    archivo fuente cambió con el mismo nombre. Devuelve True si copió."""
+    if dest.exists() and dest.stat().st_size == src.stat().st_size:
+        return False
+    shutil.copy(src, dest)
+    return True
+
+
 def _assign_user_asset(scene: dict, asset: dict, project, broll_dir: Path) -> None:
     src = project.path("input", asset["file"])
     if asset["kind"] == "image":
         dest = broll_dir / f"scene_{scene['id']:03d}{Path(asset['file']).suffix}"
-        if not dest.exists():
-            shutil.copy(src, dest)
+        _copy_fresh(src, dest)
         scene["broll_image"] = dest.name
         scene.pop("broll_video", None)
     else:  # video propio: clip + fotograma para miniatura/respaldo
         clip = broll_dir / f"scene_{scene['id']:03d}{Path(asset['file']).suffix}"
-        if not clip.exists():
-            shutil.copy(src, clip)
+        copied = _copy_fresh(src, clip)
         frame = broll_dir / f"scene_{scene['id']:03d}.jpg"
-        if not frame.exists():
+        if copied or not frame.exists():
             run_ffmpeg(["-i", str(clip), "-frames:v", "1", "-q:v", "3",
                         str(frame)], "fotograma b-roll propio")
         scene["broll_video"] = clip.name
@@ -193,6 +201,43 @@ def run(project, cfg) -> None:
                                 f"disponible (reparto uniforme): {e}")
     if mapping is None:
         mapping = _spread(len(user_assets), len(scenes))
+
+    # Caché HONESTA del material por escena: cada escena se firma con lo que
+    # debe mostrar (hash del prompt IA, o el archivo propio asignado). Si al
+    # reanudar la firma cambió — el guion se rehízo, o la asignación
+    # inteligente movió un B-roll propio a otra escena — el material viejo ya
+    # NO ilustra esa narración: se borra y se rehace (con aviso). Sin esto,
+    # una imagen vieja se quedaba pegada en la escena equivocada y el video
+    # salía «desfasado» respecto a la voz. Los proyectos previos sin firma
+    # adoptan la actual sin regenerar nada (cero costo sorpresa).
+    import hashlib
+    import json as _json
+    from ytstudio.progress import notify
+    sig_path = broll_dir / "prompts.json"
+    try:
+        sigs = _json.loads(sig_path.read_text(encoding="utf-8"))
+    except Exception:
+        sigs = {}
+    stale: list[int] = []
+    for idx, s in enumerate(scenes):
+        if idx in mapping:
+            sig = "user:" + user_assets[mapping[idx]]["file"]
+        else:
+            sig = hashlib.md5(
+                (s.get("broll_prompt") or "").encode("utf-8")).hexdigest()
+        key = str(s["id"])
+        cached = list(broll_dir.glob(f"scene_{s['id']:03d}.*"))
+        if sigs.get(key) not in (None, sig) and cached:
+            for p in cached:
+                p.unlink(missing_ok=True)
+            stale.append(s["id"])
+        sigs[key] = sig
+    sig_path.write_text(_json.dumps(sigs, indent=0), encoding="utf-8")
+    if stale:
+        notify(f"🔄 El contenido de {len(stale)} escena(s) cambió desde la "
+               f"última generación ({', '.join(map(str, stale))}): su material "
+               "se rehace para que corresponda a la narración actual.")
+
     for scene_idx, asset_idx in mapping.items():
         _assign_user_asset(scenes[scene_idx], user_assets[asset_idx],
                            project, broll_dir)

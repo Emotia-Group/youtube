@@ -3,6 +3,35 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v22 — 2026-07-18
+- AUDITORÍA TOTAL DE SINCRONIZACIÓN (voz, subtítulos, rótulos y escenas).
+  Causa raíz de la «voz cortada en varios tramos»: los respiros se cortaban
+  en las fronteras de segmento de Whisper, que traen un sesgo de ±0.2–0.4s —
+  cuando Whisper marcaba el inicio tarde, el corte caía A MITAD DE PALABRA.
+  Ahora los silencios se MIDEN en la onda real de tu grabación (ffmpeg
+  silencedetect) y cada respiro se ancla DENTRO de un silencio medido, con
+  margen de seguridad a cada lado. Donde no hay silencio real cerca (aunque
+  Whisper diga que sí), no se corta nada: la voz fluye a través del corte
+  visual. Es matemáticamente imposible partir una palabra.
+- AUTOCOMPROBACIÓN de la pista de voz: al montarla se verifica que dura
+  exactamente la suma de las escenas y que conserva TODOS los segundos
+  hablados de tu grabación — cualquier deriva dispara un aviso visible en
+  vez de entregar un video desincronizado en silencio.
+- CACHÉ HONESTA del B-roll: cada escena firma su material (hash del prompt
+  IA o archivo propio asignado). Si rehaces desde Análisis/Guion y el
+  contenido de una escena cambia, su imagen/clip viejo se descarta y se
+  rehace (con aviso) — antes se quedaba pegado material de la versión
+  anterior y el video salía «desfasado» respecto a la narración. Los
+  proyectos previos adoptan la firma sin regenerar nada (cero costo
+  sorpresa).
+- El montaje re-renderiza una escena cuando su imagen/clip se regeneró con
+  el MISMO nombre (la firma ahora incluye tamaño y fecha del archivo).
+- B-roll propio: si re-subes un archivo con el mismo nombre, la copia de la
+  escena se refresca (antes quedaba la vieja).
+- Batería de pruebas nueva: fronteras de Whisper deliberadamente sesgadas,
+  huecos inventados a mitad de voz continua, invariante palabra↔video
+  (±1.5 cuadros), subtítulos y las tres rutas de caché del B-roll.
+
 ## v21 — 2026-07-18
 - SINCRONÍA REAL de los subtítulos con narración propia: antes se repartían
   por proporción de caracteres dentro de cada escena, así que el cambio de

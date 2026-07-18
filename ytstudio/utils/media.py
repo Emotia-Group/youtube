@@ -154,6 +154,44 @@ def probe_duration(path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
+def detect_silences(path: Path, noise_db: int = -38,
+                    min_d: float = 0.15) -> list[tuple[float, float]]:
+    """Silencios REALES medidos en la onda de audio con silencedetect.
+
+    Devuelve [(inicio, fin)] en segundos. Es la fuente de verdad para saber
+    dónde se puede cortar la narración sin partir una palabra: los tiempos de
+    Whisper traen un sesgo de ±0.2–0.4s en los bordes de segmento, así que
+    cortar ahí puede caer a mitad de palabra — medir el silencio en la onda
+    no tiene ese problema."""
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostdin", "-i", str(path), "-vn",
+         "-af", f"silencedetect=noise={noise_db}dB:d={min_d}",
+         "-f", "null", "-"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    silences: list[tuple[float, float]] = []
+    start: float | None = None
+    for line in result.stderr.splitlines():
+        if "silence_start:" in line:
+            try:
+                start = float(line.split("silence_start:")[1].split()[0])
+            except (ValueError, IndexError):
+                start = None
+        elif "silence_end:" in line and start is not None:
+            try:
+                end = float(line.split("silence_end:")[1].split()[0])
+                if end > start:
+                    silences.append((start, end))
+            except (ValueError, IndexError):
+                pass
+            start = None
+    if start is not None:  # silencio abierto hasta el final del archivo
+        try:
+            silences.append((start, probe_duration(path)))
+        except Exception:
+            pass
+    return silences
+
+
 def make_silence(path: Path, seconds: float, sample_rate: int = 44100) -> Path:
     run_ffmpeg(
         ["-f", "lavfi", "-i", f"anullsrc=r={sample_rate}:cl=stereo",

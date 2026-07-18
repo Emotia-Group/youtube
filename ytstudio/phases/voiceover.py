@@ -8,7 +8,8 @@ import math
 
 from ytstudio.phases.scenes import load_scenes, save_scenes
 from ytstudio.providers import get_tts
-from ytstudio.utils.media import cut_segment, probe_duration, run_ffmpeg
+from ytstudio.utils.media import (cut_segment, detect_silences, probe_duration,
+                                  run_ffmpeg)
 
 
 def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
@@ -17,9 +18,13 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
 
     Principio: la narración del usuario NUNCA se corta a destiempo. La voz es
     continua, y los respiros (espacios en blanco) se insertan ÚNICAMENTE
-    dentro de las pausas naturales de la grabación — los huecos entre
-    segmentos de Whisper, donde hay silencio real. Ahí es imposible cortar
-    una palabra.
+    dentro de silencios REALES medidos en la onda de audio (silencedetect).
+    Los tiempos de Whisper solo orientan DÓNDE buscar el silencio: sus bordes
+    de segmento traen un sesgo de ±0.2–0.4s y cortar ahí a ciegas podía caer
+    a mitad de palabra (la causa de la «voz cortada en varios tramos»). Cada
+    frontera con respiro se re-ancla DENTRO del silencio medido; donde no hay
+    silencio medible cerca, la voz fluye a través del corte visual sin
+    insertar nada.
 
     Composición:
     - intro: aire antes de la primera palabra (el video abre, entra la música
@@ -42,37 +47,55 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
 
     segs = narration.get("segments") or []
     seg_starts = [float(s["start"]) for s in segs]
-    seg_ends = [float(s["end"]) for s in segs]
 
     user_scenes = [s for s in scenes if "audio_start" in s]
     n = len(user_scenes)
 
-    # Fronteras fuente, re-ancladas al inicio de segmento más cercano (repara
-    # también los valores cuantizados que dejó la versión anterior)
+    # Silencios REALES de la grabación, medidos en la onda (no estimados por
+    # Whisper): la única fuente de verdad sobre dónde se puede cortar.
+    silences = detect_silences(narration_file)
+
+    def snap_to_silence(b: float) -> float | None:
+        """Punto de corte DENTRO del silencio real más cercano a b (con margen
+        de seguridad a cada lado), o None si no hay silencio medible cerca."""
+        best = None
+        for s0, s1 in silences:
+            d = 0.0 if s0 <= b <= s1 else min(abs(s0 - b), abs(s1 - b))
+            if d <= 0.45 and (best is None or d < best[0]):
+                best = (d, s0, s1)
+        if best is None:
+            return None
+        _, s0, s1 = best
+        return min(max(b, s0 + 0.06), max(s0 + 0.06, s1 - 0.06))
+
+    # Fronteras fuente: el inicio de segmento de Whisper orienta, pero la
+    # frontera definitiva se ancla DENTRO de un silencio medido. Si no lo
+    # hay, se conserva la frontera solo como coordenada (sin corte ahí).
     bounds = [0.0]
+    cuttable: list[bool] = []  # ¿bounds[i+1] cae en silencio real medido?
     for s in user_scenes[1:]:
         b = float(s["audio_start"])
         if seg_starts:
             j = min(range(len(seg_starts)), key=lambda k: abs(seg_starts[k] - b))
             if abs(seg_starts[j] - b) <= 0.15:
                 b = seg_starts[j]
-        b = min(max(b, bounds[-1] + 0.2), max(audio_total - 0.2, 0.2))
-        bounds.append(b)
+        c = snap_to_silence(b)
+        if c is not None:
+            b = c
+        b2 = min(max(b, bounds[-1] + 0.2), max(audio_total - 0.2, 0.2))
+        if c is not None and b2 != b:
+            # el ajuste de monotonía lo sacó del silencio → verificar de nuevo
+            c = b2 if any(s0 + 0.05 <= b2 <= s1 - 0.05
+                          for s0, s1 in silences) else None
+        cuttable.append(c is not None)
+        bounds.append(b2)
     bounds.append(audio_total)
-
-    def natural_gap(b: float) -> float:
-        """Silencio real de la grabación justo antes de la frontera b."""
-        near = min((abs(s - b) for s in seg_starts), default=99.0)
-        if near > 0.15:
-            return 0.0  # frontera a mitad de frase (átomo partido): no tocar
-        prev = [e for e in seg_ends if e <= b + 0.02]
-        return max(0.0, b - max(prev)) if prev else 0.0
 
     pause_ideal: list[float] = []
     for i in range(n):
         if i == n - 1:
             pause_ideal.append(outro)
-        elif natural_gap(bounds[i + 1]) >= 0.12:
+        elif cuttable[i]:
             extra = min(1.6, float(user_scenes[i].get("pause_after") or 0.0))
             pause_ideal.append(breath + extra)
         else:
@@ -153,7 +176,28 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
                 str(script), "-map", "[out]", "-c:a", "pcm_s16le", str(out)],
                "línea de tiempo de la voz")
     n_breaths = sum(1 for x in sils[:-1] if x > 0.001)
-    return out, n_breaths
+
+    # AUTOCOMPROBACIÓN: la línea de tiempo solo AÑADE silencio, jamás quita
+    # voz. Se compara la duración total contra la suma de escenas y los
+    # segundos HABLADOS del resultado contra los de la fuente; cualquier
+    # deriva delata un bug de montaje y se avisa en vez de entregar un video
+    # desincronizado en silencio.
+    check = None
+    try:
+        got = probe_duration(out)
+        speech_src = audio_total - sum(
+            min(e, audio_total) - max(s, 0.0)
+            for s, e in silences if s < audio_total)
+        speech_tl = got - sum(e - s for s, e in detect_silences(out))
+        if abs(got - cum_v) > 0.1 or abs(speech_tl - speech_src) > 0.5:
+            check = (f"Autocomprobación de la voz: la línea de tiempo mide "
+                     f"{got:.2f}s (esperados {cum_v:.2f}s) con {speech_tl:.2f}s "
+                     f"de voz ({speech_src:.2f}s en tu grabación). Hay una "
+                     "deriva inesperada — reporta este aviso y usa «Rehacer "
+                     "desde Voz» tras actualizar.")
+    except Exception:
+        pass
+    return out, n_breaths, check
 
 
 def run(project, cfg) -> None:
@@ -174,13 +218,16 @@ def run(project, cfg) -> None:
     if use_user_voice:
         audio_total = probe_duration(narration_file)
         fps = float(cfg.get("video", {}).get("fps", 24))
-        timeline, n_breaths = _build_timeline(
+        timeline, n_breaths, check = _build_timeline(
             scenes, narration, cfg, narration_file, vo_dir, audio_total, fps)
         project.set("voice_timeline", timeline.name)
+        if check:
+            project.add_warning(check)
         outro = cfg.get("audio", {}).get("outro_seconds", 3.5)
         notify(f"🎙 Narración propia: voz continua de {audio_total:.1f}s con "
-               f"{n_breaths} respiros en tus pausas naturales y {outro:.1f}s "
-               "de cola final (el fundido nunca toca la voz).")
+               f"{n_breaths} respiros anclados en silencios REALES medidos en "
+               f"tu grabación y {outro:.1f}s de cola final (el fundido nunca "
+               "toca la voz).")
 
     def _is_user_voice(scene: dict) -> bool:
         return "audio_start" in scene and narration_file is not None

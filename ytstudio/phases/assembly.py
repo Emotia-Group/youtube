@@ -504,12 +504,25 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
     return args, filters, "sfx"
 
 
-def _render_signature(scenes, plans, cfg) -> str:
+def _render_signature(scenes, plans, cfg, project) -> str:
     """Huella de todo lo que afecta al render de cada escena (imagen/video,
     animación, duración, rótulo, transición y ajustes de video). Si cambia, se
     re-renderizan las escenas aunque el .mp4 exista — así reajustar las
     transiciones (o los rótulos) SÍ se ve al reanudar el montaje."""
     v = cfg.get("video", {})
+
+    def stamp(name):
+        # El material puede regenerarse CON EL MISMO NOMBRE (p.ej. cuando el
+        # prompt de la escena cambió): el nombre solo no basta — se firma
+        # también tamaño y fecha del archivo para re-renderizar la escena.
+        if not name:
+            return None
+        try:
+            st = project.path("broll", name).stat()
+            return [st.st_size, int(st.st_mtime)]
+        except OSError:
+            return None
+
     payload = {
         "video": {k: v.get(k) for k in
                   ("width", "height", "fps", "transition", "overlays",
@@ -520,6 +533,7 @@ def _render_signature(scenes, plans, cfg) -> str:
             "dur": s.get("duration"), "overlay": s.get("overlay"),
             "ost": s.get("on_screen_text"), "at": s.get("overlay_at"),
             "off": s.get("vo_offset"), "fade": p,
+            "src": [stamp(s.get("broll_image")), stamp(s.get("broll_video"))],
         } for s, p in zip(scenes, plans)],
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -542,7 +556,7 @@ def run(project, cfg) -> None:
 
     # Si algo visual cambió desde el último render, limpiar las escenas
     # cacheadas (si no, un reajuste de transiciones/rótulos no se vería).
-    sig = _render_signature(scenes, plans, cfg)
+    sig = _render_signature(scenes, plans, cfg, project)
     if project.get("assembly_sig") != sig:
         for old in scenes_dir.glob("scene_*.mp4"):
             old.unlink(missing_ok=True)
