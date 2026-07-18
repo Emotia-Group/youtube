@@ -1,9 +1,15 @@
 """FASE 8 — Subtítulos: genera .srt (para subir a YouTube o pista soft) y
-.ass estilizado (para quemar en el video). Los tiempos se reparten dentro de
-cada escena proporcionalmente al número de caracteres de cada bloque."""
+.ass estilizado (para quemar en el video).
+
+En narración propia, los tiempos de cada bloque se anclan a los timestamps
+REALES de tus palabras (Whisper) — el subtítulo cambia cuando tú lo dices,
+no por proporción de caracteres dentro de la escena (eso ligaba el cambio
+de texto al corte visual en vez de a tu voz). En TTS (sin timestamps por
+palabra) se reparte proporcionalmente, como antes."""
 from __future__ import annotations
 
 from ytstudio.phases.scenes import load_scenes
+from ytstudio.utils.align import assign_words, flatten_words, local_time
 
 
 def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
@@ -24,6 +30,30 @@ def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
             for i in range(0, len(lines), max_lines)]
 
 
+def _chunks_words(words: list[dict], max_chars: int, max_lines: int):
+    """Como _chunks, pero conservando qué palabras (con sus tiempos reales)
+    componen cada línea/bloque — para anclar el subtítulo a la voz real."""
+    lines: list[list[dict]] = []
+    current: list[dict] = []
+    current_text = ""
+    for w in words:
+        candidate = f"{current_text} {w['text']}".strip()
+        if len(candidate) > max_chars and current:
+            lines.append(current)
+            current, current_text = [w], w["text"]
+        else:
+            current.append(w)
+            current_text = candidate
+    if current:
+        lines.append(current)
+    blocks = []
+    for i in range(0, len(lines), max_lines):
+        block_lines = lines[i:i + max_lines]
+        text = "\n".join(" ".join(w["text"] for w in ln) for ln in block_lines)
+        blocks.append((text, [w for ln in block_lines for w in ln]))
+    return blocks
+
+
 def _fmt_srt(t: float) -> str:
     ms = int(round(t * 1000))
     return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
@@ -34,29 +64,44 @@ def _fmt_ass(t: float) -> str:
     return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
 
 
-def build_cues(scenes: list[dict], max_chars: int, max_lines: int) -> list[dict]:
+def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
+               narration: dict | None = None) -> list[dict]:
+    all_words = flatten_words((narration or {}).get("segments") or [])
+    word_map = assign_words(scenes, all_words) if all_words else {}
     cues = []
     t = 0.0
     for scene in scenes:
-        blocks = _chunks(scene["narration"], max_chars, max_lines)
-        vo = scene["vo_duration"]
-        total_chars = sum(len(b) for b in blocks) or 1
-        # la voz puede empezar con un pequeño aire dentro de la escena (intro)
-        offset = float(scene.get("vo_offset") or 0.0)
-        for block in blocks:
-            dur = vo * len(block) / total_chars
-            cues.append({"start": t + offset, "end": t + offset + dur, "text": block})
-            offset += dur
+        sw = word_map.get(scene.get("id"), [])
+        if sw:
+            # Timing REAL: cada bloque empieza/termina cuando tú dices esas
+            # palabras, no por proporción de caracteres.
+            for text, bwords in _chunks_words(sw, max_chars, max_lines):
+                start = local_time(scene, bwords[0]["start"])
+                end = max(start + 0.25, local_time(scene, bwords[-1]["end"]))
+                cues.append({"start": t + start, "end": t + end, "text": text})
+        else:
+            # Respaldo (TTS, o proyectos de versiones anteriores sin
+            # timestamps por palabra): reparto proporcional por caracteres.
+            blocks = _chunks(scene["narration"], max_chars, max_lines)
+            vo = scene["vo_duration"]
+            total_chars = sum(len(b) for b in blocks) or 1
+            offset = float(scene.get("vo_offset") or 0.0)
+            for block in blocks:
+                dur = vo * len(block) / total_chars
+                cues.append({"start": t + offset, "end": t + offset + dur,
+                            "text": block})
+                offset += dur
         t += scene["duration"]
     return cues
 
 
 def run(project, cfg) -> None:
     scenes = load_scenes(project)
+    narration = project.get("narration")
     sub_cfg = cfg.get("subtitles", {})
     max_chars = sub_cfg.get("max_chars_per_line", 42)
     max_lines = sub_cfg.get("max_lines", 2)
-    cues = build_cues(scenes, max_chars, max_lines)
+    cues = build_cues(scenes, max_chars, max_lines, narration)
 
     # SRT
     srt = []

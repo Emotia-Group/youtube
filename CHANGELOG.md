@@ -3,6 +3,21 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v21 — 2026-07-18
+- SINCRONÍA REAL de los subtítulos con narración propia: antes se repartían
+  por proporción de caracteres dentro de cada escena, así que el cambio de
+  texto se sentía ligado al corte de escena y no a tus pausas reales. Ahora
+  se piden a Whisper los tiempos de CADA PALABRA y los subtítulos se anclan a
+  ellos: si haces una pausa a mitad de una frase, el subtítulo la refleja en
+  vez de ignorarla.
+- Los rótulos en pantalla usan la misma fuente de verdad (ya no interpolan
+  dentro del segmento: usan la palabra real).
+- Arreglado de paso un caso límite que encontré verificando esto: una palabra
+  que cae justo en la frontera entre dos escenas podía duplicarse en los
+  subtítulos de ambas. Ahora cada palabra se asigna a una única escena.
+- Compatibilidad total: si un proyecto (o tu STT) no trae tiempos por
+  palabra, se usa automáticamente el método anterior — nada se rompe.
+
 ## v20 — 2026-07-18
 - ARREGLO del crash por "NSFW content detected": un solo prompt marcado como
   sensible ya NO tumba todo el proyecto. Se sube la tolerancia de FLUX a 6

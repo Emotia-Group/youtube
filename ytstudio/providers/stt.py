@@ -29,16 +29,30 @@ class OpenAISTT:
             result = self.client.audio.transcriptions.create(
                 model="whisper-1", file=f, language=self.language,
                 response_format="verbose_json",
-                timestamp_granularities=["segment"],
+                # "word" da el tiempo de CADA palabra — es lo que permite
+                # sincronizar subtítulos y rótulos con la voz real en vez de
+                # estimar por proporción de caracteres.
+                timestamp_granularities=["segment", "word"],
             )
+
+        def get(o, k):
+            return o[k] if isinstance(o, dict) else getattr(o, k)
+
+        words_raw = getattr(result, "words", None) or []
+        words = [{"start": float(get(w, "start")), "end": float(get(w, "end")),
+                  "text": (get(w, "word") or "").strip()}
+                 for w in words_raw if (get(w, "word") or "").strip()]
+
         segments = getattr(result, "segments", None) or []
         out = []
         for s in segments:
-            get = (lambda k: s[k]) if isinstance(s, dict) else (lambda k: getattr(s, k))
-            text = (get("text") or "").strip()
-            if text:
-                out.append({"start": float(get("start")),
-                            "end": float(get("end")), "text": text})
+            text = (get(s, "text") or "").strip()
+            if not text:
+                continue
+            start, end = float(get(s, "start")), float(get(s, "end"))
+            seg_words = [w for w in words if start - 0.05 <= w["start"] <= end + 0.05]
+            out.append({"start": start, "end": end, "text": text,
+                        "words": seg_words})
         return out
 
 
@@ -69,7 +83,15 @@ class MockSTT:
         segments, t = [], 0.0
         for s in sentences:
             seg_dur = duration * len(s) / total_chars
-            segments.append({"start": round(t, 3),
-                             "end": round(t + seg_dur, 3), "text": s})
+            words_txt = s.split()
+            wchars = sum(len(w) for w in words_txt) or 1
+            words, wt = [], t
+            for w in words_txt:
+                wdur = seg_dur * len(w) / wchars
+                words.append({"start": round(wt, 3), "end": round(wt + wdur, 3),
+                             "text": w})
+                wt += wdur
+            segments.append({"start": round(t, 3), "end": round(t + seg_dur, 3),
+                             "text": s, "words": words})
             t += seg_dur
         return segments

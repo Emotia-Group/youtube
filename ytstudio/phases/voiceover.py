@@ -244,20 +244,28 @@ def run(project, cfg) -> None:
 
 
 def _sync_overlays(scenes: list[dict], segments: list[dict]) -> None:
-    """Sincroniza cada rótulo con el momento EXACTO en que se pronuncia, usando
-    los timestamps reales de Whisper (no una estimación por caracteres). La
-    voz de la escena es la porción [audio_start, audio_end] de la grabación
-    original reproducida desde vo_offset; una palabra dicha en el tiempo
-    original `wt` aparece en la escena a `vo_offset + (wt - audio_start)`.
-    Deja scene['overlay_at'] (segundos dentro de la escena) o None."""
+    """Sincroniza cada rótulo con el momento EXACTO en que se pronuncia.
+
+    Prioridad 1: timestamp REAL de la palabra (Whisper con granularidad
+    "word") — máxima precisión, encuentra la palabra del rótulo dentro de las
+    palabras que realmente suenan en esa escena. Prioridad 2 (proyectos de
+    versiones anteriores sin timestamps por palabra): interpolar la posición
+    del texto dentro del segmento que lo contiene. Prioridad 3: proporción
+    sobre toda la narración de la escena. Deja scene['overlay_at'] (segundos
+    dentro de la escena) o None."""
     import unicodedata
+
+    from ytstudio.utils.align import assign_words, flatten_words, local_time
 
     def norm(s: str) -> str:
         return "".join(c for c in unicodedata.normalize("NFD", (s or "").lower())
                        if unicodedata.category(c) != "Mn")
 
+    all_words = flatten_words(segments)
+    word_map = assign_words(scenes, all_words)
     seg_norm = [(float(g["start"]), float(g["end"]), norm(g.get("text", "")))
                 for g in segments]
+
     for s in scenes:
         s["overlay_at"] = None
         ov = s.get("overlay") or {}
@@ -265,25 +273,44 @@ def _sync_overlays(scenes: list[dict], segments: list[dict]) -> None:
         if "audio_start" not in s or not text:
             continue
         a, b = float(s["audio_start"]), float(s["audio_end"])
-        words = [w for w in text.split() if len(w) >= 4] or text.split()
+        key_words = [w for w in text.split() if len(w) >= 3] or text.split()
         hit = None
-        # Segmento de la escena que contiene el texto → interpolar la posición
-        # EXACTA de la palabra dentro del segmento con sus tiempos reales.
-        for start, end, txt in seg_norm:
-            if not (a - 0.05 <= start <= b + 0.05):
+
+        # 1) Coincidencia por PALABRA con su tiempo real. La contención por
+        #    substring (para variantes con puntuación/plural) exige longitud
+        #    mínima en AMBOS lados — si no, palabras cortas como "la" o "el"
+        #    caen falsamente dentro de "Gaugamela" o "Alejandro".
+        sw = word_map.get(s["id"], [])
+        for w in sw:
+            wn = norm(w["text"])
+            if not wn:
                 continue
-            pos = txt.find(text)
-            if pos < 0:
-                pos = next((txt.find(w) for w in words if txt.find(w) >= 0), -1)
-            if pos >= 0:
-                frac = pos / max(1, len(txt))
-                hit = start + (end - start) * frac
+            if any(wn == kw or (len(wn) >= 4 and len(kw) >= 4
+                                and (wn in kw or kw in wn)) for kw in key_words):
+                hit = float(w["start"])
                 break
-        if hit is None:  # respaldo: proporción sobre toda la narración de la escena
+
+        # 2) Respaldo: segmento que contiene el texto, interpolando su
+        #    posición dentro de él (proyectos sin timestamps por palabra)
+        if hit is None:
+            for start, end, txt in seg_norm:
+                if not (a - 0.05 <= start <= b + 0.05):
+                    continue
+                pos = txt.find(text)
+                if pos < 0:
+                    pos = next((txt.find(w) for w in key_words if txt.find(w) >= 0), -1)
+                if pos >= 0:
+                    frac = pos / max(1, len(txt))
+                    hit = start + (end - start) * frac
+                    break
+
+        # 3) Último respaldo: proporción sobre toda la narración de la escena
+        if hit is None:
             narr = norm(s.get("narration") or "")
-            idx = next((narr.find(w) for w in words if narr.find(w) >= 0), -1)
+            idx = next((narr.find(w) for w in key_words if narr.find(w) >= 0), -1)
             if idx >= 0 and narr:
                 hit = a + (b - a) * idx / len(narr)
+
         if hit is not None:
-            local = float(s.get("vo_offset") or 0.0) + max(0.0, hit - a)
+            local = local_time(s, hit)
             s["overlay_at"] = round(min(local, float(s["duration"]) - 0.5), 3)
