@@ -50,14 +50,18 @@ class ReplicateImages:
     def __init__(self, cfg: dict):
         import replicate
         self.client = replicate
-        self.model = cfg["providers"]["images"].get(
-            "model", "black-forest-labs/flux-1.1-pro")
+        icfg = cfg["providers"]["images"]
+        self.model = icfg.get("model", "black-forest-labs/flux-1.1-pro")
+        # FLUX permite safety_tolerance 1 (estricto) a 6 (permisivo). El 2 por
+        # defecto marca como NSFW mucho contenido histórico/bélico legítimo
+        # (batallas, documentales); 6 evita esos falsos positivos.
+        self.safety = int(icfg.get("safety_tolerance", 6))
 
     def generate(self, prompt: str, out: Path) -> Path:
         import urllib.request
         output = replicate_call(self.client, self.model, {
             "prompt": prompt, "aspect_ratio": "16:9",
-            "output_format": "jpg", "safety_tolerance": 2,
+            "output_format": "jpg", "safety_tolerance": self.safety,
         })
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)

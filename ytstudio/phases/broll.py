@@ -16,6 +16,73 @@ def _user_broll_assets(project) -> list[dict]:
             if a["category"] == "broll" and a["kind"] in ("image", "video")]
 
 
+def _is_content_error(e: Exception) -> bool:
+    """¿El fallo es un rechazo de CONTENIDO del generador (no infraestructura)?
+    Esos degradan solo la escena; auth/red/rate detienen la fase."""
+    m = str(e).lower()
+    return any(k in m for k in ("nsfw", "safety", "flagged", "sensitive",
+                                "content policy", "not allowed",
+                                "e005", "moderat"))
+
+
+# Palabras que suelen disparar el filtro de seguridad en contenido histórico
+_SOFTEN = {
+    "blood": "", "bloody": "", "gore": "", "gory": "", "corpse": "statue",
+    "dead body": "fallen figure", "death": "history", "dead": "ancient",
+    "kill": "defeat", "killing": "conflict", "slaughter": "clash",
+    "massacre": "great battle", "naked": "robed", "nude": "clothed",
+    "violence": "drama", "violent": "intense", "wound": "mark",
+    "wounded": "weary", "severed": "broken",
+}
+
+
+def _soften_prompt(prompt: str) -> str:
+    """Suaviza un prompt marcado como sensible: reemplaza términos crudos por
+    equivalentes tolerables y añade señales de contenido apto, sin perder el
+    tema histórico/documental."""
+    import re
+    out = prompt
+    for bad, good in _SOFTEN.items():
+        out = re.sub(rf"\b{re.escape(bad)}\b", good, out, flags=re.I)
+    out = re.sub(r"\s{2,}", " ", out).strip(" ,")
+    return ("tasteful, safe-for-work, non-graphic historical documentary "
+            "illustration, no gore, no nudity, artistic and respectful. " + out)
+
+
+def _fallback_image(out: Path, cfg: dict, palette: list[str]) -> Path:
+    """Fondo cinematográfico neutro (degradado oscuro con viñeta y grano sutil),
+    sin texto — para una escena cuya imagen fue rechazada. Se ve como un plano
+    atmosférico, no como un error."""
+    w, h = cfg["video"]["width"], cfg["video"]["height"]
+
+    def _rgb(hexa, default):
+        try:
+            s = str(hexa).lstrip("#")
+            return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+        except Exception:
+            return default
+
+    top = _rgb(palette[0] if palette else None, (28, 32, 46))
+    bottom = _rgb(palette[-1] if len(palette) > 1 else None, (8, 9, 14))
+    try:
+        from PIL import Image, ImageDraw
+        img = Image.new("RGB", (w, h))
+        draw = ImageDraw.Draw(img)
+        for y in range(h):
+            t = y / max(1, h - 1)
+            draw.line([(0, y), (w, y)],
+                      fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)))
+        img.save(out, quality=90)
+    except Exception:
+        # sin PIL: degradado con ffmpeg
+        c1 = "0x%02x%02x%02x" % top
+        run_ffmpeg(["-f", "lavfi", "-i",
+                    f"gradients=s={w}x{h}:c0={c1}:c1=0x08090e:x0=0:y0=0:"
+                    f"x1=0:y1={h}", "-frames:v", "1", "-q:v", "3", str(out)],
+                   "fondo neutro")
+    return out
+
+
 def _spread(n_assets: int, n_scenes: int) -> dict[int, int]:
     """Reparte n_assets entre n_scenes de forma uniforme.
     Devuelve {índice_escena: índice_asset}."""
@@ -145,11 +212,34 @@ def run(project, cfg) -> None:
 
     ai_scenes = [s for s in scenes if s.get("broll_source") != "user"]
 
-    # 2a) Imágenes (obligatorias: un fallo detiene la fase, reanudable)
+    # 2a) Imágenes. Un fallo de INFRAESTRUCTURA (auth, red) detiene la fase
+    #     (reanudable). Un rechazo de CONTENIDO (NSFW) de UNA imagen no puede
+    #     tumbar todo el proyecto: se reintenta con el prompt suavizado y, si
+    #     persiste, se usa un fondo cinematográfico neutro para esa escena.
+    concept = project.get("concept") or {}
+    palette = (concept.get("visual_style") or {}).get("palette") or []
+    nsfw_scenes: list[int] = []
+
     def _gen_image(scene: dict) -> None:
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
-        if not img.exists():  # reanudable
+        if img.exists():  # reanudable
+            return
+        try:
             images.generate(scene["broll_prompt"], img)
+            return
+        except Exception as e:
+            if not _is_content_error(e):
+                raise  # infraestructura → detiene la fase (reanudable)
+        # Rechazo de contenido: reintento con prompt suavizado
+        try:
+            images.generate(_soften_prompt(scene["broll_prompt"]), img)
+            return
+        except Exception as e:
+            if not _is_content_error(e):
+                raise
+        # Sigue rechazado: fondo cinematográfico neutro (el video se completa)
+        _fallback_image(img, cfg, palette)
+        nsfw_scenes.append(scene["id"])
 
     todo_imgs = [s for s in ai_scenes
                  if not (broll_dir / f"scene_{s['id']:03d}.jpg").exists()]
@@ -166,6 +256,13 @@ def run(project, cfg) -> None:
                        f"(escena {futures[future]['id']})")
     for s in ai_scenes:
         s["broll_image"] = f"scene_{s['id']:03d}.jpg"
+    if nsfw_scenes:
+        project.add_warning(
+            "El generador marcó como sensible el prompt de "
+            f"{len(nsfw_scenes)} escena(s) ({', '.join(map(str, nsfw_scenes))}) "
+            "y usó un fondo neutro. Puedes reformular ese texto del guion y "
+            "«Rehacer desde Imágenes», o subir tu propio B-roll para esas "
+            "escenas.")
 
     # 2b) Clips de video IA (opcionales: cada fallo degrada ESA escena a
     #     imagen animada, sin detener el proyecto)

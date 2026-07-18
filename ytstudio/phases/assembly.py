@@ -62,9 +62,12 @@ def _norm_txt(s: str) -> str:
 
 
 def _narration_moment(scene: dict, dur: float) -> float | None:
-    """Momento (s) en que el narrador dice el texto del rótulo, estimado por la
-    posición de ese texto dentro de la narración (el ritmo de habla es ~uniforme
-    dentro de una escena). Si el texto no aparece, None (timing por defecto)."""
+    """Momento (s, local a la escena) en que el narrador dice el texto del
+    rótulo. En narración propia se calcula en la fase de voz con los timestamps
+    reales de Whisper (scene['overlay_at']); si no, se estima por la posición
+    del texto dentro de la narración."""
+    if scene.get("overlay_at") is not None:
+        return float(scene["overlay_at"])
     overlay = scene.get("overlay") or {}
     narr = _norm_txt(scene.get("narration") or "")
     if not narr:
@@ -515,7 +518,8 @@ def _render_signature(scenes, plans, cfg) -> str:
             "id": s["id"], "img": s.get("broll_image"),
             "vid": s.get("broll_video"), "anim": s.get("animation"),
             "dur": s.get("duration"), "overlay": s.get("overlay"),
-            "ost": s.get("on_screen_text"), "fade": p,
+            "ost": s.get("on_screen_text"), "at": s.get("overlay_at"),
+            "off": s.get("vo_offset"), "fade": p,
         } for s, p in zip(scenes, plans)],
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)

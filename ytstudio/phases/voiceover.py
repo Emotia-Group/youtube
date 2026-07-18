@@ -236,5 +236,54 @@ def run(project, cfg) -> None:
         scenes[-1]["duration"] = round(scenes[-1]["duration"] + outro, 3)
         total += outro
 
+    if use_user_voice:
+        _sync_overlays(scenes, narration.get("segments") or [])
+
     save_scenes(project, scenes)
     project.set("total_duration", round(total, 2))
+
+
+def _sync_overlays(scenes: list[dict], segments: list[dict]) -> None:
+    """Sincroniza cada rótulo con el momento EXACTO en que se pronuncia, usando
+    los timestamps reales de Whisper (no una estimación por caracteres). La
+    voz de la escena es la porción [audio_start, audio_end] de la grabación
+    original reproducida desde vo_offset; una palabra dicha en el tiempo
+    original `wt` aparece en la escena a `vo_offset + (wt - audio_start)`.
+    Deja scene['overlay_at'] (segundos dentro de la escena) o None."""
+    import unicodedata
+
+    def norm(s: str) -> str:
+        return "".join(c for c in unicodedata.normalize("NFD", (s or "").lower())
+                       if unicodedata.category(c) != "Mn")
+
+    seg_norm = [(float(g["start"]), float(g["end"]), norm(g.get("text", "")))
+                for g in segments]
+    for s in scenes:
+        s["overlay_at"] = None
+        ov = s.get("overlay") or {}
+        text = norm(ov.get("text") or "")
+        if "audio_start" not in s or not text:
+            continue
+        a, b = float(s["audio_start"]), float(s["audio_end"])
+        words = [w for w in text.split() if len(w) >= 4] or text.split()
+        hit = None
+        # Segmento de la escena que contiene el texto → interpolar la posición
+        # EXACTA de la palabra dentro del segmento con sus tiempos reales.
+        for start, end, txt in seg_norm:
+            if not (a - 0.05 <= start <= b + 0.05):
+                continue
+            pos = txt.find(text)
+            if pos < 0:
+                pos = next((txt.find(w) for w in words if txt.find(w) >= 0), -1)
+            if pos >= 0:
+                frac = pos / max(1, len(txt))
+                hit = start + (end - start) * frac
+                break
+        if hit is None:  # respaldo: proporción sobre toda la narración de la escena
+            narr = norm(s.get("narration") or "")
+            idx = next((narr.find(w) for w in words if narr.find(w) >= 0), -1)
+            if idx >= 0 and narr:
+                hit = a + (b - a) * idx / len(narr)
+        if hit is not None:
+            local = float(s.get("vo_offset") or 0.0) + max(0.0, hit - a)
+            s["overlay_at"] = round(min(local, float(s["duration"]) - 0.5), 3)

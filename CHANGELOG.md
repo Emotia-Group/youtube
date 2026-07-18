@@ -3,6 +3,20 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v20 — 2026-07-18
+- ARREGLO del crash por "NSFW content detected": un solo prompt marcado como
+  sensible ya NO tumba todo el proyecto. Se sube la tolerancia de FLUX a 6
+  (evita falsos positivos en contenido histórico/bélico) y, si aun así se
+  rechaza una imagen, se reintenta con el prompt suavizado y, en último caso,
+  se usa un fondo cinematográfico neutro solo para esa escena — el video se
+  completa y un aviso te dice qué escena y qué hacer. Los errores de
+  infraestructura (clave/red) sí detienen la fase, como debe ser.
+- Sincronía EXACTA de los rótulos con la narración propia: antes se estimaba
+  por posición del texto (impreciso, se notaba con B-rolls en video); ahora
+  se usa el timestamp REAL de Whisper e incluso se interpola la posición de
+  la palabra dentro de su frase — el highlight aparece justo cuando lo dices,
+  sin importar si la escena usa imagen IA, tu imagen o tu video.
+
 ## v19 — 2026-07-18
 - RESPIRACIÓN ESTILO DOCUMENTAL en narración propia: los espacios en blanco
   se insertan SOLO dentro de las pausas naturales de tu grabación (donde hay
