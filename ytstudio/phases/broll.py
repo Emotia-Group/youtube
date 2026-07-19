@@ -101,6 +101,29 @@ def _spread(n_assets: int, n_scenes: int) -> dict[int, int]:
     return mapping
 
 
+def _numbered_map(scenes: list[dict], assets: list[dict]) -> dict[int, int]:
+    """Asignación DETERMINISTA por número de archivo: si un B-roll se llama
+    scene_003.mp4, 03_batalla.jpg, (3).png, etc. y existe la escena 3, va a
+    ESA escena — el orden que el creador indicó con el nombre manda (es
+    típico reutilizar material exportado de un proyecto anterior, que ya
+    viene numerado por escena). Cero tokens y cero sorpresas. Los archivos
+    sin número (o con número sin escena) pasan al reparto semántico."""
+    import re
+    ids = {s["id"] for s in scenes}
+    idx_by_id = {s["id"]: i for i, s in enumerate(scenes)}
+    mapping: dict[int, int] = {}
+    for ai, a in enumerate(assets):
+        stem = Path(a.get("name") or a["file"]).stem
+        m = (re.search(r"(?:escena|scene)[\s_-]*(\d{1,3})", stem, re.I)
+             or re.match(r"^\(?(\d{1,3})\)?(?:[\s_.-]|$)", stem))
+        if not m:
+            continue
+        sid = int(m.group(1))
+        if sid in ids and idx_by_id[sid] not in mapping:
+            mapping[idx_by_id[sid]] = ai
+    return mapping
+
+
 def _semantic_map(llm, scenes: list[dict], assets: list[dict],
                   lang: str) -> dict[int, int]:
     """Asigna cada B-roll del usuario a la escena cuya narración ilustra,
@@ -108,7 +131,8 @@ def _semantic_map(llm, scenes: list[dict], assets: list[dict],
     {índice_escena: índice_asset}. Un asset por escena; el material que no
     encaja en ninguna parte no se fuerza (mejor generar que descolocar)."""
     listing = "\n".join(
-        f"- asset {i}: [{a['kind']}] {a.get('description') or a['name']}"
+        f"- asset {i}: [{a['kind']}] «{a['name']}» — "
+        f"{a.get('description') or 'sin descripción'}"
         for i, a in enumerate(assets))
     scenes_txt = "\n".join(f"[escena {i}] ({s.get('section', '')}) "
                            f"{s['narration']}" for i, s in enumerate(scenes))
@@ -363,22 +387,47 @@ def run(project, cfg) -> None:
     #    la escena cuya narración ilustra, según su descripción de visión).
     #    Si no hay IA disponible, reparto uniforme como respaldo.
     user_assets = _user_broll_assets(project)
+    from ytstudio.progress import notify as _notify
+
+    # 1a) Por NÚMERO DE ARCHIVO (determinista, prioridad máxima): scene_003,
+    #     03_batalla, (3)… van a la escena de ese número — el orden que TÚ
+    #     indicaste con el nombre manda sobre el criterio del director.
+    numbered = _numbered_map(scenes, user_assets)
+    if numbered:
+        _notify(f"📌 {len(numbered)} B-roll(s) asignados por su NÚMERO de "
+                "archivo a la escena correspondiente: "
+                + ", ".join(f"«{user_assets[a]['name']}»→escena "
+                            f"{scenes[i]['id']}" for i, a in numbered.items()))
+
+    rest_assets = [a for i, a in enumerate(user_assets)
+                   if i not in numbered.values()]
+    rest_scenes = [s for i, s in enumerate(scenes) if i not in numbered]
     mapping: dict[int, int] | None = None
-    if user_assets and not getattr(llm, "is_mock", False):
+    if rest_assets and not getattr(llm, "is_mock", False):
         try:
-            mapping = _semantic_map(llm, scenes, user_assets,
-                                    cfg.get("language", "es"))
-            unused = [a["name"] for i, a in enumerate(user_assets)
-                      if i not in mapping.values()]
+            sub = _semantic_map(llm, rest_scenes, rest_assets,
+                                cfg.get("language", "es"))
+            # traducir índices del subconjunto a índices globales
+            sidx = {i: scenes.index(s) for i, s in enumerate(rest_scenes)}
+            aidx = {i: user_assets.index(a) for i, a in enumerate(rest_assets)}
+            mapping = {sidx[si]: aidx[ai] for si, ai in sub.items()}
+            unused = [a["name"] for i, a in enumerate(rest_assets)
+                      if i not in sub.values()]
             if unused:
                 project.add_warning(
                     "B-roll propio sin usar (no encajaba con ninguna escena "
-                    "del guion): " + ", ".join(unused))
+                    "del guion): " + ", ".join(unused) + ". Consejo: ponle al "
+                    "archivo el número de la escena (ej. escena_5.jpg) o "
+                    "súbelo directo a su escena en el Storyboard.")
         except Exception as e:
             project.add_warning(f"Asignación inteligente de B-roll no "
                                 f"disponible (reparto uniforme): {e}")
     if mapping is None:
-        mapping = _spread(len(user_assets), len(scenes))
+        mapping = _spread(len(rest_assets), len(scenes))
+        mapping = {si: user_assets.index(rest_assets[ai])
+                   for si, ai in mapping.items()
+                   if si not in numbered and ai < len(rest_assets)}
+    mapping.update(numbered)
     # Las escenas con B-roll MANUAL ya están resueltas: no se les reparte
     # material semántico encima.
     if placed_manual:

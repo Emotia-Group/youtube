@@ -67,8 +67,11 @@ audio:
                              # director: ligado=0 · normal=1x · amplio=1.7x.
                              # Siempre en huecos entre palabras (nunca corta voz)
   # Modo "narración propia" (cuando subes tu voz grabada):
-  trim_silence: true         # recorta silencios largos de tu grabación
-  silence_keep: 0.4          # deja pausas uniformes de N segundos
+  trim_silence: true         # recorta el silencio SOLO al inicio y al final
+                             # (deja 0.25s de aire). Los silencios internos se
+                             # conservan SIEMPRE: recortarlos podía comerse
+                             # sílabas suaves — el director los gestiona.
+  silence_keep: 0.4          # (histórico, ya sin efecto interno)
 subtitles:
   max_chars_per_line: 42
   max_lines: 2

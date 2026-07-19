@@ -89,10 +89,10 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     sent_breath = max(0.0, float(audio_cfg.get("sentence_breath", 0.18)))
 
     words = flatten_words(narration.get("segments") or [])
-    # Silencios finos (0.08s) solo para elegir el punto MÁS silencioso de cada
-    # hueco entre palabras — no para decidir SI se corta (eso lo dan las
-    # palabras).
-    silences = detect_silences(narration_file, min_d=0.08)
+    # Silencios donde SÍ se puede insertar un respiro: umbral estricto
+    # (-45 dB) — la voz suave o aireada queda por encima y ya no se confunde
+    # con silencio (insertar una pausa sobre una sílaba aireada la partía).
+    silences = detect_silences(narration_file, noise_db=-45, min_d=0.08)
     cuts = _safe_cuts(words, silences)
     cut_by_word = {c["i"]: c for c in cuts}
 
@@ -241,7 +241,8 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         speech_src = audio_total - sum(
             min(e, audio_total) - max(s, 0.0)
             for s, e in silences if s < audio_total)
-        speech_tl = got - sum(e - s for s, e in detect_silences(out))
+        speech_tl = got - sum(e - s
+                              for s, e in detect_silences(out, noise_db=-45))
         # Umbral de voz-hablada holgado (1.2s): silencedetect mide con ruido
         # en los bordes cuando los respiros insertados quedan pegados a
         # silencios reales — la señal DURA es la duración total (0.15s).

@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.23.0 — 2026-07-19
+- EL PEDAZO DE VOZ CORTADO, encontrado por fin (con la pista clave del
+  reporte: «el subtítulo SÍ muestra lo que la voz no dice»): la LIMPIEZA de
+  la grabación recortaba los silencios internos, y con voz suave o aireada
+  el filtro confundía sílabas con silencio y SE COMÍA pedazos de palabra.
+  Era determinista (siempre el mismo punto — descartada la caché), ocurría
+  ANTES de transcribir (Whisper subtitulaba el audio ya mordido: por eso el
+  subtítulo muestra el texto que el audio perdió), y las fronteras de
+  escena caen en las pausas — por eso sonaba «en la transición».
+- ARREGLO DE RAÍZ: la limpieza ya SOLO recorta el silencio de los bordes
+  (inicio y fin, dejando 0.25s de aire) y normaliza el volumen. Los
+  silencios internos se conservan SIEMPRE — el director los gestiona con su
+  motor de pausas. Ya no existe NINGUNA operación destructiva sobre tu voz
+  en todo el pipeline.
+- Refuerzo: los respiros solo se insertan en silencios medidos a -45 dB
+  (umbral estricto) — la voz aireada o susurrada ya no se confunde con
+  silencio.
+- B-ROLL EN EL ORDEN QUE TÚ INDICAS: si el archivo trae un número que
+  coincide con una escena (scene_003.mp4, 05_castillo.jpg, «escena 7».mp4),
+  va DIRECTO a esa escena — determinista, sin criterio del director y sin
+  gastar tokens. Ideal para reutilizar material exportado de un proyecto
+  anterior (ya viene numerado). Los archivos sin número siguen el reparto
+  semántico (que ahora también ve el NOMBRE del archivo, no solo la
+  descripción visual).
+- Requiere «Rehacer desde Análisis» una vez para re-limpiar y re-transcribir
+  tu narración (unos centavos de Whisper) — de ahí en adelante la fuente
+  queda íntegra.
+
 ## v0.22.0 — 2026-07-19
 - LA PIEZA QUE FALTABA (encontrada gracias al diagnóstico del log v0.21.1,
   que salió PERFECTO a nivel de archivo y aun así el desfase se veía): los

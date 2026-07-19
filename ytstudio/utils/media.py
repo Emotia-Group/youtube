@@ -224,22 +224,39 @@ def concat_audios(paths: list[Path], out: Path) -> Path:
 
 
 def clean_narration(src: Path, out: Path, *, trim_silence: bool = True,
-                    keep: float = 0.4, threshold_db: int = -42,
+                    keep: float = 0.4, threshold_db: int = -45,
                     lufs: int = -16) -> Path:
-    """Normaliza el volumen de una narración y (opcional) recorta los silencios
-    largos — al inicio, al final y entre frases — dejando pausas uniformes de
-    `keep` segundos. Detección por RMS con umbral conservador (-42 dB): solo
-    recorta silencio real, sin comerse respiraciones ni sílabas suaves (con
-    pico a -35 dB los finales de palabra podían sonar cortados)."""
-    filters = []
+    """Normaliza el volumen de una narración y (opcional) recorta el silencio
+    de los BORDES (inicio y fin), dejando 0.25s de aire.
+
+    Los silencios INTERNOS ya NO se tocan: recortar entre frases era la única
+    operación destructiva que quedaba en todo el pipeline, y con voz suave o
+    aireada el filtro confundía sílabas con silencio y SE COMÍA pedazos de
+    palabra — siempre en el mismo punto (filtro determinista), justo en las
+    pausas donde caen las fronteras de escena. El motor de pausas del
+    director conserva y gestiona los silencios internos: nunca se pierde ni
+    un milisegundo de la grabación."""
+    # Bordes MEDIDOS (silencedetect) y recortados con -ss/-to calculados —
+    # sin cadenas silenceremove/areverse, que pueden colgarse según el build
+    # de ffmpeg. Determinista y verificable.
+    seek: list[str] = []
     if trim_silence:
-        filters.append(
-            f"silenceremove=start_periods=1:start_duration=0:"
-            f"start_threshold={threshold_db}dB:detection=rms:"
-            f"stop_periods=-1:stop_duration={keep}:"
-            f"stop_threshold={threshold_db}dB:detection=rms")
-    filters.append(f"loudnorm=I={lufs}:TP=-1.5:LRA=11")
-    run_ffmpeg(["-i", str(src), "-vn", "-af", ",".join(filters),
+        try:
+            dur = probe_duration(src)
+            sils = detect_silences(src, noise_db=threshold_db, min_d=0.4)
+            start, end = 0.0, dur
+            if sils and sils[0][0] <= 0.1:      # silencio inicial
+                start = max(0.0, sils[0][1] - 0.25)
+            if sils and sils[-1][1] >= dur - 0.1:  # silencio final
+                end = min(dur, sils[-1][0] + 0.25)
+            if end - start >= 1.0 and (start > 0.01 or end < dur - 0.01):
+                seek = ["-ss", f"{start:.3f}", "-to", f"{end:.3f}"]
+        except Exception:
+            pass  # sin recorte de bordes: mejor íntegro que arriesgar
+    # -ss/-to DESPUÉS del input: corte preciso a la muestra (antes del input
+    # el seek de mp3 cae en el frame más cercano, ±26 ms)
+    run_ffmpeg(["-i", str(src), *seek, "-vn",
+                "-af", f"loudnorm=I={lufs}:TP=-1.5:LRA=11",
                 "-c:a", "libmp3lame", "-q:a", "2", str(out)], "limpiar narración")
     return out
 
