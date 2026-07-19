@@ -9,6 +9,29 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.22.0 — 2026-07-19
+- LA PIEZA QUE FALTABA (encontrada gracias al diagnóstico del log v0.21.1,
+  que salió PERFECTO a nivel de archivo y aun así el desfase se veía): los
+  TIEMPOS DE WHISPER derivan de forma sistemática (±0.3–0.8s es normal en
+  whisper-1) respecto a dónde suena de verdad cada palabra en tu grabación.
+  Los subtítulos y rótulos se anclaban a esos tiempos corridos — toda la
+  matemática interna era exacta, pero sobre coordenadas desplazadas. Los
+  cortes de escena (anclados a silencios MEDIDOS en la onda) sí estaban
+  bien: por eso el desfase se notaba justo en las transiciones.
+- CALIBRACIÓN AUTOMÁTICA: al transcribir, cada arranque de habla según
+  Whisper se compara con los arranques REALES medidos en la onda
+  (silencedetect); la mediana de las diferencias corrige TODOS los tiempos
+  de segmentos y palabras. El log registra cuántos milisegundos venían
+  corridos («🎯 Calibración de transcripción: +XXX ms»).
+- MEDICIÓN DE CONTENIDO en cada montaje: se compara dónde SUENA tu voz
+  (arranques de habla reales de la pista) contra dónde CAEN los subtítulos,
+  y la mediana firmada queda siempre en el 🧾 Log de eventos («Contenido
+  voz↔subtítulos: +XX ms»). El «se siente desfasado» ahora es un número
+  con signo — y si supera 400 ms aparece un aviso con la solución.
+- Verificado con deriva simulada de +400 ms: la calibración la mide, la
+  corrige, y la medición de contenido confirma subtítulos a +0 ms de la
+  voz real.
+
 ## v0.21.1 — 2026-07-19
 - Gracias al Log de eventos compartido, la autocomprobación de v0.21.0
   atrapó una deriva real: el video final reportaba 94s cuando el cuerpo

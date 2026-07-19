@@ -759,7 +759,57 @@ def run(project, cfg) -> None:
                    f"escenas {total:.2f}s (una sola línea de tiempo).")
     except Exception:
         pass
+
+    # MEDICIÓN DE CONTENIDO (no de contenedor): ¿los subtítulos caen donde la
+    # voz SUENA de verdad? Se comparan los arranques de habla reales de la
+    # pista de voz (fin de cada silencio medido) contra el inicio del
+    # subtítulo más cercano. La mediana firmada va SIEMPRE al Log de eventos:
+    # convierte el «se siente desfasado» en un número con signo.
+    try:
+        _measure_content_sync(project, tl_path)
+    except Exception:
+        pass
     project.set("final_video", str(output))
+
+
+def _measure_content_sync(project, tl_path: Path) -> None:
+    import re as _re
+    from ytstudio import eventlog
+    from ytstudio.utils.media import detect_silences
+    srt = project.path("subtitles", "subtitulos.srt")
+    if not srt.exists():
+        return
+    cue_starts = []
+    for m in _re.finditer(r"(\d{2}):(\d{2}):(\d{2}),(\d{3}) -->",
+                          srt.read_text(encoding="utf-8")):
+        h, mi, s, ms = (int(x) for x in m.groups())
+        cue_starts.append(h * 3600 + mi * 60 + s + ms / 1000)
+    if not cue_starts:
+        return
+    onsets = [e for _, e in detect_silences(tl_path, min_d=0.3)]
+    tl_len = probe_duration(tl_path)
+    onsets = [o for o in onsets if o < tl_len - 0.5]  # fuera el fin de archivo
+    diffs = []
+    for o in onsets:
+        near = min(cue_starts, key=lambda c: abs(c - o))
+        if abs(near - o) <= 1.5:
+            diffs.append(near - o)
+    if len(diffs) < 2:
+        return
+    diffs.sort()
+    med = diffs[len(diffs) // 2]
+    slug = getattr(project, "slug", None)
+    eventlog.log("info",
+                 f"Contenido voz↔subtítulos: desfase mediano "
+                 f"{'+' if med > 0 else ''}{med * 1000:.0f} ms "
+                 f"(medido en {len(diffs)} arranques de habla; + = subtítulo "
+                 "tarde, − = subtítulo adelantado).",
+                 project=slug, phase="assembly")
+    if abs(med) > 0.4:
+        project.add_warning(
+            f"Los subtítulos están {'retrasados' if med > 0 else 'adelantados'} "
+            f"~{abs(med) * 1000:.0f} ms respecto a tu voz real. Usa «Rehacer "
+            "desde Análisis» para re-transcribir con calibración automática.")
 
 
 def _stream_durations(path: Path) -> dict:

@@ -187,6 +187,72 @@ def _describe_broll(project, llm, assets, input_dir, lang: str) -> None:
     project.set("assets", assets)
 
 
+def _calibrate_whisper(segments: list[dict], clean_path: Path,
+                       project) -> list[dict]:
+    """Calibra los tiempos de Whisper contra la ONDA REAL de la grabación.
+
+    Los timestamps de whisper-1 derivan de forma sistemática (±0.3–0.8s es
+    normal) respecto a dónde suena de verdad cada palabra. Como los subtítulos
+    y rótulos se anclan a esos tiempos, la deriva los corría respecto a la voz
+    real aunque toda la matemática interna fuera exacta (el contenedor daba
+    perfecto y aun así «se veía» desfasado).
+
+    Método: cada inicio de segmento que viene tras una pausa (≥0.3s según
+    Whisper) debería coincidir con un ARRANQUE DE HABLA real (el fin de un
+    silencio medido con silencedetect). Se toma la MEDIANA de las diferencias
+    (robusta a emparejamientos malos) y, si es significativa (≥80ms), se
+    corren TODOS los segmentos y palabras. El resultado: los subtítulos caen
+    donde tu voz suena de verdad."""
+    from ytstudio.utils.media import detect_silences
+    if not segments:
+        return segments
+    try:
+        sils = detect_silences(clean_path, min_d=0.25)
+    except Exception:
+        return segments
+    onsets = [e for _, e in sils]
+    if not onsets:
+        return segments
+
+    cands: list[float] = []
+    prev_end = None
+    for seg in segments:
+        st = float(seg["start"])
+        if prev_end is None or st - prev_end >= 0.3:
+            cands.append(st)
+        prev_end = float(seg["end"])
+
+    diffs: list[float] = []
+    for st in cands:
+        near = min(onsets, key=lambda o: abs(o - st))
+        if abs(near - st) <= 0.9:
+            diffs.append(near - st)
+    if len(diffs) < 2:
+        return segments
+    diffs.sort()
+    offset = diffs[len(diffs) // 2]
+    if abs(offset) < 0.08:
+        project.set("whisper_calibration", 0.0)
+        return segments
+
+    for seg in segments:
+        seg["start"] = round(max(0.0, float(seg["start"]) + offset), 3)
+        seg["end"] = round(max(seg["start"] + 0.05, float(seg["end"]) + offset), 3)
+        for w in seg.get("words") or []:
+            w["start"] = round(max(0.0, float(w["start"]) + offset), 3)
+            w["end"] = round(max(w["start"] + 0.02, float(w["end"]) + offset), 3)
+    project.set("whisper_calibration", round(offset, 3))
+    from ytstudio import eventlog
+    msg = (f"🎯 Calibración de transcripción: los tiempos de Whisper venían "
+           f"{'+' if offset > 0 else ''}{offset * 1000:.0f} ms corridos "
+           f"respecto a tu voz real (medido en {len(diffs)} arranques de "
+           "habla) — corregido para subtítulos y rótulos.")
+    notify(msg)
+    eventlog.log("info", msg, project=getattr(project, "slug", None),
+                phase="ingest")
+    return segments
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
@@ -329,6 +395,7 @@ def run(project, cfg) -> None:
                 "Configura tu clave de OpenAI en ⚙ Configuración para "
                 "transcribir tu voz de verdad.")
         segments = stt.transcribe_segments(clean)
+        segments = _calibrate_whisper(segments, clean, project)
         if not segments:
             # Sin segmentos no hay dónde anclar las escenas — si esto pasara
             # en silencio, el video caería de nuevo a guion y voz sintética
