@@ -195,8 +195,14 @@ function renderProjList(){
     </div>`).join('')||`<div class="muted" style="padding:8px">${q||PROJFILTER!=='all'?'Sin resultados':'Sin proyectos aún'}</div>`;
 }
 async function duplicateProject(slug){
+  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
+  const suggested=`${proj?(proj.display_name||slug):slug} (copia)`;
+  const name=prompt('Nombre para la copia:',suggested);
+  if(name===null)return;  // cancelado
+  const trimmed=name.trim();
+  if(!trimmed){toast('Ponle un nombre a la copia');return}
   try{
-    const r=await api(`/api/projects/${slug}/duplicate`,{method:'POST'});
+    const r=await api(`/api/projects/${slug}/duplicate`,{method:'POST',body:JSON.stringify({name:trimmed})});
     toast('✅ Proyecto duplicado');
     await refreshList();
     openProject(r.slug);
@@ -991,10 +997,15 @@ async function showEvents(){
   const icon={info:'•',warn:'⚠',error:'✕'};
   const color={info:'var(--muted)',warn:'#E8C46B',error:'#ff6b6b'};
   const evs=data.events.filter(e=>EVFILTER==='all'||e.level===EVFILTER);
+  // El log guarda el slug interno (estable aunque renombres el proyecto);
+  // se muestra el nombre visible ACTUAL — así un proyecto renombrado o
+  // duplicado no aparece con el nombre técnico enterrado.
+  const allProjects=window._allProjects||await api('/api/projects').catch(()=>[]);
+  const nameOf=slug=>{const p=allProjects.find(x=>x.slug===slug);return p?(p.display_name||slug):slug};
   const rows=evs.map(e=>{
     const sec=(e.seconds!=null)?` <span class="muted">(${e.seconds}s)</span>`:'';
     const ph=e.phase?` <span class="badge">${esc(e.phase)}</span>`:'';
-    const pr=e.project?` <span class="muted" style="font-size:11px">${esc(e.project)}</span>`:'';
+    const pr=e.project?` <span class="muted" style="font-size:11px" title="${esc(e.project)}">${esc(nameOf(e.project))}</span>`:'';
     return `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="color:${color[e.level]||'var(--muted)'};min-width:14px;text-align:center">${icon[e.level]||'•'}</span>
       <span class="muted" style="font-size:11px;white-space:nowrap">${esc(e.ts||'')}</span>

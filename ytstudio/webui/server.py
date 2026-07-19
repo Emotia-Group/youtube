@@ -206,23 +206,31 @@ def api_list_projects() -> list[dict]:
     return out
 
 
-def api_duplicate_project(slug: str) -> dict:
+def api_duplicate_project(slug: str, body: dict | None = None) -> dict:
+    body = body or {}
     import shutil
     src = Project(slug)
     if not src.state_path.exists():
         raise ApiError(404, "Proyecto no encontrado.")
     if RUNS.get(slug, {}).get("running"):
         raise ApiError(409, "Espera a que termine de generarse antes de duplicarlo.")
-    base = slug
-    new_slug, i = f"{base}-copia", 2
+    # El nombre se pide ANTES de duplicar (en la UI) para que el slug interno
+    # —el que aparece en el Log de eventos y en las rutas de archivos— nazca
+    # ya con el nombre elegido, en vez de encadenar «-copia-copia-copia» y
+    # dejarlo enterrado bajo un nombre visible distinto.
+    wanted_name = (body.get("name") or "").strip()
+    base = slugify(wanted_name) if wanted_name else f"{slug}-copia"
+    new_slug = base
+    i = 2
     while Project.exists(new_slug):
-        new_slug = f"{base}-copia-{i}"
+        new_slug = f"{base}-{i}"
         i += 1
     shutil.copytree(src.dir, PROJECTS_DIR / new_slug)
     dup = Project(new_slug)
     dup.state["slug"] = new_slug
     dup.state["created_at"] = time.time()
-    dup.state["display_name"] = f"{src.state.get('display_name') or slug} (copia)"
+    dup.state["display_name"] = (
+        wanted_name or f"{src.state.get('display_name') or slug} (copia)")
     dup.save()
     return {"slug": new_slug}
 
@@ -737,7 +745,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/run", path):
                 self._json(api_run(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/duplicate", path):
-                self._json(api_duplicate_project(m.group(1)), 201)
+                self._json(api_duplicate_project(m.group(1), self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes/(\d+)/broll", path):
                 self._json(api_scene_broll_upload(m.group(1), int(m.group(2)),
                                                   self._body()), 201)

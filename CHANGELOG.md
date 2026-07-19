@@ -9,6 +9,18 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.1 — 2026-07-19
+- Al DUPLICAR un proyecto, ahora se pregunta el nombre ANTES de crear la
+  copia — ese nombre pasa a ser el identificador interno del proyecto
+  (antes solo cambiaba el nombre visible, pero por debajo se seguía
+  registrando como «…-copia-copia-copia» en cada duplicado sucesivo, y ese
+  nombre técnico era el que aparecía en el 🧾 Log de eventos). Si el nombre
+  ya existe, se numera con un sufijo limpio (-2, -3…), no más cadenas de
+  «copia».
+- El Log de eventos ahora muestra el NOMBRE VISIBLE actual de cada
+  proyecto (el que le pusiste), no el identificador técnico — aunque hayas
+  renombrado o duplicado el proyecto después de que ese evento se registró.
+
 ## v0.24.0 — 2026-07-19
 - ADIÓS AL EXCESO DE SILENCIOS: conservar íntegras todas las pausas de la
   grabación (v0.23.0) le metía el aire muerto de los ensayos al video (tu
