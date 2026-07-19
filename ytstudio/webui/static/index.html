@@ -450,6 +450,32 @@ function usageTimeHtml(p){
   </div>`;
 }
 
+async function setBrollPolicy(on){
+  try{await api(`/api/projects/${current}/broll-policy`,{method:'PUT',body:JSON.stringify({auto_replace:on})});
+    toast(on?'El director reemplazará el B-roll que no encaje':'Se respetará siempre tu B-roll');
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function uploadSceneBroll(sid,input){
+  const f=input.files[0];if(!f)return;
+  if(f.size>300*1024*1024){toast('El archivo supera 300 MB');input.value='';return}
+  toast('Subiendo…',1500);
+  try{
+    const data_base64=await readB64(f);
+    const r=await api(`/api/projects/${current}/scenes/${sid}/broll`,{method:'POST',
+      body:JSON.stringify({file:{name:f.name,data_base64}})});
+    toast(r.downgrade?'✅ Imagen subida (la escena era de video → se usa como imagen con movimiento)':'✅ B-roll subido a la escena '+sid);
+    await renderProject('Storyboard');
+  }catch(e){toast('⚠ '+e.message)}
+  input.value='';
+}
+async function deleteSceneBroll(sid){
+  if(!confirm(`¿Quitar tu B-roll de la escena ${sid}? Se generará con IA al montar.`))return;
+  try{
+    await api(`/api/projects/${current}/scenes/${sid}/broll`,{method:'DELETE'});
+    toast('Quitado — esa escena se generará con IA');
+    await renderProject('Storyboard');
+  }catch(e){toast('⚠ '+e.message)}
+}
 async function renderTab(tab,p){
   const el=$('#tabbody');
   if(tab==='Guion'){
@@ -463,20 +489,47 @@ async function renderTab(tab,p){
   }
   else if(tab==='Storyboard'){
     if(!p.scenes){el.innerHTML='<div class="card muted">Aún no hay escenas (fase «scenes»).</div>';return}
-    el.innerHTML=p.scenes.map(s=>`
+    const manual=p.manual_broll||{};
+    el.innerHTML=`
+      <div class="card" style="padding:12px 16px;font-size:13px">
+        <b>🎬 Tu B-roll por escena (opcional)</b>
+        <p class="muted" style="margin:4px 0 6px">Sube tu propia imagen o video a las escenas que quieras — reutiliza B-roll de pruebas anteriores y ahorra tiempo y créditos. Lo que no subas, se genera con IA. Cada escena acepta el tipo que decidió el director (🎞 video o 🖼 imagen). Al terminar, el director revisa lo que subiste y te avisa si algo no encaja. Nada de esto afecta la voz, los subtítulos ni los tiempos.</p>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" style="width:auto" ${p.broll_auto_replace?'checked':''} onchange="setBrollPolicy(this.checked)">
+          <span class="muted">Dejar que el director <b>reemplace por IA</b> el B-roll que juzgue que no encaja (si lo desactivas, se respeta siempre tu elección y solo avisa).</span>
+        </label>
+      </div>`
+    + p.scenes.map(s=>{
+      const mb=manual[String(s.id)];
+      const rev=mb&&mb.review;
+      const isVideo=s.broll_type==='video';
+      const accept=isVideo?'video/*,image/*':'image/*';
+      const thumb=s.broll_image?`/files/${current}/06_broll/${s.broll_image}?v=${p.done}`:'';
+      return `
       <div class="scene">
-        ${s.broll_image?`<img src="/files/${current}/06_broll/${s.broll_image}" loading="lazy">`:'<div style="width:240px" class="muted">sin imagen aún</div>'}
+        ${thumb?`<img src="${thumb}" loading="lazy">`:'<div style="width:240px" class="muted">sin imagen aún</div>'}
         <div style="flex:1">
           <div class="num">ESCENA ${s.id} — ${esc(s.section)}
-            <span class="badge">${s.animation}</span><span class="badge">${s.broll_type}</span>
-            ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}</div>
+            <span class="badge">${s.animation}</span><span class="badge">${isVideo?'🎞 video':'🖼 imagen'}</span>
+            ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}
+            ${s.broll_source==='manual'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">tu B-roll</span>':''}</div>
           <p style="margin:6px 0">${esc(s.narration)}</p>
           <div class="muted" style="font-size:12px">🎨 ${esc(s.broll_prompt)}</div>
           ${s.overlay?`<div class="muted">🔤 Rótulo <span class="badge">${esc(s.overlay.type)}</span> ${s.overlay.kicker?`<small>${esc(s.overlay.kicker)} · </small>`:''}<b>${esc(s.overlay.text)}</b></div>`:(s.on_screen_text?`<div class="muted">🔤 Texto en pantalla: <b>${esc(s.on_screen_text)}</b></div>`:'')}
           ${(s.sfx||s.pause_after)?`<div class="muted" style="font-size:12px">${s.sfx?`🔊 ${esc(s.sfx)} `:''}${s.pause_after?`⏸ respiro ${s.pause_after}s`:''}</div>`:''}
-          ${s.vo_file?`<audio controls preload="none" src="/files/${current}/05_voiceover/${s.vo_file}"></audio>`:''}
+          <div class="brollbox" style="margin-top:8px">
+            ${mb?`<div class="row" style="gap:8px">
+                <span class="badge">📎 ${esc(mb.orig||mb.file)}</span>
+                <button class="btn sec small" onclick="deleteSceneBroll(${s.id})">✕ Quitar (se generará con IA)</button>
+              </div>
+              ${rev?`<div class="muted" style="font-size:12px;margin-top:4px;color:${rev.fits?'var(--ok)':'var(--err)'}">${rev.fits?'✓ El director aprobó este B-roll para la escena.':'⚠ El director cree que NO encaja: '+esc(rev.reason)}</div>`:'<div class="muted" style="font-size:12px;margin-top:4px">Se revisará al generar.</div>'}`
+            :`<label class="btn sec small" style="display:inline-block">⬆ Subir ${isVideo?'video o imagen':'imagen'} para esta escena
+                <input type="file" accept="${accept}" style="display:none" onchange="uploadSceneBroll(${s.id},this)"></label>
+              <span class="muted" style="font-size:11px;margin-left:6px">o se genera con IA</span>`}
+          </div>
+          ${s.vo_file?`<audio controls preload="none" src="/files/${current}/05_voiceover/${s.vo_file}" style="margin-top:8px"></audio>`:''}
         </div>
-      </div>`).join('');
+      </div>`;}).join('');
   }
   else if(tab==='Video'){
     if(!p.final_video){el.innerHTML='<div class="card muted">El video final aparecerá aquí al terminar la fase de montaje.</div>';return}

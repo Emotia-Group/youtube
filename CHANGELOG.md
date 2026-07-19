@@ -9,6 +9,26 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.20.0 — 2026-07-19
+- B-ROLL MANUAL POR ESCENA (pestaña Storyboard): tras «Generar hasta el
+  guion gráfico», ahora puedes subir tu propia imagen o video a las escenas
+  que quieras — ideal para reutilizar B-roll de pruebas anteriores y
+  ahorrar tiempo y créditos. Lo que no subas, se genera con IA (opcional
+  por escena). Cada escena acepta el tipo que decidió el director: una
+  escena de video acepta video (o una imagen, que se usa con movimiento
+  Ken Burns, avisando); una de imagen solo acepta imagen (un video se
+  rechaza con un mensaje claro).
+- EL DIRECTOR REVISA LO QUE SUBES: con visión IA juzga si tu B-roll de
+  verdad ilustra lo que se narra en esa escena, y te muestra su veredicto
+  (✓ aprobado / ⚠ no encaja + motivo) en el propio Storyboard. Si activas
+  «el director reemplaza lo que no encaje», los que no encajan se generan
+  con IA (se te notifica el motivo); si no, se respeta SIEMPRE tu elección
+  y solo se avisa. Solo se revisa lo que cambió (no gasta tokens de más).
+- Nada de esto afecta la voz, los subtítulos ni los tiempos: cambiar el
+  B-roll de una escena solo rehace esa escena en el montaje (las duraciones
+  vienen de la voz, son independientes del material visual). Subir o quitar
+  material reanuda solo desde el B-roll, no desde el guion.
+
 ## v0.19.0 — 2026-07-19
 - ARREGLO: renombrar un proyecto no se veía reflejado en el panel principal
   (el título de arriba seguía mostrando el nombre viejo aunque la lista de

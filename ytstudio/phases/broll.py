@@ -174,18 +174,190 @@ def _assign_user_asset(scene: dict, asset: dict, project, broll_dir: Path) -> No
     scene["broll_source"] = "user"
 
 
+def _place_manual_broll(project, scenes: list[dict], broll_dir: Path,
+                        cfg: dict) -> set[int]:
+    """Coloca el B-roll que subiste a mano a escenas CONCRETAS (pestaña
+    Storyboard). Máxima prioridad: gana sobre el reparto semántico y sobre la
+    generación IA. Respeta el tipo que decidió el director — una escena de
+    video acepta video (ideal) o imagen (se degrada a Ken Burns, con aviso);
+    una de imagen solo acepta imagen. Devuelve los ids con material manual.
+
+    Los archivos se referencian DENTRO de 06_broll/manual/ (no se copian a la
+    raíz): no chocan con el material IA ni con la caché por firma."""
+    manual = project.get("manual_broll") or {}
+    if not manual:
+        return set()
+    from ytstudio.progress import notify
+    placed: set[int] = set()
+    downgraded: list[int] = []
+    by_id = {s["id"]: s for s in scenes}
+    for sid_str, info in manual.items():
+        scene = by_id.get(int(sid_str))
+        src = broll_dir / "manual" / info["file"]
+        if scene is None or not src.exists():
+            continue
+        if info["kind"] == "image":
+            scene["broll_image"] = f"manual/{info['file']}"
+            scene.pop("broll_video", None)
+            if scene.get("broll_type") == "video":
+                scene["broll_type"] = "image"
+                downgraded.append(scene["id"])
+        else:  # video propio: se necesita un fotograma para revisión/miniatura
+            frame = broll_dir / "manual" / f"{Path(info['file']).stem}_frame.jpg"
+            if not frame.exists():
+                run_ffmpeg(["-i", str(src), "-frames:v", "1", "-q:v", "3",
+                            str(frame)], "fotograma b-roll manual")
+            scene["broll_video"] = f"manual/{info['file']}"
+            scene["broll_image"] = f"manual/{frame.name}"
+            scene["broll_type"] = "video"
+        scene["broll_source"] = "manual"
+        placed.add(scene["id"])
+    if downgraded:
+        notify(f"ℹ Subiste una imagen a {len(downgraded)} escena(s) que el "
+               f"director planeó como video ({', '.join(map(str, downgraded))}): "
+               "se usan como imagen con movimiento (Ken Burns).")
+    return placed
+
+
+def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
+                         broll_dir: Path, cfg: dict) -> None:
+    """El director REVISA con visión cada B-roll que subiste y juzga si de
+    verdad ilustra lo que se narra en esa escena. Guarda su veredicto (encaja
+    sí/no + motivo) para mostrártelo. Si activaste «el director reemplaza lo
+    que no encaje», los que no encajan se descartan y se generan con IA (se te
+    notifica el motivo). Si no, se respeta SIEMPRE tu elección y solo se avisa.
+
+    Solo se revisa lo que cambió desde la última vez (no re-gasta tokens)."""
+    if not placed:
+        return
+    manual = project.get("manual_broll") or {}
+    auto_replace = bool(project.get("broll_auto_replace"))
+    lang = cfg.get("language", "es")
+    from ytstudio.progress import notify
+    by_id = {s["id"]: s for s in scenes}
+
+    def sig(info):
+        return f"{info.get('file')}:{info.get('size')}"
+
+    pending = [sid for sid in placed
+               if manual.get(str(sid), {}).get("reviewed_sig") != sig(manual.get(str(sid), {}))
+               or "review" not in manual.get(str(sid), {})]
+    if not pending:
+        return
+
+    if getattr(llm, "is_mock", False):
+        for sid in pending:
+            info = manual.get(str(sid), {})
+            info["review"] = {"fits": True,
+                              "reason": "sin revisión (modo vista previa)"}
+            info["reviewed_sig"] = sig(info)
+        project.set("manual_broll", manual)
+        return
+
+    notify(f"👁 El director revisa {len(pending)} B-roll(s) que subiste…")
+    schema = {
+        "type": "object",
+        "properties": {"reviews": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"scene": {"type": "integer"},
+                           "fits": {"type": "boolean"},
+                           "reason": {"type": "string"}},
+            "required": ["scene", "fits", "reason"],
+            "additionalProperties": False}}},
+        "required": ["reviews"], "additionalProperties": False}
+    replaced: list[tuple[int, str]] = []
+    for start in range(0, len(pending), 6):
+        chunk = pending[start:start + 6]
+        images: list[Path] = []
+        manifest: list[str] = []
+        order: list[int] = []
+        for sid in chunk:
+            frame = broll_dir / (by_id[sid].get("broll_image") or "")
+            if not frame.exists():
+                continue
+            images.append(frame)
+            manifest.append(f"- escena {sid}: narración «{by_id[sid]['narration'][:220]}»")
+            order.append(sid)
+        if not images:
+            continue
+        try:
+            result = llm.complete_json(
+                f"Eres editor senior de documentales en {lang}. Juzgas si una "
+                "imagen de B-roll ilustra de verdad lo que se narra en su "
+                "escena (tema, personaje, lugar, época, acción). Eres exigente "
+                "pero justo: una imagen atmosférica coherente SÍ encaja; una "
+                "que contradice o nada tiene que ver, NO.",
+                "Las imágenes adjuntas corresponden, EN ORDEN, a estas "
+                "escenas:\n" + "\n".join(manifest) +
+                "\n\nPara cada escena (por su número) di fits=true si la imagen "
+                "ilustra bien su narración, false si no; reason: una frase "
+                "concreta explicando por qué.",
+                schema=schema, images=images, purpose="broll_review")
+        except Exception as e:
+            project.add_warning(f"No se pudo revisar el B-roll subido "
+                                f"({e}) — se respeta tu elección sin cambios.")
+            return
+        verdicts = {r["scene"]: r for r in result.get("reviews", [])}
+        for sid in order:
+            v = verdicts.get(sid)
+            info = manual.get(str(sid), {})
+            if not v:
+                info["review"] = {"fits": True, "reason": "no evaluada"}
+                info["reviewed_sig"] = sig(info)
+                continue
+            info["review"] = {"fits": bool(v["fits"]),
+                              "reason": v.get("reason", "")}
+            info["reviewed_sig"] = sig(info)
+            if v["fits"]:
+                continue
+            if auto_replace:
+                # Descartar tu material y dejar que la IA genere esa escena.
+                (broll_dir / "manual" / info["file"]).unlink(missing_ok=True)
+                fr = broll_dir / "manual" / f"{Path(info['file']).stem}_frame.jpg"
+                fr.unlink(missing_ok=True)
+                reason = info.get("review", {}).get("reason", "")
+                manual.pop(str(sid), None)
+                s = by_id[sid]
+                s["broll_source"] = None
+                s.pop("broll_video", None)
+                s.pop("broll_image", None)
+                placed.discard(sid)
+                replaced.append((sid, reason))
+            else:
+                project.add_warning(
+                    f"El director revisó tu B-roll de la escena {sid} y cree "
+                    f"que NO ilustra bien lo que se narra: {v.get('reason', '')} "
+                    "Se respeta tu elección; quítalo en Storyboard si prefieres "
+                    "que se genere automáticamente.")
+    project.set("manual_broll", manual)
+    for sid, reason in replaced:
+        project.add_warning(
+            f"El director reemplazó por IA tu B-roll de la escena {sid} (no "
+            f"encajaba): {reason}".strip())
+    if replaced:
+        ids = ", ".join(str(sid) for sid, _ in replaced)
+        notify(f"🔄 El director generará con IA {len(replaced)} escena(s) cuyo "
+               f"B-roll no encajaba ({ids}).")
+
+
 def run(project, cfg) -> None:
     images = get_images(cfg)
     videogen = get_videogen(cfg)
     scenes = load_scenes(project)
     broll_dir = project.path("broll")
+    (broll_dir / "manual").mkdir(exist_ok=True)
+    llm = get_llm(cfg)
+
+    # 0) B-roll MANUAL por escena (subido en Storyboard): máxima prioridad, y
+    #    el director lo revisa con visión (encaja o no, con aviso).
+    placed_manual = _place_manual_broll(project, scenes, broll_dir, cfg)
+    _review_manual_broll(project, llm, scenes, placed_manual, broll_dir, cfg)
 
     # 1) B-roll propio del creador: asignación SEMÁNTICA (cada material va a
     #    la escena cuya narración ilustra, según su descripción de visión).
     #    Si no hay IA disponible, reparto uniforme como respaldo.
     user_assets = _user_broll_assets(project)
     mapping: dict[int, int] | None = None
-    llm = get_llm(cfg)
     if user_assets and not getattr(llm, "is_mock", False):
         try:
             mapping = _semantic_map(llm, scenes, user_assets,
@@ -201,6 +373,11 @@ def run(project, cfg) -> None:
                                 f"disponible (reparto uniforme): {e}")
     if mapping is None:
         mapping = _spread(len(user_assets), len(scenes))
+    # Las escenas con B-roll MANUAL ya están resueltas: no se les reparte
+    # material semántico encima.
+    if placed_manual:
+        mapping = {i: a for i, a in mapping.items()
+                   if scenes[i]["id"] not in placed_manual}
 
     # Caché HONESTA del material por escena: cada escena se firma con lo que
     # debe mostrar (hash del prompt IA, o el archivo propio asignado). Si al
@@ -220,6 +397,8 @@ def run(project, cfg) -> None:
         sigs = {}
     stale: list[int] = []
     for idx, s in enumerate(scenes):
+        if s["id"] in placed_manual:
+            continue  # material manual: se gestiona en 06_broll/manual/, aparte
         if idx in mapping:
             sig = "user:" + user_assets[mapping[idx]]["file"]
         else:
@@ -261,7 +440,8 @@ def run(project, cfg) -> None:
         img_workers = min(img_workers, 2)
     vid_workers = max(1, int(perf.get("parallel_video", 2)))
 
-    ai_scenes = [s for s in scenes if s.get("broll_source") != "user"]
+    ai_scenes = [s for s in scenes
+                 if s.get("broll_source") not in ("user", "manual")]
 
     # 2a) Imágenes. Un fallo de INFRAESTRUCTURA (auth, red) detiene la fase
     #     (reanudable). Un rechazo de CONTENIDO (NSFW) de UNA imagen no puede

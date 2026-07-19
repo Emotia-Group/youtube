@@ -372,7 +372,76 @@ def api_project_detail(slug: str) -> dict:
     usage_items = project.get("usage_items") or []
     detail["usage_report"] = usage.summarize(usage_items) if usage_items else None
     detail["time_report"] = project.get("time_report")
+    detail["manual_broll"] = project.get("manual_broll") or {}
+    detail["broll_auto_replace"] = bool(project.get("broll_auto_replace"))
     return detail
+
+
+def _scene_or_404(project, scene_id: int) -> dict:
+    scenes_file = project.dir / DIRS["scenes"] / "scenes.json"
+    if not scenes_file.exists():
+        raise ApiError(409, "Genera primero hasta el guion gráfico (Storyboard) "
+                            "para poder subir B-roll por escena.")
+    scenes = read_json_tolerant(scenes_file)["scenes"]
+    scene = next((s for s in scenes if s.get("id") == scene_id), None)
+    if scene is None:
+        raise ApiError(404, "Escena no encontrada.")
+    return scene
+
+
+def api_scene_broll_upload(slug: str, scene_id: int, body: dict) -> dict:
+    from ytstudio.phases.ingest import kind_of
+    project = Project(slug)
+    scene = _scene_or_404(project, scene_id)
+    f = body.get("file") or {}
+    if not f.get("data_base64"):
+        raise ApiError(400, "Falta el archivo.")
+    name = Path(f.get("name") or "").name
+    try:
+        kind = kind_of(Path(name))
+    except ValueError as e:
+        raise ApiError(400, str(e))
+    if kind not in ("image", "video"):
+        raise ApiError(400, "El B-roll de una escena debe ser una imagen o un video.")
+    btype = scene.get("broll_type", "image")
+    if btype == "image" and kind == "video":
+        raise ApiError(400, "El director planificó esta escena como imagen fija "
+                            "(no como video). Sube una imagen, o deja que se "
+                            "genere automáticamente.")
+    manual_dir = project.path("broll", "manual")
+    manual_dir.mkdir(parents=True, exist_ok=True)
+    for old in manual_dir.glob(f"scene_{scene_id:03d}.*"):
+        old.unlink(missing_ok=True)
+    data = base64.b64decode(f["data_base64"])
+    ext = Path(name).suffix.lower() or (".mp4" if kind == "video" else ".jpg")
+    dest = manual_dir / f"scene_{scene_id:03d}{ext}"
+    dest.write_bytes(data)
+    manual = project.get("manual_broll") or {}
+    manual[str(scene_id)] = {"file": dest.name, "kind": kind,
+                             "orig": name, "size": len(data)}
+    project.set("manual_broll", manual)
+    # Solo se rehace el B-roll y el montaje (las escenas cuyo material cambió):
+    # ni el guion, ni la voz, ni los tiempos se tocan.
+    project.reset_from("broll", PHASE_ORDER)
+    return {"ok": True, "kind": kind,
+            "downgrade": btype == "video" and kind == "image"}
+
+
+def api_scene_broll_delete(slug: str, scene_id: int) -> dict:
+    project = Project(slug)
+    manual = project.get("manual_broll") or {}
+    if manual.pop(str(scene_id), None) is not None:
+        for old in project.path("broll", "manual").glob(f"scene_{scene_id:03d}.*"):
+            old.unlink(missing_ok=True)
+        project.set("manual_broll", manual)
+        project.reset_from("broll", PHASE_ORDER)
+    return {"ok": True}
+
+
+def api_set_broll_policy(slug: str, body: dict) -> dict:
+    project = Project(slug)
+    project.set("broll_auto_replace", bool(body.get("auto_replace")))
+    return {"broll_auto_replace": project.get("broll_auto_replace")}
 
 
 def api_run(slug: str, body: dict) -> dict:
@@ -664,6 +733,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_run(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/duplicate", path):
                 self._json(api_duplicate_project(m.group(1)), 201)
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes/(\d+)/broll", path):
+                self._json(api_scene_broll_upload(m.group(1), int(m.group(2)),
+                                                  self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/assets", path):
                 self._json(api_add_assets(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
@@ -695,6 +767,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_script(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/rename", path):
                 self._json(api_rename_project(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/broll-policy", path):
+                self._json(api_set_broll_policy(m.group(1), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
@@ -708,6 +782,8 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
                 self._json(api_delete_asset(m.group(1), int(m.group(2))))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes/(\d+)/broll", path):
+                self._json(api_scene_broll_delete(m.group(1), int(m.group(2))))
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
                 self._json(api_channel_delete(m.group(1)))
             elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
