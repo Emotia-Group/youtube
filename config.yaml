@@ -62,6 +62,10 @@ audio:
                              # nunca toca la voz; antes 3.5s + 3s de fundido
                              # dejaban casi todo el cierre en silencio)
   scene_breath: 0.3          # respiro base entre escenas (se suma a pause_after)
+  max_pause: 1.2             # tope de las pausas naturales de tu grabación en
+                             # el video (se COMPRIMEN saltando solo silencio
+                             # medido, nunca voz; el ritmo/pace por escena del
+                             # director lo escala: ligado acorta, amplio da aire)
   sentence_breath: 0.18      # respiro base al final de cada frase DENTRO de la
                              # escena, escalado por el ritmo (pace) que elige el
                              # director: ligado=0 · normal=1x · amplio=1.7x.

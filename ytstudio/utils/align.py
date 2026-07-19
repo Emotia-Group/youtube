@@ -77,6 +77,30 @@ def video_time_fn(intro: float, insertions: list[tuple[float, float]]):
     return video
 
 
+def measure_sync_offset(tl_path, cue_starts: list[float]) -> tuple[float, int]:
+    """Mide, SOBRE EL RESULTADO REAL, cuánto se desvían los subtítulos de la
+    voz: compara cada arranque de habla de la pista (fin de un silencio
+    medido) con el inicio del cue más cercano. Devuelve (mediana firmada, n) —
+    positivo = subtítulos tarde. Es la base del lazo cerrado de sincronía:
+    medir el artefacto final es robusto donde corregir los tiempos de Whisper
+    resultó frágil (el emparejamiento con respiraciones sesgaba la mediana)."""
+    from ytstudio.utils.media import detect_silences, probe_duration
+    if not cue_starts:
+        return 0.0, 0
+    tl_len = probe_duration(tl_path)
+    onsets = [e for _, e in detect_silences(tl_path, min_d=0.3)
+              if e < tl_len - 0.5]
+    diffs = []
+    for o in onsets:
+        near = min(cue_starts, key=lambda c: abs(c - o))
+        if abs(near - o) <= 1.5:
+            diffs.append(near - o)
+    if len(diffs) < 2:
+        return 0.0, len(diffs)
+    diffs.sort()
+    return diffs[len(diffs) // 2], len(diffs)
+
+
 def local_time(scene: dict, t: float) -> float:
     """Convierte un tiempo del audio ORIGINAL (t) al tiempo LOCAL dentro de la
     escena ya montada — sumando su aire de entrada (vo_offset, solo la

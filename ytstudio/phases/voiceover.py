@@ -134,31 +134,78 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
             bounds.append(min(max(nb, bounds[-1] + 0.4), audio_total - 0.1))
     bounds.append(audio_total)
 
-    # 2) Inserciones de silencio (punto en el audio original → duración)
-    insertions: list[tuple[float, float]] = []
-    boundary_pts: set[float] = set()
-    for i in range(n - 1):
-        if boundary_pause[i] > 0.001:
-            insertions.append((bounds[i + 1], boundary_pause[i]))
-            boundary_pts.add(round(bounds[i + 1], 4))
-    # 2b) Respiros intra-escena al final de cada frase (según el pace del
-    #     director), SOLO en cortes respaldados por silencio medido.
-    n_sentence_breaths = 0
-    for i, s in enumerate(user_scenes):
-        pace = _pace_factor(s.get("pace"))
-        if pace <= 0 or sent_breath <= 0:
+    # 2) EL DIRECTOR AJUSTA CADA SILENCIO MEDIDO a un objetivo — comprimir
+    #    (saltar parte del silencio) o ampliar (insertar), NUNCA tocar voz.
+    #    Las pausas naturales se conservan pero con tope: preservarlas todas
+    #    íntegras llenaba el video de silencios (una grabación con pausas de
+    #    ensayo largas ganaba 16s de aire muerto). delta>0 inserta silencio en
+    #    el punto; delta<0 SALTA [punto, punto-delta] del interior del
+    #    silencio.
+    max_pause = max(0.5, float(audio_cfg.get("max_pause", 1.2)))
+    boundary_cut = {round(bounds[i + 1], 4): i for i in range(n - 1)
+                    if boundary_pause[i] > 0.001}
+
+    def last_word_before(t: float):
+        prev = None
+        for w in words:
+            if float(w["end"]) <= t + 0.05:
+                prev = w
+            else:
+                break
+        return prev
+
+    def pace_of(t: float) -> float:
+        for i in range(n):
+            if bounds[i] <= t < bounds[i + 1]:
+                return _pace_factor(user_scenes[i].get("pace"))
+        return 1.0
+
+    adjustments: list[tuple[float, float]] = []  # (punto, delta ±)
+    n_ext = n_comp = 0
+    for s0, s1 in silences:
+        natural = s1 - s0
+        if natural < 0.3 or s1 <= 0.05 or s0 >= audio_total - 0.05:
+            continue  # bordes: intro/outro los gestionan; cortos: se quedan
+        w_prev = last_word_before(s0)
+        is_sent = w_prev is not None and _ends_sentence(w_prev.get("text", ""))
+        pace = pace_of(s0)
+        # ¿este silencio aloja una frontera de escena con pausa de director?
+        bkey = next((k for k in boundary_cut
+                     if s0 - 0.02 <= float(k) <= s1 + 0.02), None)
+        if bkey is not None and is_sent:
+            # frontera tras FIN DE ORACIÓN: la pausa total = criterio del
+            # director (respiro + pause_after), capada — no natural + extra.
+            i = boundary_cut[bkey]
+            target = min(max(boundary_pause[i] + 0.35, 0.6),
+                         max_pause + boundary_pause[i])
+            point = float(bkey)
+        elif bkey is not None:
+            # frontera en una VACILACIÓN a mitad de frase: nada de pausa de
+            # director (sonaba a «corte de voz»); solo el tope de longitud.
+            target = min(natural, max_pause * pace if pace > 0 else max_pause)
+            point = float(bkey)
+        else:
+            # pausa interna: se respeta hasta el tope según el ritmo (pace)
+            # de la escena; en fin de oración se permite algo más de aire.
+            cap = max_pause * (pace if pace > 0 else 0.6)
+            if is_sent and sent_breath > 0 and pace > 0:
+                cap = max(cap, sent_breath * pace + 0.5)
+            target = min(natural, max(0.35, cap))
+            point = (s0 + s1) / 2
+        delta = target - natural
+        if abs(delta) < 0.06:
             continue
-        a, b = bounds[i], bounds[i + 1]
-        for wi, w in enumerate(words[:-1]):
-            if not (a <= float(w["start"]) < b) or not _ends_sentence(w["text"]):
-                continue
-            c = cut_by_word.get(wi)
-            if c is None or not (a < c["mid"] < b) or c["wide"] < 0.12:
-                continue
-            if round(c["mid"], 4) in boundary_pts:
-                continue  # ya lleva la pausa de frontera: no duplicar
-            insertions.append((c["mid"], sent_breath * pace))
-            n_sentence_breaths += 1
+        if delta < 0:
+            # saltar el TRAMO FINAL del interior del silencio, dejando margen
+            # (el punto de salto queda estrictamente dentro del silencio)
+            skip_start = max(s0 + 0.1, min(point + 0.01, s1 - 0.1 + delta))
+            adjustments.append((skip_start, delta))
+            n_comp += 1
+        else:
+            adjustments.append((point, delta))
+            n_ext += 1
+    insertions = sorted(adjustments)
+    n_sentence_breaths = n_ext  # para el mensaje de progreso
 
     # Fija las fronteras fuente de cada escena (base para agrupar palabras)
     for i, s in enumerate(user_scenes):
@@ -180,20 +227,24 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         s["duration"] = round(durs[i], 3)
         s["vo_offset"] = round(intro, 3) if i == 0 else 0.0
 
-    # 4) WAV: trozos de la fuente cortados SOLO en los puntos de inserción
-    #    (huecos entre palabras) + los silencios insertados. No se descarta ni
-    #    un milisegundo de voz: se recorre [0, audio_total] entero.
+    # 4) WAV: trozos de la fuente cortados SOLO dentro de silencios medidos.
+    #    delta>0 inserta silencio en el punto; delta<0 SALTA ese tramo del
+    #    silencio (nunca voz: los saltos viven en el interior de silencios
+    #    medidos, lejos de cualquier palabra).
     ins_pts = sorted(insertions)
     pieces: list[tuple] = []
     if intro > 0.001:
         pieces.append(("sil", intro))
     cur = 0.0
     for p, dur in ins_pts:
-        if p - cur > 0.001:
-            pieces.append(("cut", cur, p))
-            cur = p
+        if p <= cur + 0.001:
+            continue  # solapado con un ajuste anterior: se omite por seguridad
+        pieces.append(("cut", cur, p))
         if dur > 0.001:
             pieces.append(("sil", dur))
+            cur = p
+        else:
+            cur = min(p - dur, audio_total)  # saltar |delta| de silencio
     if audio_total - cur > 0.001:
         pieces.append(("cut", cur, audio_total))
     if outro > 0.001:
@@ -230,10 +281,12 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
 
     voice_map = {"intro": round(intro, 4), "outro": round(outro, 4),
                  "audio_total": round(audio_total, 4),
-                 "insertions": [[round(p, 4), round(d, 4)] for p, d in ins_pts]}
+                 "insertions": [[round(p, 4), round(d, 4)] for p, d in ins_pts],
+                 "n_ext": n_ext, "n_comp": n_comp}
     n_breaths = sum(1 for i in range(n - 1) if boundary_pause[i] > 0.001)
 
-    # AUTOCOMPROBACIÓN: solo se AÑADE silencio, jamás se quita voz.
+    # AUTOCOMPROBACIÓN: los ajustes solo añaden o quitan SILENCIO medido —
+    # los segundos HABLADOS deben conservarse exactos.
     check = None
     try:
         got = probe_duration(out)
@@ -285,10 +338,12 @@ def run(project, cfg) -> None:
         if check:
             project.add_warning(check)
         outro = voice_map["outro"]
-        notify(f"🎙 Narración propia: voz continua de {audio_total:.1f}s. El "
-               f"director puso {n_breaths} respiros entre escenas y {n_sent} "
-               "entre frases, TODOS en huecos entre palabras (imposible cortar "
-               f"la voz) + {outro:.1f}s de cola final.")
+        notify(f"🎙 Narración propia: {audio_total:.1f}s de voz íntegra. El "
+               f"director ajustó las pausas a su ritmo: "
+               f"{voice_map.get('n_comp', 0)} recortadas y "
+               f"{voice_map.get('n_ext', 0)} ampliadas — siempre DENTRO de "
+               f"silencios medidos (la voz jamás se toca) + {outro:.1f}s de "
+               "cola final.")
 
     def _is_user_voice(scene: dict) -> bool:
         return "audio_start" in scene and narration_file is not None

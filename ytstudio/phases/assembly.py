@@ -565,6 +565,18 @@ def run(project, cfg) -> None:
             "transition")
     plans = _plan_transitions(scenes, cfg, style_transition)
 
+    # Corrección del LAZO DE SINCRONÍA (medida por la fase de subtítulos
+    # sobre la pista de voz real): los rótulos se corren lo mismo que los
+    # subtítulos, para que aparezcan cuando la palabra SUENA. Solo en
+    # memoria — entra en la firma de render, así que re-renderiza lo justo.
+    shift = float(project.get("sync_shift") or 0.0)
+    if abs(shift) > 0.001:
+        for s in scenes:
+            if s.get("overlay_at") is not None:
+                s["overlay_at"] = round(
+                    min(max(0.0, float(s["overlay_at"]) + shift),
+                        max(0.1, float(s["duration"]) - 0.5)), 3)
+
     # Si algo visual cambió desde el último render, limpiar las escenas
     # cacheadas (si no, un reajuste de transiciones/rótulos no se vería).
     sig = _render_signature(scenes, plans, cfg, project)
@@ -687,11 +699,13 @@ def run(project, cfg) -> None:
     afilters += sfx_filters
     mix_in = f"[{voice_mx}][{music_label}]" + (f"[{sfx_label}]" if sfx_label else "")
     n_mix = 3 if sfx_label else 2
-    # Cierre: fundido de salida del audio completo (tras loudnorm, para que la
-    # normalización no lo contrarreste) — el final deja de sentirse abrupto.
+    # Cierre: fundido LARGO del audio (mínimo 2.5s) que muere EXACTAMENTE con
+    # la imagen — un fundido corto que arrancaba al acabar la voz sonaba a
+    # «la música termina antes que el video, y de golpe».
     end_fade = float(cfg["audio"].get("end_fade", 1.5))
-    fade = (f",afade=t=out:st={max(0.0, total - end_fade):.2f}:d={end_fade:.2f}"
-            if end_fade > 0 else "")
+    fade_d = max(end_fade, 2.5) if end_fade > 0 else 0.0
+    fade = (f",afade=t=out:st={max(0.0, total - fade_d):.2f}:d={fade_d:.2f}"
+            if fade_d > 0 else "")
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"
                     f"loudnorm=I=-14:TP=-1.5:LRA=11{fade}[aout]")
 

@@ -131,6 +131,37 @@ def run(project, cfg) -> None:
     max_lines = sub_cfg.get("max_lines", 2)
     cues = build_cues(scenes, max_chars, max_lines, narration, voice_map)
 
+    # LAZO CERRADO de sincronía: se mide el desfase de los cues contra la
+    # pista de voz REAL (narration_timeline.wav) y, si es significativo, se
+    # corrigen TODOS por la mediana medida — y se re-mide para confirmar.
+    # Los rótulos usan la misma corrección (project.sync_shift) al montar.
+    project.set("sync_shift", 0.0)
+    tl = project.get("voice_timeline")
+    tl_path = project.path("voiceover", tl) if tl else None
+    if cues and tl_path and tl_path.exists():
+        from ytstudio import eventlog
+        from ytstudio.utils.align import measure_sync_offset
+        try:
+            med, n_pts = measure_sync_offset(tl_path,
+                                             [c["start"] for c in cues])
+            if abs(med) > 0.12 and n_pts >= 3:
+                limit = sum(float(s["duration"]) for s in scenes)
+                for c in cues:
+                    c["start"] = min(max(0.0, c["start"] - med), limit - 0.3)
+                    c["end"] = min(max(c["start"] + 0.25, c["end"] - med), limit)
+                project.set("sync_shift", round(-med, 3))
+                med2, _ = measure_sync_offset(tl_path,
+                                             [c["start"] for c in cues])
+                eventlog.log("info",
+                             f"🔁 Lazo de sincronía: subtítulos corregidos "
+                             f"{-med * 1000:+.0f} ms (desfase medido "
+                             f"{med * 1000:+.0f} ms en {n_pts} arranques; tras "
+                             f"corregir: {med2 * 1000:+.0f} ms).",
+                             project=getattr(project, "slug", None),
+                             phase="subtitles")
+        except Exception:
+            pass
+
     # SRT
     srt = []
     for i, c in enumerate(cues, 1):

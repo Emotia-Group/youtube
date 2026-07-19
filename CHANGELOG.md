@@ -9,6 +9,28 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.0 — 2026-07-19
+- ADIÓS AL EXCESO DE SILENCIOS: conservar íntegras todas las pausas de la
+  grabación (v0.23.0) le metía el aire muerto de los ensayos al video (tu
+  narración pasó de 70 a 87s). Ahora el director AJUSTA CADA PAUSA MEDIDA a
+  su ritmo: las largas se comprimen (saltando SOLO silencio medido — la voz
+  sigue siendo intocable), las cortas se respetan, y el «pace» por escena
+  las escala (ligado acorta, amplio da aire). Configurable:
+  audio.max_pause (1.2s por defecto). La escena 1 de 18 segundos era una
+  pausa larga tuya dentro de la escena: se corrige sola.
+- LA PAUSA DE DIRECTOR SOLO TRAS FIN DE ORACIÓN: si la frontera de escena
+  cae en una vacilación a mitad de frase, ya no se inserta la pausa
+  dramática ahí (ese silencio largo en mitad de una frase era lo que
+  sonaba a «se cortó la voz» en el primer cambio de escena).
+- LAZO CERRADO DE SINCRONÍA (sustituye a la calibración de Whisper, que
+  resultó frágil: midió −158ms y +226ms en corridas de la MISMA
+  grabación): ahora se mide el desfase de los subtítulos contra la pista
+  de voz REAL ya montada y se corrigen todos por esa medición — y se
+  re-mide para confirmar (queda en el log: «🔁 Lazo de sincronía»). Los
+  rótulos usan la misma corrección.
+- CIERRE MUSICAL: el fundido final ahora es largo (mínimo 2.5s) y muere
+  EXACTAMENTE con la imagen — la música ya no termina antes ni de golpe.
+
 ## v0.23.0 — 2026-07-19
 - EL PEDAZO DE VOZ CORTADO, encontrado por fin (con la pista clave del
   reporte: «el subtítulo SÍ muestra lo que la voz no dice»): la LIMPIEZA de
