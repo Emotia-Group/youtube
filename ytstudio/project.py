@@ -49,9 +49,20 @@ class Project:
         self.slug = slug
         self.dir = PROJECTS_DIR / slug
         self.state_path = self.dir / "project.json"
-        self.state: dict = {"slug": slug, "phases": {}, "data": {}}
+        self.state: dict = {"slug": slug, "phases": {}, "data": {},
+                            "created_at": time.time(), "display_name": slug}
         if self.state_path.exists():
             self.state = read_json_tolerant(self.state_path)
+            if not self.state.get("created_at"):
+                # Proyectos de versiones anteriores no tienen fecha de creación
+                # guardada: se usa la fecha de la carpeta como aproximación
+                # razonable (en Windows st_ctime SÍ es la fecha de creación).
+                try:
+                    self.state["created_at"] = self.dir.stat().st_ctime
+                except OSError:
+                    self.state["created_at"] = 0
+            if not self.state.get("display_name"):
+                self.state["display_name"] = slug
             # Re-guardar en UTF-8 para migrar los proyectos antiguos de una vez
             try:
                 self.save()

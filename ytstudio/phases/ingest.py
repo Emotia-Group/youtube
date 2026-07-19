@@ -213,6 +213,21 @@ def run(project, cfg) -> None:
             forced_script = True
         elif cat == "voz" and kind == "audio":
             voice_audios.append(path)  # se procesan juntos más abajo
+        elif cat == "voz" and kind == "video":
+            # Nota de voz grabada en un contenedor de VIDEO (frecuente: los
+            # grabadores del navegador y algunos celulares exportan audio-only
+            # como .webm o .mp4). Antes esto se descartaba EN SILENCIO — el
+            # narración quedaba vacía y el programa generaba guion y voz
+            # propios sin avisar. Se extrae la pista de audio y se usa igual
+            # que una narración normal.
+            audio = extract_audio(path, input_dir / f"voz_audio_{asset['id']:02d}.mp3")
+            voice_audios.append(audio)
+        elif cat == "voz":
+            project.add_warning(
+                f"No se pudo usar «{asset['name']}» como tu narración (no se "
+                "reconoce como audio ni video con audio) — el video se genera "
+                "con guion y voz propios. Formatos válidos: mp3, wav, m4a, "
+                "ogg, opus, flac, aac, wma, o un video con audio.")
         elif cat == "referencia":
             if kind == "image":
                 frames.append(path)
@@ -282,6 +297,16 @@ def run(project, cfg) -> None:
 
     # --- Narración grabada por el usuario: limpiar + transcribir con tiempos ---
     project.set("narration", None)
+    voz_assets = [a for a in assets if a["category"] == "voz"]
+    if voz_assets and not voice_audios:
+        # Red de seguridad: hay material marcado como "tu voz" pero ninguno se
+        # pudo aprovechar (los avisos de arriba explican por qué asset a
+        # asset) — que quede clarísimo que el video usará voz sintética, en
+        # vez de fallar en silencio.
+        project.add_warning(
+            "Ninguno de tus archivos de voz se pudo usar como narración — "
+            "revisa los avisos anteriores. El video se genera con guion y "
+            "voz sintética (IA) en su lugar.")
     if voice_audios:
         from ytstudio.utils.media import clean_narration, concat_audios
         trim = cfg.get("audio", {}).get("trim_silence", True)
@@ -291,7 +316,27 @@ def run(project, cfg) -> None:
                                 trim_silence=trim, keep=keep,
                                 lufs=cfg.get("audio", {}).get("vo_lufs", -16))
         stt = stt or get_stt(cfg)
+        if getattr(stt, "is_mock", False):
+            # Sin clave de transcripción real (OPENAI_API_KEY / proveedor STT
+            # en ⚙ Configuración) el "mock" NO transcribe tu voz: rellena un
+            # texto de muestra genérico sincronizado con la duración de tu
+            # audio. El AUDIO que suena sí es el tuyo, pero el GUION y los
+            # subtítulos serían de relleno — hay que dejarlo clarísimo.
+            project.add_warning(
+                "No hay un proveedor de transcripción real configurado (STT) "
+                "— tu grabación se usará como audio, pero el guion y los "
+                "subtítulos serán de MUESTRA, no lo que realmente dijiste. "
+                "Configura tu clave de OpenAI en ⚙ Configuración para "
+                "transcribir tu voz de verdad.")
         segments = stt.transcribe_segments(clean)
+        if not segments:
+            # Sin segmentos no hay dónde anclar las escenas — si esto pasara
+            # en silencio, el video caería de nuevo a guion y voz sintética
+            # SIN avisar (el mismo fallo silencioso de arriba).
+            project.add_warning(
+                "No se detectó voz en tu grabación (revisa que el archivo "
+                "no esté vacío o silenciado) — el video se genera con guion "
+                "y voz sintética (IA) en su lugar.")
         (input_dir / "narracion.txt").write_text(
             " ".join(s["text"] for s in segments), encoding="utf-8")
         project.set("narration", {"file": clean.name, "segments": segments})

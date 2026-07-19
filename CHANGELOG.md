@@ -3,6 +3,27 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v26 — 2026-07-19
+- CAUSA DE RAÍZ encontrada: «subo mi voz y el programa genera una propia».
+  Una nota de voz grabada en un contenedor de VIDEO (.webm o .mp4 — lo
+  normal si la grabaste con el micrófono del navegador o ciertos
+  celulares) se descartaba EN SILENCIO al analizarla: el programa seguía
+  sin ningún error y generaba guion y voz sintética por su cuenta, sin
+  avisar. Ahora se detecta y se le extrae el audio igual que a cualquier
+  narración. Además, se añadieron avisos explícitos para que esto NUNCA
+  vuelva a pasar en silencio: si un archivo de voz no se puede aprovechar,
+  si no se detecta voz en la grabación, o si falta configurar un
+  transcriptor real (STT) y se usaría texto de muestra — todo queda dicho
+  en el registro de avisos y en el 🧾 Log de eventos.
+- GESTIÓN DE PROYECTOS: la lista de la izquierda ahora se ordena del más
+  reciente al más antiguo (antes salía alfabética por nombre interno).
+  Nuevo: 🔎 buscador, filtro (todos · en curso · completos · con errores)
+  y, pasando el cursor sobre cada proyecto, tres acciones rápidas:
+  ⧉ duplicar (copia completa, incluidas las fases ya generadas — para
+  variar un video sin pagar de nuevo lo ya hecho), ✎ renombrar (el nombre
+  visible; los archivos internos no se mueven, así que no hay riesgo de
+  romper nada) y 🗑 borrar.
+
 ## v25 — 2026-07-19
 - ARREGLO de la regresión de v24 (desfase/corte en la transición de la
   escena 1 a la 2, y desfase acumulado después):

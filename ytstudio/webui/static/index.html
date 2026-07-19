@@ -37,11 +37,18 @@
   #verinfo.stale b{color:var(--err)}
   .proj{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px}
   .proj:hover{background:var(--panel2)}
+  .proj:hover .projactions{opacity:1}
   .proj.active{background:var(--panel2);outline:1px solid var(--line)}
-  .proj .name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .proj .name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
   .proj .bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
   .proj .bar i{display:block;height:100%;background:var(--accent)}
   .proj.running .bar i{background:var(--run)}
+  .proj.haserror .name{color:var(--err)}
+  .projactions{display:flex;gap:2px;opacity:0;flex-shrink:0}
+  .projactions button{background:none;color:var(--muted);padding:2px 5px;font-size:12px;border-radius:5px}
+  .projactions button:hover{background:var(--panel);color:var(--text)}
+  #projtools{margin:2px 0 8px}
+  #projtools input,#projtools select{padding:6px 9px;font-size:12.5px;margin-bottom:5px}
 
   /* main */
   #main{flex:1;overflow-y:auto;padding:26px 34px}
@@ -116,6 +123,15 @@
   <button class="navbtn" onclick="showEvents()">🧾 Log de eventos</button>
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
   <h3 style="padding:0 6px">Proyectos</h3>
+  <div id="projtools">
+    <input id="projsearch" placeholder="🔎 Buscar…" oninput="PROJQ=this.value;renderProjList()">
+    <select id="projfilter" onchange="PROJFILTER=this.value;renderProjList()">
+      <option value="all">Todos</option>
+      <option value="running">⏳ En curso</option>
+      <option value="done">✔ Completos</option>
+      <option value="error">⚠ Con errores</option>
+    </select>
+  </div>
   <div id="projlist"></div>
   <div id="verinfo"></div>
 </div>
@@ -137,14 +153,71 @@ async function api(path,opts={}){
 function toast(msg,ms=2800){const t=$('#toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',ms)}
 
 /* ---------- sidebar ---------- */
+let PROJQ='', PROJFILTER='all';
+const fmtDate=ts=>{
+  if(!ts)return'';
+  const d=new Date(ts*1000),now=new Date();
+  return d.toDateString()===now.toDateString()
+    ?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+    :d.toLocaleDateString([],{day:'2-digit',month:'short'});
+};
 async function refreshList(){
-  const projects=await api('/api/projects');
+  window._allProjects=await api('/api/projects');
+  renderProjList();
+}
+function renderProjList(){
+  let projects=window._allProjects||[];
+  const q=PROJQ.trim().toLowerCase();
+  if(q)projects=projects.filter(p=>(p.display_name||p.slug).toLowerCase().includes(q));
+  if(PROJFILTER==='running')projects=projects.filter(p=>p.running);
+  else if(PROJFILTER==='done')projects=projects.filter(p=>p.done===p.total&&p.total>0);
+  else if(PROJFILTER==='error')projects=projects.filter(p=>p.has_error);
   $('#projlist').innerHTML=projects.map(p=>`
-    <div class="proj ${p.slug===current?'active':''} ${p.running?'running':''}" onclick="openProject('${p.slug}')">
-      <div class="name">${p.running?'⏳ ':''}${esc(p.slug)}</div>
-      <div class="muted">${p.done}/${p.total} fases</div>
+    <div class="proj ${p.slug===current?'active':''} ${p.running?'running':''} ${p.has_error?'haserror':''}" onclick="openProject('${p.slug}')">
+      <div style="display:flex;align-items:center;gap:4px">
+        <div class="name">${p.running?'⏳ ':p.has_error?'⚠ ':''}${esc(p.display_name||p.slug)}</div>
+        <div class="projactions" onclick="event.stopPropagation()">
+          <button title="Duplicar" onclick="duplicateProject('${p.slug}')">⧉</button>
+          <button title="Renombrar" onclick="renameProject('${p.slug}')">✎</button>
+          <button title="Borrar" onclick="deleteProjectFromList('${p.slug}')">🗑</button>
+        </div>
+      </div>
+      <div class="muted">${p.done}/${p.total} fases${p.created_at?' · '+fmtDate(p.created_at):''}</div>
       <div class="bar"><i style="width:${100*p.done/p.total}%"></i></div>
-    </div>`).join('')||'<div class="muted" style="padding:8px">Sin proyectos aún</div>';
+    </div>`).join('')||`<div class="muted" style="padding:8px">${q||PROJFILTER!=='all'?'Sin resultados':'Sin proyectos aún'}</div>`;
+}
+async function duplicateProject(slug){
+  try{
+    const r=await api(`/api/projects/${slug}/duplicate`,{method:'POST'});
+    toast('✅ Proyecto duplicado');
+    await refreshList();
+    openProject(r.slug);
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function renameProject(slug){
+  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
+  const cur=proj?(proj.display_name||slug):slug;
+  const name=prompt('Nuevo nombre para el proyecto:',cur);
+  if(name===null)return;
+  const trimmed=name.trim();
+  if(!trimmed)return;
+  try{
+    await api(`/api/projects/${slug}/rename`,{method:'PUT',body:JSON.stringify({name:trimmed})});
+    toast('✅ Renombrado');
+    refreshList();
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function deleteProjectFromList(slug){
+  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
+  if(proj&&proj.running){toast('⚠ No se puede borrar mientras se está generando.');return}
+  const name=proj?(proj.display_name||slug):slug;
+  if(!confirm(`¿Borrar el proyecto «${name}» y todos sus archivos generados? Esta acción no se puede deshacer.`))return;
+  try{
+    await api(`/api/projects/${slug}`,{method:'DELETE'});
+    toast('🗑 Proyecto borrado');
+    if(current===slug){current=null;showNew()}
+    refreshList();
+  }catch(e){toast('⚠ '+e.message)}
 }
 
 /* ---------- nuevo proyecto ---------- */

@@ -15,6 +15,7 @@ import json
 import mimetypes
 import re
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -168,12 +169,17 @@ def _project_summary(slug: str) -> dict:
     project = Project(slug)
     phases = {name: project.phase_status(name) for name in PHASE_ORDER}
     run = RUNS.get(slug, {})
+    failed = any((project.state["phases"].get(n) or {}).get("status") == "failed"
+                for n in PHASE_ORDER)
     return {
         "slug": slug,
+        "display_name": project.state.get("display_name") or slug,
+        "created_at": project.state.get("created_at") or 0,
         "phases": phases,
         "done": sum(1 for s in phases.values() if s == "done"),
         "total": len(PHASE_ORDER),
         "running": bool(run.get("running")),
+        "has_error": bool(run.get("error")) or failed,
         "input_meta": project.get("input_meta"),
         "total_duration": project.get("total_duration"),
         "scene_count": project.get("scene_count"),
@@ -191,10 +197,46 @@ def api_list_projects() -> list[dict]:
             out.append(_project_summary(p.name))
         except Exception as e:
             traceback.print_exc()
-            out.append({"slug": p.name, "phases": {}, "done": 0,
-                        "total": len(PHASE_ORDER), "running": False,
+            out.append({"slug": p.name, "display_name": p.name, "created_at": 0,
+                        "phases": {}, "done": 0, "total": len(PHASE_ORDER),
+                        "running": False, "has_error": True,
                         "error": f"No se pudo leer: {e}"})
+    # Más reciente primero — antes salían por orden alfabético del slug.
+    out.sort(key=lambda s: s.get("created_at") or 0, reverse=True)
     return out
+
+
+def api_duplicate_project(slug: str) -> dict:
+    import shutil
+    src = Project(slug)
+    if not src.state_path.exists():
+        raise ApiError(404, "Proyecto no encontrado.")
+    if RUNS.get(slug, {}).get("running"):
+        raise ApiError(409, "Espera a que termine de generarse antes de duplicarlo.")
+    base = slug
+    new_slug, i = f"{base}-copia", 2
+    while Project.exists(new_slug):
+        new_slug = f"{base}-copia-{i}"
+        i += 1
+    shutil.copytree(src.dir, PROJECTS_DIR / new_slug)
+    dup = Project(new_slug)
+    dup.state["slug"] = new_slug
+    dup.state["created_at"] = time.time()
+    dup.state["display_name"] = f"{src.state.get('display_name') or slug} (copia)"
+    dup.save()
+    return {"slug": new_slug}
+
+
+def api_rename_project(slug: str, body: dict) -> dict:
+    project = Project(slug)
+    if not project.state_path.exists():
+        raise ApiError(404, "Proyecto no encontrado.")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise ApiError(400, "Escribe un nombre.")
+    project.state["display_name"] = name[:120]
+    project.save()
+    return {"display_name": project.state["display_name"]}
 
 
 def api_create_project(body: dict) -> dict:
@@ -595,6 +637,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_create_project(self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/run", path):
                 self._json(api_run(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/duplicate", path):
+                self._json(api_duplicate_project(m.group(1)), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/assets", path):
                 self._json(api_add_assets(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
@@ -624,6 +668,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_keys(self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_save_script(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/rename", path):
+                self._json(api_rename_project(m.group(1), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:

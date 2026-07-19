@@ -30,6 +30,8 @@ def _restore_punctuation(seg_text: str, words: list[dict]) -> list[dict]:
 
 
 class OpenAISTT:
+    is_mock = False
+
     def __init__(self, cfg: dict):
         from openai import OpenAI
         self.client = OpenAI()
@@ -95,6 +97,8 @@ class MockSTT:
     """Transcripción de ejemplo. `transcribe_segments` reparte un texto de
     muestra a lo largo de la duración real del audio, para poder validar toda
     la alineación audio↔escenas sin un STT real."""
+
+    is_mock = True
 
     SAMPLE = ("Bienvenidos a este documental. Hoy vamos a explorar una historia "
               "fascinante que muy pocos conocen. Todo comenzó hace muchos años, "
