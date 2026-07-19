@@ -53,6 +53,13 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     slug = getattr(project, "slug", None)
     cur = {"phase": None}
 
+    # Gasto REAL (tokens/imágenes/voz/video que de verdad se generaron en esta
+    # ejecución) — se acumula al histórico del proyecto al terminar, para que
+    # el reporte cubra TODO el proyecto aunque se haya generado en varias
+    # sesiones (reanudar no cuenta de nuevo lo ya hecho, y aquí tampoco).
+    from ytstudio import usage
+    usage.reset()
+
     def emit(level: str, msg: str, **kw) -> None:
         eventlog.log(level, msg, project=slug, phase=cur["phase"], **kw)
 
@@ -77,35 +84,52 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     run_start = time.time()
     seen_warnings = 0
 
-    for name, module, desc in PHASES:
-        cur["phase"] = name
-        if project.phase_status(name) == "done":
-            log(f"✔ {name:<10} {desc} (ya completada)")
+    try:
+        for name, module, desc in PHASES:
+            cur["phase"] = name
+            if project.phase_status(name) == "done":
+                log(f"✔ {name:<10} {desc} (ya completada)")
+                if name == to_phase:
+                    break
+                continue
+
+            sink(f"▶ {name:<10} {desc}…")
+            start = time.time()
+            try:
+                module.run(project, cfg)
+            except Exception as e:
+                secs = round(time.time() - start, 1)
+                project.mark_phase(name, "failed", error=str(e))
+                emit("error", f"{desc}: {e}", seconds=secs)
+                raise RuntimeError(f"La fase '{name}' falló: {e}") from e
+            secs = round(time.time() - start, 1)
+            project.mark_phase(name, "done", seconds=secs)
+            # Avisos nuevos acumulados por esta fase (B-roll sin usar, NSFW, etc.)
+            warnings = project.get("warnings") or []
+            for w in warnings[seen_warnings:]:
+                emit("warn", w)
+            seen_warnings = len(warnings)
+            emit("info", f"{desc}: completada", seconds=secs)
+            log(f"✔ {name:<10} completada en {secs:.1f}s")
+
             if name == to_phase:
                 break
-            continue
-
-        sink(f"▶ {name:<10} {desc}…")
-        start = time.time()
-        try:
-            module.run(project, cfg)
-        except Exception as e:
-            secs = round(time.time() - start, 1)
-            project.mark_phase(name, "failed", error=str(e))
-            emit("error", f"{desc}: {e}", seconds=secs)
-            raise RuntimeError(f"La fase '{name}' falló: {e}") from e
-        secs = round(time.time() - start, 1)
-        project.mark_phase(name, "done", seconds=secs)
-        # Avisos nuevos acumulados por esta fase (B-roll sin usar, NSFW, etc.)
-        warnings = project.get("warnings") or []
-        for w in warnings[seen_warnings:]:
-            emit("warn", w)
-        seen_warnings = len(warnings)
-        emit("info", f"{desc}: completada", seconds=secs)
-        log(f"✔ {name:<10} completada en {secs:.1f}s")
-
-        if name == to_phase:
-            break
+    finally:
+        # El gasto YA incurrido se guarda SIEMPRE, incluso si una fase falló a
+        # mitad de camino — ese dinero/tiempo se gastó de verdad.
+        _persist_usage(project, round(time.time() - run_start, 1))
 
     cur["phase"] = None
     emit("info", f"Generación finalizada en {time.time() - run_start:.1f}s.")
+
+
+def _persist_usage(project, elapsed_seconds: float) -> None:
+    from ytstudio import usage
+    new_items = usage.get_state()
+    if new_items:
+        project.set("usage_items", (project.get("usage_items") or []) + new_items)
+    time_report = project.get("time_report") or {"total_seconds": 0.0}
+    time_report["last_run_seconds"] = elapsed_seconds
+    time_report["total_seconds"] = round(
+        time_report.get("total_seconds", 0.0) + elapsed_seconds, 1)
+    project.set("time_report", time_report)

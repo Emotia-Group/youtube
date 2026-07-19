@@ -88,6 +88,9 @@ class ReplicateMusic:
                     "-c:a", "libmp3lame", "-q:a", "4", str(out)],
                    "loop música", timeout=300)
         raw.unlink(missing_ok=True)
+        from ytstudio import pricing, usage
+        usage.record("replicate", "pista de música", 1, "pista",
+                    pricing.music_cost_mid())
         return out
 
 

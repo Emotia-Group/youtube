@@ -9,35 +9,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# --- Tarifas aproximadas ----------------------------------------------------
-
-# LLM: USD por millón de tokens (entrada, salida)
-LLM_PRICES = {
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-    "claude-sonnet-5": (3.0, 15.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
-LLM_DEFAULT_PRICE = (5.0, 25.0)
-
-IMG_COST = {"openai": (0.07, 0.25), "replicate": (0.03, 0.06)}   # por imagen
-IMG_SECONDS = {"openai": (20, 60), "replicate": (8, 25)}
-VIDEO_COST_5S = (0.13, 0.35)      # Kling estándar por clip de 5 s
-VIDEO_SECONDS = (180, 420)        # por clip (generación + descarga)
-MUSIC_COST = (0.05, 0.15)         # MusicGen por pista
-TTS_PER_M_CHARS = (12.0, 30.0)    # OpenAI tts-1 / tts-1-hd por millón de caracteres
-STT_PER_MIN = 0.006               # Whisper por minuto de audio
-VISION_TOKENS_PER_IMAGE = 1500    # tokens de entrada aproximados por imagen
-
-WORDS_PER_MINUTE = 150            # ritmo de narración
-TOKENS_PER_WORD = 1.6             # aproximación para español
+from ytstudio.pricing import (IMG_COST, IMG_SECONDS, MUSIC_COST,
+                              STT_PER_MIN, TOKENS_PER_WORD, TTS_PER_M_CHARS,
+                              VIDEO_COST_5S, VIDEO_SECONDS,
+                              VISION_TOKENS_PER_IMAGE, WORDS_PER_MINUTE,
+                              llm_price)
 
 
 def _llm_price(cfg: dict) -> tuple[float, float]:
     model = cfg.get("providers", {}).get("llm", {}).get("model", "")
-    return LLM_PRICES.get(model, LLM_DEFAULT_PRICE)
+    return llm_price(model)
 
 
 def _fmt_range(lo: float, hi: float) -> list[float]:
@@ -131,10 +112,13 @@ def estimate(project, cfg: dict) -> dict:
         calls_in += vision_images * VISION_TOKENS_PER_IMAGE
         cost_lo = (calls_in * in_lo + calls_out * out_lo) / 1e6
         n_calls = 7 + (1 if user_broll else 0)
+        # Rango angosto (±20%): la variación real entre proyectos similares es
+        # de reintentos/longitud de guion, no de un orden de magnitud — un
+        # rango de 0.8x-1.8x (el anterior) no decía nada útil.
         add("Inteligencia (Claude)",
             f"~{n_calls} llamadas · guion de ~{int(words)} palabras"
             + (f" · visión de {vision_images} imágenes" if vision_images else ""),
-            cost_lo * 0.8, cost_lo * 1.8,
+            cost_lo * 1.0, cost_lo * 1.2,
             n_calls * 15 / 60, n_calls * 50 / 60)
     else:
         add("Inteligencia (Claude)", "modo vista previa (sin API)", 0, 0, 0, 0.2)
@@ -235,5 +219,8 @@ def estimate(project, cfg: dict) -> dict:
                  "reanudar un proyecto NO repite fases ya completadas (no se "
                  "vuelve a pagar lo ya generado).")
     return {"items": items, "total_costo": total_cost,
-            "total_minutos": total_min, "notas": notes,
+            "total_costo_medio": round((total_cost[0] + total_cost[1]) / 2, 2),
+            "total_minutos": total_min,
+            "total_min_medio": round((total_min[0] + total_min[1]) / 2, 1),
+            "notas": notes,
             "escenas": n_scenes, "duracion_min": round(video_minutes, 1)}

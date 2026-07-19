@@ -1,9 +1,41 @@
 # Novedades de ytstudio
 
-Cada ajuste publicado incrementa la versión. La versión activa se muestra
-arriba a la izquierda en la interfaz (junto a la fecha de actualización).
+Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
+- **Mayor**: cambios que rompen compatibilidad (aún en 0.x — programa de
+  un solo usuario en desarrollo activo, puede cambiar sin previo aviso).
+- **Menor**: funciones nuevas.
+- **Revisión**: arreglos que no añaden función nueva.
 
-## v26 — 2026-07-19
+La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
+fecha de actualización) — clic para ver este historial completo.
+
+## v0.19.0 — 2026-07-19
+- ARREGLO: renombrar un proyecto no se veía reflejado en el panel principal
+  (el título de arriba seguía mostrando el nombre viejo aunque la lista de
+  la izquierda sí se actualizara). Ahora ambos se refrescan al renombrar.
+- VERSIONADO SEMÁNTICO: el número de versión pasa de un contador
+  consecutivo (v1, v2, v3…) a SemVer real (Mayor.Menor.Revisión). Se
+  rehicieron los números de TODO el historial anterior (v1→v0.1.0,
+  v26→v0.18.0…) conservando el contenido de cada entrada tal cual — nada
+  se perdió, solo se renumeró con criterio (función nueva = Menor, arreglo
+  = Revisión).
+- REPORTE DE GASTO REAL: al terminar de generar (o en cualquier momento
+  después), el proyecto muestra el gasto REAL por proveedor — no una
+  predicción — con lo que de verdad se generó (tokens exactos de Claude,
+  imágenes/clips/voz/transcripción realmente producidos) y el tiempo REAL
+  que tardó la última ejecución y el total acumulado del proyecto. Se
+  acumula entre sesiones: reanudar un proyecto suma al total, no lo
+  reemplaza.
+- PROGRESO EN VIVO: barra con % completado y tiempo restante estimado
+  mientras se genera el video, calculada con la misma base de tiempo que
+  ya se mostraba antes de empezar (ningún número nuevo que la contradiga).
+- PANEL DE ESTIMACIÓN MÁS PEQUEÑO Y ÚTIL: antes de generar, ahora muestra
+  un solo número aproximado («~$X.XX») en vez de un rango ancho que no
+  decía mucho — el desglose por fase sigue disponible con un clic. Además
+  el rango interno de la estimación de Claude se angostó (antes variaba
+  hasta 2.25× entre el mínimo y el máximo mostrados; ahora como mucho 1.3×).
+
+## v0.18.0 — 2026-07-19
 - CAUSA DE RAÍZ encontrada: «subo mi voz y el programa genera una propia».
   Una nota de voz grabada en un contenedor de VIDEO (.webm o .mp4 — lo
   normal si la grabaste con el micrófono del navegador o ciertos
@@ -24,7 +56,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   visible; los archivos internos no se mueven, así que no hay riesgo de
   romper nada) y 🗑 borrar.
 
-## v25 — 2026-07-19
+## v0.17.1 — 2026-07-19
 - ARREGLO de la regresión de v24 (desfase/corte en la transición de la
   escena 1 a la 2, y desfase acumulado después):
   · La pausa entre escenas exigía solo un hueco entre palabras según
@@ -51,7 +83,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   milisegundos entre palabras legítimas de Whisper ya no borra palabras
   del subtítulo.
 
-## v24 — 2026-07-19
+## v0.17.0 — 2026-07-19
 - SOLUCIÓN DE RAÍZ del corte de voz en las transiciones (el «se cortó al
   segundo 11»). Causa: las fronteras de escena se colocaban por TIEMPO y
   podían caer a mitad de una palabra; al insertar ahí el respiro, la palabra
@@ -79,7 +111,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   cada fase quedan registrados y se pueden descargar para compartir. Filtra
   por avisos/errores y actualiza en vivo.
 
-## v23 — 2026-07-19
+## v0.16.2 — 2026-07-19
 - ARREGLO de las palabras repetidas en subtítulos («historia historia»): la
   transcripción asignaba las palabras a los segmentos de Whisper por ventana
   de tiempo, y dos segmentos vecinos pueden solaparse un poco — la misma
@@ -102,7 +134,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   duplicadas (del bug anterior), se filtran automáticamente al usarlas — no
   hace falta volver a transcribir para beneficiarte del arreglo.
 
-## v22 — 2026-07-18
+## v0.16.1 — 2026-07-18
 - AUDITORÍA TOTAL DE SINCRONIZACIÓN (voz, subtítulos, rótulos y escenas).
   Causa raíz de la «voz cortada en varios tramos»: los respiros se cortaban
   en las fronteras de segmento de Whisper, que traen un sesgo de ±0.2–0.4s —
@@ -131,7 +163,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   huecos inventados a mitad de voz continua, invariante palabra↔video
   (±1.5 cuadros), subtítulos y las tres rutas de caché del B-roll.
 
-## v21 — 2026-07-18
+## v0.16.0 — 2026-07-18
 - SINCRONÍA REAL de los subtítulos con narración propia: antes se repartían
   por proporción de caracteres dentro de cada escena, así que el cambio de
   texto se sentía ligado al corte de escena y no a tus pausas reales. Ahora
@@ -146,7 +178,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 - Compatibilidad total: si un proyecto (o tu STT) no trae tiempos por
   palabra, se usa automáticamente el método anterior — nada se rompe.
 
-## v20 — 2026-07-18
+## v0.15.0 — 2026-07-18
 - ARREGLO del crash por "NSFW content detected": un solo prompt marcado como
   sensible ya NO tumba todo el proyecto. Se sube la tolerancia de FLUX a 6
   (evita falsos positivos en contenido histórico/bélico) y, si aun así se
@@ -160,7 +192,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   la palabra dentro de su frase — el highlight aparece justo cuando lo dices,
   sin importar si la escena usa imagen IA, tu imagen o tu video.
 
-## v19 — 2026-07-18
+## v0.14.0 — 2026-07-18
 - RESPIRACIÓN ESTILO DOCUMENTAL en narración propia: los espacios en blanco
   se insertan SOLO dentro de las pausas naturales de tu grabación (donde hay
   silencio real) — la voz jamás se corta a destiempo. Entre escenas hay un
@@ -176,7 +208,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 - La pista de voz se compila como WAV sin pérdidas (narration_timeline.wav):
   cortes solo en silencios reales, sin el padding del codificador mp3.
 
-## v18 — 2026-07-18
+## v0.13.2 — 2026-07-18
 - SOLUCIÓN DEFINITIVA de los saltos de voz en narración propia. La causa
   real: los tiempos de Whisper traen huecos entre segmentos (pausas,
   respiraciones) y esos huecos se DESCARTABAN de la línea de tiempo — el
@@ -195,7 +227,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   «🎙 Voz: usando tu narración CONTINUA…» para confirmar que el modo correcto
   está activo.
 
-## v17 — 2026-07-17
+## v0.13.1 — 2026-07-17
 - ARREGLO GRAVE del audio en narración propia: tu voz grabada ya NO se pica
   con silencios entre escenas. Antes se insertaba relleno (0.35s) y pausas
   entre cada trozo — muy notorio con ritmos rápidos. Ahora el montaje usa tu
@@ -211,7 +243,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   tapados. No pierdes tus preferencias reales (idioma, resolución, ritmo,
   proveedores, etc.).
 
-## v16 — 2026-07-16
+## v0.13.0 — 2026-07-16
 - CANALES Y ESTILOS (📺 en el menú): guarda el estilo de un proyecto que te
   gustó (botón «💾 Guardar estilo» en la pestaña Concepto) o crea estilos
   desde cero; agrúpalos por canal de YouTube y elígelos al crear un proyecto
@@ -226,7 +258,7 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   rápido sin pérdida de calidad (las imágenes fuente son de 1536 px).
 - La estimación de tiempo ahora refleja el paralelismo.
 
-## v15 — 2026-07-16
+## v0.12.0 — 2026-07-16
 - Transiciones entre escenas variadas: ya no todas hacen el mismo fundido.
   El video abre y cierra con fundido; entre escenas alterna corte seco (sin
   transición) y fundido breve según la historia (cambios de sección, saltos
@@ -240,21 +272,21 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   midiendo ritmo) y la descarga tiene límite de tiempo — si YouTube se atasca,
   falla y degrada a los metadatos en vez de quedarse colgado.
 
-## v14 — 2026-07-15
+## v0.11.0 — 2026-07-15
 - Estimación de costo y tiempo ANTES de generar: panel en cada proyecto con
   el desglose por fase (IA, voz, imágenes, video, música, montaje), rangos en
   USD y minutos según tu configuración de proveedores e inputs.
 - Versionado consecutivo del programa (v1, v2, v3…) con este registro de
   cambios visible desde la interfaz (clic en la versión).
 
-## v13 — 2026-07-15
+## v0.10.0 — 2026-07-15
 - Análisis PROFUNDO de videos de referencia por enlace (YouTube, Vimeo,
   Wistia…): guion/transcripción completa, ritmo de cortes medido (se aplica
   al ritmo visual del proyecto), capítulos y fotogramas para visión.
 - Requiere yt-dlp (actualizar.bat lo instala). Sin él, se usan los metadatos
   públicos del enlace.
 
-## v12 — 2026-07-15
+## v0.9.0 — 2026-07-15
 - B-roll propio colocado por CONTEXTO: cada imagen/video se describe con
   visión IA y se asigna a la escena cuya narración ilustra. Lo que no encaja
   no se fuerza; lo que falta se genera.
@@ -262,12 +294,12 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
   del video); si ninguna pista encaja y hay Replicate, se genera a medida.
 - Referencias nuevas: documentos (PDF, docx…) y enlaces web al crear proyecto.
 
-## v11 — 2026-07-15
+## v0.8.1 — 2026-07-15
 - Arreglado: la fase Música se colgaba indefinidamente con mp3 que traen
   carátula incrustada (Suno, iTunes…). Además, tiempo límite de seguridad.
 - La tarjeta de error de un intento anterior se oculta mientras se genera.
 
-## v10 — 2026-07-15
+## v0.8.0 — 2026-07-15
 - Rótulos sincronizados con la narración (aparecen cuando el narrador dice
   la frase, con margen de entrada).
 - Conclusiones como declaración tipográfica (líneas apiladas, mezcla de
@@ -277,48 +309,48 @@ arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 - Corte de voz preciso (no se come el inicio de la primera palabra).
 - Fundido de cierre del audio al final del video.
 
-## v9 — 2026-07-14
+## v0.7.0 — 2026-07-14
 - Rótulos cinematográficos tipados (personaje, lugar, fecha, dato, lista,
   conclusión) con kicker dorado, animados y SOLO en momentos clave.
 - Arco dramático musical: la intensidad de la música sube y baja con la
   historia; respiros con silencio donde la música respira.
 - Efectos de sonido incidentales (whoosh, riser, boom) en cortes señalados.
 
-## v8 — 2026-07-14
+## v0.6.0 — 2026-07-14
 - Número exacto de escenas con video generativo (configurable) repartidas
   uniformemente — ya no queda al criterio del modelo.
 - Kling por polling (sin timeouts de lectura) y reintentos automáticos ante
   el límite de velocidad de Replicate (429), visibles en el progreso.
 
-## v7 — 2026-07-13
+## v0.5.1 — 2026-07-13
 - Tamaños válidos automáticos para gpt-image-1; versiones de modelos de
   Replicate resueltas dinámicamente (adiós 404 por hashes caducados).
 - El video generativo y la música degradan con aviso en vez de detener todo.
 
-## v6 — 2026-07-13
+## v0.5.0 — 2026-07-13
 - Presets de estilo (documental cinematográfico, cine épico, misterio…).
 - Ritmo visual configurable (cada cuántos segundos cambia la imagen).
 - La configuración de la interfaz se guarda en config.local.yaml (git pull
   ya no choca con tus ajustes).
 
-## v5 — 2026-07-12
+## v0.4.0 — 2026-07-12
 - Modo narración propia: tu voz grabada se usa TAL CUAL — limpieza de
   silencios, transcripción con tiempos y escenas alineadas a tu audio.
 
-## v4 — 2026-07-12
+## v0.3.0 — 2026-07-12
 - Subida de varios archivos por categorías (guion, voz, B-roll, referencia)
   con eliminación individual; se aceptan PDF, Word, PowerPoint, Excel, etc.
 - Configuración de claves de API desde la interfaz.
 
-## v3 — 2026-07-11
+## v0.2.1 — 2026-07-11
 - Compatibilidad completa con Windows: fuentes, UTF-8, autodetección de
   ffmpeg, rutas en filtros. Lanzadores iniciar.bat / actualizar.bat.
 
-## v2 — 2026-07-11
+## v0.2.0 — 2026-07-11
 - Interfaz web local: crear proyectos, ver progreso por fases, storyboard,
   reanudar desde cualquier paso, video final y metadatos.
 
-## v1 — 2026-07-10
+## v0.1.0 — 2026-07-10
 - Sistema base: pipeline de 11 fases (análisis, concepto, guion, escenas,
   voz, B-roll, música, subtítulos, montaje, metadatos, publicación) con
   proveedores intercambiables (Claude, OpenAI, ElevenLabs, Replicate…).

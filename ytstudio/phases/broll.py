@@ -246,7 +246,13 @@ def run(project, cfg) -> None:
     #    clip es una llamada de red independiente; generarlos en serie era el
     #    mayor cuello de botella del pipeline (mismo costo, mucho menos tiempo).
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from ytstudio import usage as usage_mod
     from ytstudio.progress import notify
+
+    # El gasto real (imágenes/clips) se registra DENTRO de los hilos del pool
+    # más abajo — comparten este acumulador (los hilos nuevos no heredan el
+    # del hilo que arrancó la generación).
+    usage_items = usage_mod.get_state()
 
     perf = cfg.get("performance", {})
     img_workers = max(1, int(perf.get("parallel_images", 4)))
@@ -266,6 +272,7 @@ def run(project, cfg) -> None:
     nsfw_scenes: list[int] = []
 
     def _gen_image(scene: dict) -> None:
+        usage_mod.bind(usage_items)
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
         if img.exists():  # reanudable
             return
@@ -315,6 +322,7 @@ def run(project, cfg) -> None:
     videogen_warning = None
     if video_scenes and videogen is not None:
         def _gen_clip(scene: dict) -> None:
+            usage_mod.bind(usage_items)
             clip = broll_dir / f"scene_{scene['id']:03d}.mp4"
             if not clip.exists():
                 # imagen como fotograma inicial → coherencia visual del clip

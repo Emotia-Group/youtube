@@ -59,6 +59,14 @@
   label.f{display:block;margin-bottom:12px}
   label.f span{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
 
+  .hidden{display:none !important}
+
+  /* progreso en vivo */
+  #progressbar{margin:8px 0 14px}
+  #progressbar .track{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+  #progressbar .track i{display:block;height:100%;background:var(--run);transition:width .4s ease}
+  #progressbar .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+
   /* fases */
   #phases{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
   .phase{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
@@ -204,7 +212,8 @@ async function renameProject(slug){
   try{
     await api(`/api/projects/${slug}/rename`,{method:'PUT',body:JSON.stringify({name:trimmed})});
     toast('✅ Renombrado');
-    refreshList();
+    await refreshList();
+    if(slug===current)await renderProject();  // el panel principal mostraba el nombre viejo
   }catch(e){toast('⚠ '+e.message)}
 }
 async function deleteProjectFromList(slug){
@@ -353,7 +362,7 @@ async function renderProject(activeTab){
   const tab=activeTab||window._tab||'Guion';window._tab=tab;
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between">
-    <h1>🎬 ${esc(current)}</h1>
+    <h1>🎬 ${esc(p.display_name||current)}</h1>
     <div class="row">
       <select id="run-to" style="width:auto" title="Hasta dónde generar">
         <option value="">Generar el video completo</option>
@@ -371,10 +380,15 @@ async function renderProject(activeTab){
   ${mock?`<div class="banner">⚠ <b>Modo vista previa</b> — no hay clave de API configurada (<code>ANTHROPIC_API_KEY</code>), así que el video se generará con contenido de marcador (voz silenciosa, imágenes de relleno). Tu guion <b>sí se respeta</b>. Para calidad real, añade tu clave en el archivo <code>.env</code> y elige los proveedores en ⚙ Configuración.</div>`:''}
   <div class="muted" style="margin:6px 0 2px">Progreso — se generan 11 pasos en orden${running&&p.phase?`. Ahora: <b style="color:var(--run)">${esc(phaseLabel(p.phase))}</b>`:''}:</div>
   <div id="phases">${phaseChipsHtml(p,running?p.phase:null)}</div>
+  <div id="progressbar" class="${running?'':'hidden'}">
+    <div class="track"><i style="width:0%"></i></div>
+    <div class="lbl"><span id="progresspct">0%</span><span id="progresseta"></span></div>
+  </div>
   ${p.total_duration?`<div class="muted">Duración estimada: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
   <div id="estimate"></div>
   ${failed&&!running?`<div class="card" style="border-color:var(--err)">✖ Se detuvo en el paso <b>${esc(phaseLabel(failed[0]))}</b>:<br><span class="muted">${esc(p.phase_info[failed[0]]?.error||'')}</span><br><br>Corrige lo indicado y pulsa <b>▶ Generar video</b> para reanudar desde ahí.</div>`:''}
   ${(p.warnings||[]).map(w=>`<div class="banner">⚠ ${esc(w)}</div>`).join('')}
+  ${usageTimeHtml(p)}
   <pre id="log"></pre>
   <div class="tabs" style="margin-top:16px">${tabs.map(([t,ic])=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${ic} ${t}</button>`).join('')}</div>
   <div id="tabbody"></div>`;
@@ -389,26 +403,51 @@ async function loadEstimate(slug){
   try{
     const e=await api(`/api/projects/${slug}/estimate`);
     if(!el.isConnected)return;
-    const money=r=>r[1]===0?'<span class="muted">gratis</span>':`$${r[0].toFixed(2)} – $${r[1].toFixed(2)}`;
-    const mins=r=>r[0]===r[1]?`${r[1]} min`:`${r[0]} – ${r[1]} min`;
-    el.innerHTML=`<div class="card" style="font-size:13px">
-      <b>💰 Antes de generar — costo y tiempo estimados</b>
-      <span class="muted">(${e.escenas} escenas · ~${e.duracion_min} min de video)</span>
-      <table style="width:100%;margin-top:8px;border-collapse:collapse">
-        ${e.items.map(i=>`<tr>
-          <td style="padding:3px 8px 3px 0">${esc(i.fase)}<br><span class="muted" style="font-size:11px">${esc(i.detalle)}</span></td>
-          <td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:3px">${money(i.costo)}</td>
-          <td style="text-align:right;white-space:nowrap;vertical-align:top;padding:3px 0 0 12px" class="muted">${mins(i.minutos)}</td>
-        </tr>`).join('')}
-        <tr><td colspan="3" style="border-top:1px solid rgba(128,128,128,.35);padding:0"></td></tr>
-        <tr style="font-weight:bold">
-          <td style="padding-top:5px">Total aproximado</td>
-          <td style="text-align:right;white-space:nowrap;padding-top:5px">$${e.total_costo[0].toFixed(2)} – $${e.total_costo[1].toFixed(2)}</td>
-          <td style="text-align:right;white-space:nowrap;padding:5px 0 0 12px">${e.total_minutos[0]} – ${e.total_minutos[1]} min</td></tr>
-      </table>
-      ${e.notas.map(n=>`<div class="muted" style="font-size:11px;margin-top:5px">ℹ ${esc(n)}</div>`).join('')}
+    const mid=e.total_costo_medio??((e.total_costo[0]+e.total_costo[1])/2);
+    const midmin=e.total_min_medio??((e.total_minutos[0]+e.total_minutos[1])/2);
+    const costTxt=mid<0.01?'gratis':`~$${mid.toFixed(2)}`;
+    const mins=r=>r[0]===r[1]?`${r[1]} min`:`${r[0]}–${r[1]} min`;
+    // Compacto por defecto: un número aproximado, no un rango ancho que no
+    // dice mucho. El desglose por fase queda un clic más allá.
+    el.innerHTML=`<div class="card" style="font-size:13px;padding:12px 16px">
+      <div class="row" style="justify-content:space-between;cursor:pointer" onclick="this.parentElement.querySelector('.estdetail').classList.toggle('hidden');this.querySelector('.estchevron').textContent=this.parentElement.querySelector('.estdetail').classList.contains('hidden')?'▸':'▾'">
+        <span><b>💰 Estimado antes de generar:</b> ${costTxt} · ⏱ ~${Math.round(midmin)} min
+          <span class="muted" style="font-size:11px">(${e.escenas} escenas · ~${e.duracion_min} min de video)</span></span>
+        <span class="estchevron muted">▸</span>
+      </div>
+      <div class="estdetail hidden" style="margin-top:8px">
+        <table style="width:100%;border-collapse:collapse">
+          ${e.items.map(i=>`<tr>
+            <td style="padding:3px 8px 3px 0">${esc(i.fase)}<br><span class="muted" style="font-size:11px">${esc(i.detalle)}</span></td>
+            <td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:3px" class="muted">${i.costo[1]===0?'gratis':`$${i.costo[0].toFixed(2)}–$${i.costo[1].toFixed(2)}`}</td>
+            <td style="text-align:right;white-space:nowrap;vertical-align:top;padding:3px 0 0 12px" class="muted">${mins(i.minutos)}</td>
+          </tr>`).join('')}
+        </table>
+        ${e.notas.map(n=>`<div class="muted" style="font-size:11px;margin-top:5px">ℹ ${esc(n)}</div>`).join('')}
+      </div>
     </div>`;
   }catch(err){el.innerHTML=''}
+}
+
+function usageTimeHtml(p){
+  const u=p.usage_report,t=p.time_report;
+  if(!u&&!t)return'';
+  const fmtSec=s=>s==null?'—':s<60?`${Math.round(s)}s`:`${Math.floor(s/60)} min ${Math.round(s%60)}s`;
+  const rows=(u?.by_provider||[]).map(pr=>`
+    <tr><td style="padding:3px 8px 3px 0">${esc(pr.provider)}</td>
+      <td style="text-align:right;white-space:nowrap" class="muted">${pr.details.length} llamada(s)</td>
+      <td style="text-align:right;white-space:nowrap;padding-left:12px">${pr.usd<0.01&&pr.usd>0?'<$0.01':'$'+pr.usd.toFixed(2)}</td></tr>`).join('');
+  return `<div class="card" style="font-size:13px;padding:12px 16px">
+    <b>📊 Gasto real de este proyecto</b>
+    <span class="muted" style="font-size:11px">(lo que de verdad se consumió — no una predicción)</span>
+    ${u?`<table style="width:100%;margin-top:8px;border-collapse:collapse">${rows}
+      <tr><td colspan="3" style="border-top:1px solid rgba(128,128,128,.35);padding:0"></td></tr>
+      <tr style="font-weight:bold"><td style="padding-top:5px">Total real</td><td></td>
+        <td style="text-align:right;padding-top:5px">$${u.total_usd.toFixed(2)}</td></tr>
+    </table>`:'<div class="muted" style="margin-top:6px">Sin proveedores de pago usados todavía.</div>'}
+    ${t?`<div class="muted" style="margin-top:8px">⏱ Última ejecución: <b style="color:var(--text)">${fmtSec(t.last_run_seconds)}</b>
+      · Tiempo total invertido en este proyecto: <b style="color:var(--text)">${fmtSec(t.total_seconds)}</b></div>`:''}
+  </div>`;
 }
 
 async function renderTab(tab,p){
@@ -552,6 +591,17 @@ function startPoll(){
       el.style.display='block';
       if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;}
       if(log.running&&log.phase!==lastPhase){lastPhase=log.phase;renderPhasesOnly(log.phase);}
+    }
+    const pb=$('#progressbar');
+    if(pb){
+      if(log.running){
+        pb.classList.remove('hidden');
+        const pct=log.percent??0;
+        pb.querySelector('.track i').style.width=pct+'%';
+        pb.querySelector('#progresspct').textContent=pct+'% completo';
+        pb.querySelector('#progresseta').textContent=log.eta_seconds!=null
+          ?`~${log.eta_seconds<60?Math.round(log.eta_seconds)+'s':Math.round(log.eta_seconds/60)+' min'} restantes`:'';
+      }else{pb.classList.add('hidden')}
     }
     if(wasRunning&&!log.running){
       if(!log.error){

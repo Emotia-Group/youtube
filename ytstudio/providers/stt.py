@@ -42,6 +42,10 @@ class OpenAISTT:
             result = self.client.audio.transcriptions.create(
                 model="whisper-1", file=f, language=self.language,
             )
+        from ytstudio import pricing, usage
+        minutes = probe_duration(audio) / 60.0
+        usage.record("openai", "transcripción de referencia (Whisper)", minutes,
+                    "min", pricing.stt_cost(minutes))
         return result.text
 
     def transcribe_segments(self, audio: Path) -> list[dict]:
@@ -90,6 +94,10 @@ class OpenAISTT:
             start, end = float(get(s, "start")), float(get(s, "end"))
             out.append({"start": start, "end": end, "text": text,
                         "words": _restore_punctuation(text, sw)})
+        from ytstudio import pricing, usage
+        minutes = probe_duration(audio) / 60.0
+        usage.record("openai", "transcripción (Whisper)", minutes, "min",
+                    pricing.stt_cost(minutes))
         return out
 
 

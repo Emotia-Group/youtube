@@ -46,7 +46,21 @@ class ClaudeLLM:
             message = stream.get_final_message()
         if message.stop_reason == "refusal":
             raise RuntimeError("El modelo rechazó la petición (stop_reason=refusal).")
+        self._record_usage(message, purpose)
         return next(b.text for b in message.content if b.type == "text")
+
+    def _record_usage(self, message, purpose: str) -> None:
+        # Gasto REAL (no estimado): la API devuelve los tokens exactos que
+        # cobró esta llamada.
+        from ytstudio import pricing, usage
+        u = getattr(message, "usage", None)
+        if u is None:
+            return
+        in_tok = int(getattr(u, "input_tokens", 0) or 0)
+        out_tok = int(getattr(u, "output_tokens", 0) or 0)
+        in_price, out_price = pricing.llm_price(self.model)
+        usd = (in_tok * in_price + out_tok * out_price) / 1e6
+        usage.record("anthropic", purpose or "llm", in_tok + out_tok, "tokens", usd)
 
     def complete_json(self, system: str, prompt: str, *, schema: dict,
                       images: list[Path] | None = None, max_tokens: int = 16000,

@@ -255,7 +255,10 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
 
 def run(project, cfg) -> None:
     from concurrent.futures import ThreadPoolExecutor
+    from ytstudio import usage as usage_mod
     from ytstudio.progress import notify
+
+    usage_items = usage_mod.get_state()
 
     scenes = load_scenes(project)
     vo_dir = project.path("voiceover")
@@ -289,6 +292,7 @@ def run(project, cfg) -> None:
     # Generación EN PARALELO (cada clip es independiente); la medición de
     # duraciones y la suma total van después, en orden.
     def _make_vo(scene: dict) -> None:
+        usage_mod.bind(usage_items)
         out = vo_dir / f"vo_{scene['id']:03d}.mp3"
         if _is_user_voice(scene):
             span = float(scene["audio_end"]) - float(scene["audio_start"])

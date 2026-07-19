@@ -43,6 +43,8 @@ class OpenAIImages:
             model="gpt-image-1", prompt=prompt, size=self.size, n=1,
         )
         out.write_bytes(base64.b64decode(result.data[0].b64_json))
+        from ytstudio import pricing, usage
+        usage.record("openai", "imagen", 1, "img", pricing.img_cost_mid("openai"))
         return out
 
 
@@ -65,6 +67,8 @@ class ReplicateImages:
         })
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)
+        from ytstudio import pricing, usage
+        usage.record("replicate", "imagen", 1, "img", pricing.img_cost_mid("replicate"))
         return out
 
 

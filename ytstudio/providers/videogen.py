@@ -30,4 +30,7 @@ class ReplicateVideo:
             output = replicate_call(self.client, self.model, inputs)
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)
+        from ytstudio import pricing, usage
+        usage.record("replicate", f"clip de video {duration}s", 1, "clip",
+                    pricing.video_cost_mid(duration))
         return out

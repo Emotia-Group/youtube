@@ -25,6 +25,11 @@ class ElevenLabsTTS:
         with open(out, "wb") as f:
             for chunk in audio:
                 f.write(chunk)
+        from ytstudio import usage
+        # ElevenLabs cobra por plan de suscripción, no por llamada aislada —
+        # se registran los caracteres reales sin costo en USD (ver nota en la UI).
+        usage.record("elevenlabs", "voz (plan de suscripción)", len(text),
+                    "caracteres", 0.0)
         return out
 
 
@@ -40,6 +45,9 @@ class OpenAITTS:
             response_format="mp3",
         ) as response:
             response.stream_to_file(out)
+        from ytstudio import pricing, usage
+        usage.record("openai", "voz TTS", len(text), "caracteres",
+                    pricing.tts_cost(len(text)))
         return out
 
 

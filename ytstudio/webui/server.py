@@ -35,14 +35,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 def get_version() -> dict:
     """Identifica exactamente qué código está corriendo este servidor —
     para poder verificar desde la propia UI si un 'git pull' surtió efecto.
-    El número consecutivo (v14, v15…) sale de la primera entrada de
-    CHANGELOG.md; el commit y la hora local, de git."""
+    El número (SemVer: Mayor.Menor.Revisión, ej. v0.19.0) sale de la primera
+    entrada de CHANGELOG.md; el commit y la hora local, de git."""
     import re
     import subprocess
     version = ""
     try:
         head = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")[:2000]
-        m = re.search(r"^## (v\d+)", head, re.M)
+        m = re.search(r"^## (v\d+\.\d+\.\d+)", head, re.M)
         version = m.group(1) if m else ""
     except Exception:
         pass
@@ -368,6 +368,10 @@ def api_project_detail(slug: str) -> dict:
     meta_file = project.dir / DIRS["final"] / "metadata.json"
     if meta_file.exists():
         detail["metadata_full"] = read_json_tolerant(meta_file)
+    from ytstudio import usage
+    usage_items = project.get("usage_items") or []
+    detail["usage_report"] = usage.summarize(usage_items) if usage_items else None
+    detail["time_report"] = project.get("time_report")
     return detail
 
 
@@ -375,11 +379,23 @@ def api_run(slug: str, body: dict) -> dict:
     with RUNS_LOCK:
         if RUNS.get(slug, {}).get("running"):
             raise ApiError(409, "Ya se está generando este proyecto.")
-        state = {"running": True, "lines": [], "error": None, "phase": None}
+        state = {"running": True, "lines": [], "error": None, "phase": None,
+                 "run_start": time.time(), "est_total_sec": None}
         RUNS[slug] = state
 
     from_phase = body.get("from") or None
     to_phase = body.get("to") or None
+
+    # Línea base para el % completo / tiempo restante en vivo: el mismo
+    # tiempo estimado que ya se muestra antes de generar (no se inventa un
+    # segundo número que podría contradecirlo).
+    try:
+        from ytstudio.estimate import estimate as _estimate
+        _proj = Project(slug)
+        _est = _estimate(_proj, load_config(_proj.dir))
+        state["est_total_sec"] = max(20.0, float(_est.get("total_min_medio") or 0) * 60)
+    except Exception:
+        pass
 
     def log(msg: str) -> None:
         state["lines"].append(str(msg))
@@ -405,6 +421,19 @@ def api_run(slug: str, body: dict) -> dict:
 
     threading.Thread(target=worker, daemon=True).start()
     return {"started": True}
+
+
+def _run_progress(slug: str) -> dict:
+    run = RUNS.get(slug, {"running": False, "lines": [], "error": None, "phase": None})
+    out = {k: run.get(k) for k in ("running", "lines", "error", "phase")}
+    out["percent"], out["eta_seconds"] = None, None
+    if run.get("running") and run.get("run_start"):
+        elapsed = time.time() - run["run_start"]
+        est = run.get("est_total_sec")
+        if est and est > 0:
+            out["percent"] = min(99, round(100 * elapsed / est))
+            out["eta_seconds"] = max(0, round(est - elapsed))
+    return out
 
 
 def api_get_script(slug: str) -> dict:
@@ -607,11 +636,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
                 self._json(api_project_detail(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/log", path):
-                run = RUNS.get(m.group(1),
-                               {"running": False, "lines": [], "error": None,
-                                "phase": None})
-                self._json({k: run.get(k) for k in
-                            ("running", "lines", "error", "phase")})
+                self._json(_run_progress(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_get_script(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/estimate", path):
