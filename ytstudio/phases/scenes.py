@@ -23,6 +23,7 @@ _CREATIVE_PROPS = {
     "overlay_emphasis": {"type": "string"},
     "music_intensity": {"type": "number"},
     "pause_after": {"type": "number"},
+    "pace": {"type": "string", "enum": ["ligado", "normal", "amplio"]},
     "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
     "transition": {"type": "string", "enum": ["corte", "fundido"]},
 }
@@ -88,10 +89,19 @@ MÚSICA (music_intensity, 0.0-1.0): dibuja el arco dramático de la historia.
 - Cambia de forma gradual (±0.15 entre escenas contiguas); reserva los saltos
   bruscos para golpes dramáticos reales.
 
-RESPIROS (pause_after, segundos): silencio de la voz tras la escena, donde la
-música respira y sube — recurso cinematográfico, úsalo con intención.
+RESPIROS ENTRE ESCENAS (pause_after, segundos): silencio de la voz tras la
+escena, donde la música respira y sube — recurso cinematográfico, úsalo con
+intención.
 - 0 en la mayoría de escenas. 0.8-1.6 tras una revelación, una pregunta al
   espectador, o el final de una sección. Máximo en 1 de cada 6 escenas.
+
+RITMO DENTRO DE LA ESCENA (pace): cuánto aire dejar ENTRE LAS FRASES de esta
+escena (respiros breves al final de cada frase, sin cortar nunca la voz).
+- 'ligado': frases encadenadas, sin aire extra — para secuencias de tensión,
+  acción rápida, enumeraciones ágiles o un gancho urgente.
+- 'normal': respiro natural entre frases (lo habitual en un documental).
+- 'amplio': más aire, tono contemplativo — para pasajes solemnes, reflexivos,
+  paisajísticos o el desenlace. Que NO sea todo 'amplio': cansa.
 
 EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
 - 'whoosh' al cambiar de sección/lugar/tiempo · 'riser' en la escena que
@@ -200,6 +210,9 @@ def _normalize_creative(scenes: list[dict]) -> None:
         pa = s.get("pause_after")
         pa = float(pa) if isinstance(pa, (int, float)) else 0.0
         s["pause_after"] = round(min(2.0, max(0.0, pa)), 2)
+
+        s["pace"] = s.get("pace") if s.get("pace") in \
+            ("ligado", "normal", "amplio") else "normal"
 
         s["sfx"] = s.get("sfx") if s.get("sfx") in ("whoosh", "riser", "boom") \
             else None

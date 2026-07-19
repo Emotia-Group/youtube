@@ -113,6 +113,7 @@
   <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
   <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
   <button class="navbtn" onclick="showLibrary()">📺 Canales y estilos</button>
+  <button class="navbtn" onclick="showEvents()">🧾 Log de eventos</button>
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
   <h3 style="padding:0 6px">Proyectos</h3>
   <div id="projlist"></div>
@@ -788,6 +789,39 @@ async function showChangelog(){
       <button class="btn sec small" onclick="this.closest('div[style*=fixed]')?.remove()||this.parentElement.parentElement.parentElement.remove()">✕ Cerrar</button>
     </div><div style="font-size:13px;line-height:1.5">${html}</div></div>`;
   document.body.appendChild(ov);
+}
+let EVFILTER='all';
+async function showEvents(){
+  const main=document.getElementById('main');
+  let data;
+  try{data=await api('/api/events?limit=500')}catch(e){toast('⚠ '+e.message);return}
+  const icon={info:'•',warn:'⚠',error:'✕'};
+  const color={info:'var(--muted)',warn:'#E8C46B',error:'#ff6b6b'};
+  const evs=data.events.filter(e=>EVFILTER==='all'||e.level===EVFILTER);
+  const rows=evs.map(e=>{
+    const sec=(e.seconds!=null)?` <span class="muted">(${e.seconds}s)</span>`:'';
+    const ph=e.phase?` <span class="badge">${esc(e.phase)}</span>`:'';
+    const pr=e.project?` <span class="muted" style="font-size:11px">${esc(e.project)}</span>`:'';
+    return `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="color:${color[e.level]||'var(--muted)'};min-width:14px;text-align:center">${icon[e.level]||'•'}</span>
+      <span class="muted" style="font-size:11px;white-space:nowrap">${esc(e.ts||'')}</span>
+      <span style="flex:1">${esc(e.message||'')}${sec}${ph}${pr}</span>
+    </div>`;
+  }).join('')||'<div class="muted" style="padding:14px 0">Aún no hay eventos. Genera un video y aquí quedará el historial de novedades, errores y tiempos.</div>';
+  main.innerHTML=`<div style="max-width:820px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h1 style="margin:0">🧾 Log de eventos</h1>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn sec small" onclick="EVFILTER='all';showEvents()">Todo</button>
+        <button class="btn sec small" onclick="EVFILTER='warn';showEvents()">Avisos</button>
+        <button class="btn sec small" onclick="EVFILTER='error';showEvents()">Errores</button>
+        <button class="btn sec small" onclick="showEvents()">↻ Actualizar</button>
+        <a class="btn small" href="/api/events/download" download>⬇ Descargar</a>
+      </div>
+    </div>
+    <p class="muted" style="font-size:12px">Cada novedad, aviso, error y el tiempo de cada fase quedan registrados aquí. Descárgalo para compartírmelo si algo falla.</p>
+    <div class="card" style="font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace">${rows}</div>
+  </div>`;
 }
 (async function(){
   const data=await api('/api/config');

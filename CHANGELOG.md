@@ -3,6 +3,34 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v24 — 2026-07-19
+- SOLUCIÓN DE RAÍZ del corte de voz en las transiciones (el «se cortó al
+  segundo 11»). Causa: las fronteras de escena se colocaban por TIEMPO y
+  podían caer a mitad de una palabra; al insertar ahí el respiro, la palabra
+  se partía. Ahora TODO silencio se inserta en el hueco ENTRE dos palabras
+  reconocidas (en su punto de menor energía, medido en la onda). Es
+  imposible partir una palabra, sin importar la imprecisión de Whisper.
+- EL RITMO LO DECIDE EL DIRECTOR, no un rango de tiempos fijo:
+  · Entre escenas/bloques: respiro base + la pausa dramática que el director
+    marcó para esa escena (pause_after).
+  · Dentro de la escena: un respiro breve al final de cada frase, según el
+    RITMO que el director elige por escena — nuevo campo «pace»: ligado
+    (frases encadenadas, tensión/acción), normal, o amplio (contemplativo,
+    solemne). Así las frases dejan de sonar pegadas, con criterio, y sin
+    cortar la voz. (Cuesta ~0 tokens: es un campo más del análisis que ya se
+    hacía.)
+  · Donde el narrador encadenó dos palabras sin ningún hueco, no se inserta
+    nada — no hay dónde sin cortar; la voz fluye, muy documental.
+- MAPA DE TIEMPO GLOBAL: subtítulos y rótulos ahora se anclan al instante
+  REAL en que suena cada palabra en el video (una sola fuente de verdad para
+  voz, subtítulos y rótulos). Esto corrige el desfase acumulado entre voz,
+  subtítulos, rótulos y escenas — todo se mueve junto.
+- Autocomprobación reforzada: verifica que la voz conserva todos sus
+  segundos y que la pista dura exactamente la suma de escenas.
+- LOG DE EVENTOS (🧾 en el menú): cada novedad, aviso, error y el TIEMPO de
+  cada fase quedan registrados y se pueden descargar para compartir. Filtra
+  por avisos/errores y actualiza en vivo.
+
 ## v23 — 2026-07-19
 - ARREGLO de las palabras repetidas en subtítulos («historia historia»): la
   transcripción asignaba las palabras a los segmentos de Whisper por ventana

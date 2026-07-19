@@ -9,7 +9,8 @@ palabra) se reparte proporcionalmente, como antes."""
 from __future__ import annotations
 
 from ytstudio.phases.scenes import load_scenes
-from ytstudio.utils.align import assign_words, flatten_words, local_time
+from ytstudio.utils.align import (assign_words, flatten_words, local_time,
+                                  video_time_fn)
 
 
 def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
@@ -65,16 +66,31 @@ def _fmt_ass(t: float) -> str:
 
 
 def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
-               narration: dict | None = None) -> list[dict]:
+               narration: dict | None = None,
+               voice_map: dict | None = None) -> list[dict]:
     all_words = flatten_words((narration or {}).get("segments") or [])
     word_map = assign_words(scenes, all_words) if all_words else {}
+    # Con narración propia, el instante de cada palabra en el video sale del
+    # mapa GLOBAL de tiempo (intro + inserciones) — la misma fuente de verdad
+    # que usan los rótulos y el WAV de la voz. Sin él (TTS o proyecto antiguo)
+    # se reparte proporcionalmente dentro de cada escena.
+    V = None
+    if voice_map:
+        V = video_time_fn(voice_map["intro"],
+                          [(p, d) for p, d in voice_map["insertions"]])
     cues = []
     t = 0.0
     for scene in scenes:
         sw = word_map.get(scene.get("id"), [])
-        if sw:
-            # Timing REAL: cada bloque empieza/termina cuando tú dices esas
-            # palabras, no por proporción de caracteres.
+        if sw and V is not None:
+            # Timing REAL absoluto: cada bloque empieza/termina cuando tú dices
+            # esas palabras (video_time), no por proporción ni por escena.
+            for text, bwords in _chunks_words(sw, max_chars, max_lines):
+                start = V(float(bwords[0]["start"]))
+                end = max(start + 0.25, V(float(bwords[-1]["end"])))
+                cues.append({"start": start, "end": end, "text": text})
+        elif sw:
+            # Palabras reales pero sin mapa (raro): tiempo local por escena.
             for text, bwords in _chunks_words(sw, max_chars, max_lines):
                 start = local_time(scene, bwords[0]["start"])
                 end = max(start + 0.25, local_time(scene, bwords[-1]["end"]))
@@ -92,16 +108,20 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
                             "text": block})
                 offset += dur
         t += scene["duration"]
+    # Los cues por video_time son absolutos y ya vienen ordenados por palabra;
+    # garantizar orden por si el respaldo se mezcló con el modo real.
+    cues.sort(key=lambda c: c["start"])
     return cues
 
 
 def run(project, cfg) -> None:
     scenes = load_scenes(project)
     narration = project.get("narration")
+    voice_map = project.get("voice_map")
     sub_cfg = cfg.get("subtitles", {})
     max_chars = sub_cfg.get("max_chars_per_line", 42)
     max_lines = sub_cfg.get("max_lines", 2)
-    cues = build_cues(scenes, max_chars, max_lines, narration)
+    cues = build_cues(scenes, max_chars, max_lines, narration, voice_map)
 
     # SRT
     srt = []

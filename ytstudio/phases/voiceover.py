@@ -4,156 +4,183 @@ sintetiza con TTS. Mide la duración real de cada clip: es la base de tiempos
 para montaje y subtítulos."""
 from __future__ import annotations
 
-import math
-
 from ytstudio.phases.scenes import load_scenes, save_scenes
 from ytstudio.providers import get_tts
 from ytstudio.utils.media import (cut_segment, detect_silences, probe_duration,
                                   run_ffmpeg)
 
 
+_PACE_FACTOR = {"ligado": 0.0, "normal": 1.0, "amplio": 1.7}
+
+
+def _pace_factor(pace) -> float:
+    return _PACE_FACTOR.get((pace or "normal"), 1.0)
+
+
+def _ends_sentence(text: str) -> bool:
+    return (text or "").rstrip("»\"')”…").endswith((".", "!", "?", "…")) \
+        or (text or "").endswith("…")
+
+
+def _safe_cuts(words: list[dict],
+               silences: list[tuple[float, float]]) -> list[dict]:
+    """Puntos de corte SEGUROS: entre dos palabras RECONOCIDAS por Whisper
+    siempre hay una palabra completa antes y otra después, así que insertar
+    silencio ahí no puede partir ninguna palabra. Para cada hueco se busca el
+    punto de MENOR energía (el silencio real medido en la onda) — así el corte
+    es además inaudible. Devuelve, por índice de palabra i, el corte del hueco
+    entre words[i] y words[i+1]: {i, mid, wide}."""
+    cuts: list[dict] = []
+    for i in range(len(words) - 1):
+        g0, g1 = float(words[i]["end"]), float(words[i + 1]["start"])
+        if g1 - g0 <= 0.02:
+            continue  # palabras pegadas: no hay hueco donde cortar
+        # Silencio real (silencedetect) que solape el hueco → corte inaudible
+        best = None
+        for s0, s1 in silences:
+            lo, hi = max(g0, s0), min(g1, s1)
+            if hi - lo > 0 and (best is None or hi - lo > best[1] - best[0]):
+                best = (lo, hi)
+        if best is not None:
+            mid, wide = (best[0] + best[1]) / 2, best[1] - best[0]
+        else:
+            mid, wide = (g0 + g1) / 2, g1 - g0  # hueco corto sin silencio medido
+        cuts.append({"i": i, "mid": mid, "wide": wide})
+    return cuts
+
+
 def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
                     narration_file, vo_dir, audio_total: float, fps: float):
-    """Construye la línea de tiempo de la voz al estilo documental.
+    """Construye la línea de tiempo de la voz al estilo documental, con el
+    RITMO que decide el director audiovisual.
 
-    Principio: la narración del usuario NUNCA se corta a destiempo. La voz es
-    continua, y los respiros (espacios en blanco) se insertan ÚNICAMENTE
-    dentro de silencios REALES medidos en la onda de audio (silencedetect).
-    Los tiempos de Whisper solo orientan DÓNDE buscar el silencio: sus bordes
-    de segmento traen un sesgo de ±0.2–0.4s y cortar ahí a ciegas podía caer
-    a mitad de palabra (la causa de la «voz cortada en varios tramos»). Cada
-    frontera con respiro se re-ancla DENTRO del silencio medido; donde no hay
-    silencio medible cerca, la voz fluye a través del corte visual sin
-    insertar nada.
+    Principio inquebrantable: la voz NUNCA se corta a destiempo. Todo silencio
+    insertado cae en un hueco ENTRE dos palabras reconocidas (en su punto de
+    menor energía), así que es imposible partir una palabra — sin importar la
+    imprecisión de los tiempos de Whisper.
 
-    Composición:
-    - intro: aire antes de la primera palabra (el video abre, entra la música
-      y luego la voz).
-    - respiro entre escenas (scene_breath) + pausa dramática (pause_after del
-      director creativo) — solo en fronteras con pausa natural; donde la
-      frontera cae a mitad de frase, la voz fluye a través del corte visual
-      (muy documental) sin insertar nada.
-    - outro: cola tras la última palabra — la imagen y la música respiran y
-      el fundido final NUNCA toca la voz.
+    El RITMO no depende de un rango de tiempos fijo, sino del criterio del
+    director:
+    - Entre escenas/bloques: respiro base (scene_breath) + la pausa dramática
+      que el director marcó para esa escena (pause_after).
+    - Dentro de la escena: un respiro breve al final de cada frase, escalado
+      por el ritmo que el director eligió para la escena (pace: ligado /
+      normal / amplio) — así las frases dejan de sonar pegadas sin cortar la
+      voz.
+    Donde el narrador encadenó dos palabras sin ningún hueco, no se inserta
+    nada (no hay dónde hacerlo sin cortar): la voz fluye, muy documental.
 
-    Cada duración se cuantiza a cuadros ENTEROS con difusión de error, y los
-    silencios reabsorben el error acumulado: sincronía exacta de principio a
-    fin. El resultado se escribe como narration_timeline.wav (PCM, sin el
-    padding que el codificador mp3 mete en cada corte)."""
+    El resultado se escribe como narration_timeline.wav (PCM, sin el padding
+    que el codificador mp3 mete en cada corte). Devuelve además el mapa GLOBAL
+    de tiempo (intro + inserciones) — única fuente de verdad para sincronizar
+    subtítulos y rótulos."""
+    from ytstudio.utils.align import flatten_words, video_time_fn
+
     audio_cfg = cfg.get("audio", {})
     breath = max(0.0, float(audio_cfg.get("scene_breath", 0.3)))
     intro = max(0.0, float(audio_cfg.get("intro_seconds", 0.8)))
     outro = max(1.0, float(audio_cfg.get("outro_seconds", 2.0)))
+    sent_breath = max(0.0, float(audio_cfg.get("sentence_breath", 0.18)))
 
-    segs = narration.get("segments") or []
-    seg_starts = [float(s["start"]) for s in segs]
+    words = flatten_words(narration.get("segments") or [])
+    # Silencios finos (0.08s) solo para elegir el punto MÁS silencioso de cada
+    # hueco entre palabras — no para decidir SI se corta (eso lo dan las
+    # palabras).
+    silences = detect_silences(narration_file, min_d=0.08)
+    cuts = _safe_cuts(words, silences)
+    cut_by_word = {c["i"]: c for c in cuts}
 
     user_scenes = [s for s in scenes if "audio_start" in s]
     n = len(user_scenes)
 
-    # Silencios REALES de la grabación, medidos en la onda (no estimados por
-    # Whisper): la única fuente de verdad sobre dónde se puede cortar. Se pide
-    # un silencio de al menos 0.18s (silencedetect puede marcar sus bordes con
-    # unos ms de imprecisión) y se deja un margen de seguridad de 0.08s a cada
-    # lado del punto de corte — así el corte cae siempre en silencio franco,
-    # nunca al filo de una palabra.
-    silences = detect_silences(narration_file, min_d=0.18)
-    MARGIN = 0.08
-
-    def snap_to_silence(b: float) -> float | None:
-        """Punto de corte DENTRO del silencio real más cercano a b (con margen
-        de seguridad a cada lado), o None si no hay silencio medible cerca."""
+    def nearest_cut(t: float, window: float, low: float,
+                    min_wide: float = 0.0):
         best = None
-        for s0, s1 in silences:
-            if s1 - s0 < 2 * MARGIN + 0.02:
-                continue  # demasiado angosto para dejar margen a ambos lados
-            d = 0.0 if s0 <= b <= s1 else min(abs(s0 - b), abs(s1 - b))
-            if d <= 0.45 and (best is None or d < best[0]):
-                best = (d, s0, s1)
-        if best is None:
-            return None
-        _, s0, s1 = best
-        return min(max(b, s0 + MARGIN), s1 - MARGIN)
+        for c in cuts:
+            if c["mid"] <= low + 0.001 or c["wide"] < min_wide:
+                continue
+            d = abs(c["mid"] - t)
+            if d <= window and (best is None or d < best[0]):
+                best = (d, c)
+        return best[1] if best else None
 
-    # Fronteras fuente: el inicio de segmento de Whisper orienta, pero la
-    # frontera definitiva se ancla DENTRO de un silencio medido. Si no lo
-    # hay, se conserva la frontera solo como coordenada (sin corte ahí).
+    # 1) Fronteras de escena re-ancladas a un hueco entre palabras (para que el
+    #    respiro entre escenas caiga en sitio seguro y las palabras se agrupen
+    #    de forma coherente). Si no hay hueco cerca, se conserva la frontera.
     bounds = [0.0]
-    cuttable: list[bool] = []  # ¿bounds[i+1] cae en silencio real medido?
-    for s in user_scenes[1:]:
-        b = float(s["audio_start"])
-        if seg_starts:
-            j = min(range(len(seg_starts)), key=lambda k: abs(seg_starts[k] - b))
-            if abs(seg_starts[j] - b) <= 0.15:
-                b = seg_starts[j]
-        c = snap_to_silence(b)
+    boundary_pause = [0.0] * n  # pausa DESPUÉS de la escena i
+    for i in range(1, n):
+        b = float(user_scenes[i]["audio_start"])
+        c = nearest_cut(b, window=0.7, low=bounds[-1] + 0.4)
         if c is not None:
-            b = c
-        b2 = min(max(b, bounds[-1] + 0.2), max(audio_total - 0.2, 0.2))
-        if c is not None and b2 != b:
-            # el ajuste de monotonía lo sacó del silencio → verificar de nuevo
-            c = b2 if any(s0 + MARGIN <= b2 <= s1 - MARGIN
-                          for s0, s1 in silences) else None
-        cuttable.append(c is not None)
-        bounds.append(b2)
+            bounds.append(c["mid"])
+            pa = min(1.6, float(user_scenes[i - 1].get("pause_after") or 0.0))
+            boundary_pause[i - 1] = breath + pa
+        else:
+            bounds.append(min(max(b, bounds[-1] + 0.4), audio_total - 0.1))
     bounds.append(audio_total)
 
-    pause_ideal: list[float] = []
-    for i in range(n):
-        if i == n - 1:
-            pause_ideal.append(outro)
-        elif cuttable[i]:
-            extra = min(1.6, float(user_scenes[i].get("pause_after") or 0.0))
-            pause_ideal.append(breath + extra)
-        else:
-            pause_ideal.append(0.0)
+    # 2) Inserciones de silencio (punto en el audio original → duración)
+    insertions: list[tuple[float, float]] = []
+    for i in range(n - 1):
+        if boundary_pause[i] > 0.001:
+            insertions.append((bounds[i + 1], boundary_pause[i]))
+    # 2b) Respiros intra-escena al final de cada frase (según el pace del
+    #     director), solo en huecos seguros dentro de la escena.
+    n_sentence_breaths = 0
+    for i, s in enumerate(user_scenes):
+        pace = _pace_factor(s.get("pace"))
+        if pace <= 0 or sent_breath <= 0:
+            continue
+        a, b = bounds[i], bounds[i + 1]
+        for wi, w in enumerate(words[:-1]):
+            if not (a <= float(w["start"]) < b) or not _ends_sentence(w["text"]):
+                continue
+            c = cut_by_word.get(wi)
+            if c is None or not (a < c["mid"] < b) or c["wide"] < 0.06:
+                continue
+            insertions.append((c["mid"], sent_breath * pace))
+            n_sentence_breaths += 1
 
-    # Duraciones a cuadros exactos; los silencios reabsorben el error
-    durs: list[float] = []
-    sils: list[float] = []
-    err = 0.0
-    cum_v = 0.0
-    sil_sum = 0.0
-    for i in range(n):
-        span = bounds[i + 1] - bounds[i]
-        extra = intro if i == 0 else 0.0
-        ideal = span + extra + pause_ideal[i]
-        if pause_ideal[i] > 0:
-            frames = max(math.ceil((span + extra) * fps) + 2,
-                         round((ideal + err) * fps))
-        else:
-            frames = max(1, round((ideal + err) * fps))
-        dur = frames / fps
-        err += ideal - dur
-        cum_v += dur
-        if pause_ideal[i] > 0:
-            s_len = max(0.0, cum_v - (bounds[i + 1] + sil_sum + intro))
-            sil_sum += s_len
-            err = 0.0  # el silencio realinea audio y video con exactitud
-        else:
-            s_len = 0.0
-        durs.append(dur)
-        sils.append(s_len)
-
+    # Fija las fronteras fuente de cada escena (base para agrupar palabras)
     for i, s in enumerate(user_scenes):
         s["audio_start"] = round(bounds[i], 4)
         s["audio_end"] = round(bounds[i + 1], 4)
         s["vo_duration"] = round(bounds[i + 1] - bounds[i], 3)
+
+    # 3) Mapa GLOBAL de tiempo y duraciones de escena (a cuadros enteros)
+    V = video_time_fn(intro, insertions)
+    boundary_video = [0.0] + [V(bounds[i + 1]) for i in range(n)]
+    boundary_video[-1] += outro  # la última escena sostiene la cola de cierre
+    vframes = [round(x * fps) for x in boundary_video]
+    vframes[0] = 0
+    for i in range(1, len(vframes)):
+        if vframes[i] <= vframes[i - 1]:
+            vframes[i] = vframes[i - 1] + 1
+    durs = [(vframes[i + 1] - vframes[i]) / fps for i in range(n)]
+    for i, s in enumerate(user_scenes):
         s["duration"] = round(durs[i], 3)
         s["vo_offset"] = round(intro, 3) if i == 0 else 0.0
 
-    # WAV de la línea de tiempo: trozos LARGOS de la fuente (cortados solo en
-    # pausas reales) + silencios insertados
+    # 4) WAV: trozos de la fuente cortados SOLO en los puntos de inserción
+    #    (huecos entre palabras) + los silencios insertados. No se descarta ni
+    #    un milisegundo de voz: se recorre [0, audio_total] entero.
+    ins_pts = sorted(insertions)
     pieces: list[tuple] = []
     if intro > 0.001:
         pieces.append(("sil", intro))
-    cur = bounds[0]
-    for i in range(n):
-        if sils[i] > 0.001 or i == n - 1:
-            pieces.append(("cut", cur, bounds[i + 1]))
-            if sils[i] > 0.001:
-                pieces.append(("sil", sils[i]))
-            cur = bounds[i + 1]
+    cur = 0.0
+    for p, dur in ins_pts:
+        if p - cur > 0.001:
+            pieces.append(("cut", cur, p))
+            cur = p
+        if dur > 0.001:
+            pieces.append(("sil", dur))
+    if audio_total - cur > 0.001:
+        pieces.append(("cut", cur, audio_total))
+    if outro > 0.001:
+        pieces.append(("sil", outro))
+
     n_cuts = sum(1 for p in pieces if p[0] == "cut")
     fmt = "aresample=44100,aformat=sample_fmts=s16:channel_layouts=stereo"
     graph: list[str] = []
@@ -182,29 +209,30 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     run_ffmpeg(["-i", str(narration_file), "-filter_complex_script",
                 str(script), "-map", "[out]", "-c:a", "pcm_s16le", str(out)],
                "línea de tiempo de la voz")
-    n_breaths = sum(1 for x in sils[:-1] if x > 0.001)
 
-    # AUTOCOMPROBACIÓN: la línea de tiempo solo AÑADE silencio, jamás quita
-    # voz. Se compara la duración total contra la suma de escenas y los
-    # segundos HABLADOS del resultado contra los de la fuente; cualquier
-    # deriva delata un bug de montaje y se avisa en vez de entregar un video
-    # desincronizado en silencio.
+    voice_map = {"intro": round(intro, 4), "outro": round(outro, 4),
+                 "audio_total": round(audio_total, 4),
+                 "insertions": [[round(p, 4), round(d, 4)] for p, d in ins_pts]}
+    n_breaths = sum(1 for i in range(n - 1) if boundary_pause[i] > 0.001)
+
+    # AUTOCOMPROBACIÓN: solo se AÑADE silencio, jamás se quita voz.
     check = None
     try:
         got = probe_duration(out)
+        want = vframes[-1] / fps
         speech_src = audio_total - sum(
             min(e, audio_total) - max(s, 0.0)
             for s, e in silences if s < audio_total)
         speech_tl = got - sum(e - s for s, e in detect_silences(out))
-        if abs(got - cum_v) > 0.1 or abs(speech_tl - speech_src) > 0.5:
-            check = (f"Autocomprobación de la voz: la línea de tiempo mide "
-                     f"{got:.2f}s (esperados {cum_v:.2f}s) con {speech_tl:.2f}s "
-                     f"de voz ({speech_src:.2f}s en tu grabación). Hay una "
-                     "deriva inesperada — reporta este aviso y usa «Rehacer "
-                     "desde Voz» tras actualizar.")
+        if abs(got - want) > 0.15 or abs(speech_tl - speech_src) > 0.6:
+            check = (f"Autocomprobación de la voz: la pista mide {got:.2f}s "
+                     f"(esperados {want:.2f}s) con {speech_tl:.2f}s de voz "
+                     f"({speech_src:.2f}s en tu grabación). Hay una deriva "
+                     "inesperada — reporta este aviso y usa «Rehacer desde "
+                     "Voz» tras actualizar.")
     except Exception:
         pass
-    return out, n_breaths, check
+    return out, n_breaths, n_sentence_breaths, check, voice_map
 
 
 def run(project, cfg) -> None:
@@ -225,16 +253,17 @@ def run(project, cfg) -> None:
     if use_user_voice:
         audio_total = probe_duration(narration_file)
         fps = float(cfg.get("video", {}).get("fps", 24))
-        timeline, n_breaths, check = _build_timeline(
+        timeline, n_breaths, n_sent, check, voice_map = _build_timeline(
             scenes, narration, cfg, narration_file, vo_dir, audio_total, fps)
         project.set("voice_timeline", timeline.name)
+        project.set("voice_map", voice_map)
         if check:
             project.add_warning(check)
-        outro = cfg.get("audio", {}).get("outro_seconds", 2.0)
-        notify(f"🎙 Narración propia: voz continua de {audio_total:.1f}s con "
-               f"{n_breaths} respiros anclados en silencios REALES medidos en "
-               f"tu grabación y {outro:.1f}s de cola final (el fundido nunca "
-               "toca la voz).")
+        outro = voice_map["outro"]
+        notify(f"🎙 Narración propia: voz continua de {audio_total:.1f}s. El "
+               f"director puso {n_breaths} respiros entre escenas y {n_sent} "
+               "entre frases, TODOS en huecos entre palabras (imposible cortar "
+               f"la voz) + {outro:.1f}s de cola final.")
 
     def _is_user_voice(scene: dict) -> bool:
         return "audio_start" in scene and narration_file is not None
@@ -291,36 +320,47 @@ def run(project, cfg) -> None:
         total += outro
 
     if use_user_voice:
-        _sync_overlays(scenes, narration.get("segments") or [])
+        _sync_overlays(scenes, narration.get("segments") or [], voice_map)
 
     save_scenes(project, scenes)
     project.set("total_duration", round(total, 2))
 
 
-def _sync_overlays(scenes: list[dict], segments: list[dict]) -> None:
+def _sync_overlays(scenes: list[dict], segments: list[dict],
+                   voice_map: dict) -> None:
     """Sincroniza cada rótulo con el momento EXACTO en que se pronuncia.
 
-    Prioridad 1: timestamp REAL de la palabra (Whisper con granularidad
-    "word") — máxima precisión, encuentra la palabra del rótulo dentro de las
-    palabras que realmente suenan en esa escena. Prioridad 2 (proyectos de
-    versiones anteriores sin timestamps por palabra): interpolar la posición
-    del texto dentro del segmento que lo contiene. Prioridad 3: proporción
-    sobre toda la narración de la escena. Deja scene['overlay_at'] (segundos
-    dentro de la escena) o None."""
+    Usa el mapa GLOBAL de tiempo (intro + inserciones): el instante del video
+    de una palabra es video_time(tiempo_original), y overlay_at es ese instante
+    menos el arranque de la escena en el video. Así el rótulo aparece cuando lo
+    dices aunque haya respiros insertados dentro de la escena.
+
+    Prioridad 1: timestamp REAL de la palabra (Whisper "word"). Prioridad 2
+    (proyectos sin timestamps por palabra): interpolar dentro del segmento.
+    Prioridad 3: proporción sobre la narración de la escena."""
     import unicodedata
 
-    from ytstudio.utils.align import assign_words, flatten_words, local_time
+    from ytstudio.utils.align import (assign_words, flatten_words, local_time,
+                                      video_time_fn)
 
     def norm(s: str) -> str:
         return "".join(c for c in unicodedata.normalize("NFD", (s or "").lower())
                        if unicodedata.category(c) != "Mn")
+
+    V = video_time_fn(voice_map["intro"],
+                      [(p, d) for p, d in voice_map["insertions"]])
+    # arranque de cada escena en el VIDEO = suma de duraciones anteriores
+    starts, acc = [], 0.0
+    for s in scenes:
+        starts.append(acc)
+        acc += float(s.get("duration") or 0.0)
 
     all_words = flatten_words(segments)
     word_map = assign_words(scenes, all_words)
     seg_norm = [(float(g["start"]), float(g["end"]), norm(g.get("text", "")))
                 for g in segments]
 
-    for s in scenes:
+    for idx, s in enumerate(scenes):
         s["overlay_at"] = None
         ov = s.get("overlay") or {}
         text = norm(ov.get("text") or "")
@@ -361,10 +401,11 @@ def _sync_overlays(scenes: list[dict], segments: list[dict]) -> None:
         # 3) Último respaldo: proporción sobre toda la narración de la escena
         if hit is None:
             narr = norm(s.get("narration") or "")
-            idx = next((narr.find(w) for w in key_words if narr.find(w) >= 0), -1)
-            if idx >= 0 and narr:
-                hit = a + (b - a) * idx / len(narr)
+            i2 = next((narr.find(w) for w in key_words if narr.find(w) >= 0), -1)
+            if i2 >= 0 and narr:
+                hit = a + (b - a) * i2 / len(narr)
 
         if hit is not None:
-            local = local_time(s, hit)
-            s["overlay_at"] = round(min(local, float(s["duration"]) - 0.5), 3)
+            local = V(hit) - starts[idx]  # instante del video, relativo a la escena
+            local = max(0.0, min(local, float(s["duration"]) - 0.5))
+            s["overlay_at"] = round(local, 3)

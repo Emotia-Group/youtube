@@ -46,35 +46,66 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     from ytstudio.utils.media import require_ffmpeg
     require_ffmpeg()
 
-    # Los avisos de espera por límite de velocidad de Replicate se muestran en
-    # el registro de progreso (no solo en la consola).
+    # Registro de eventos persistente (novedades, errores y tiempos): todo lo
+    # que aparece en el progreso queda guardado para diagnóstico y para poder
+    # compartirlo. El estado de la fase actual acompaña a cada evento.
+    from ytstudio import eventlog
+    slug = getattr(project, "slug", None)
+    cur = {"phase": None}
+
+    def emit(level: str, msg: str, **kw) -> None:
+        eventlog.log(level, msg, project=slug, phase=cur["phase"], **kw)
+
+    def sink(msg) -> None:
+        log(msg)
+        emit("info", str(msg))
+
+    # Los avisos de espera por límite de velocidad de Replicate y el canal de
+    # progreso general (descargas, análisis…) van al log de la UI y al de
+    # eventos.
     from ytstudio.providers import replicate_util
-    replicate_util.set_progress(log)
-    # Canal de progreso general (descargas, análisis de referencia, etc.)
+    replicate_util.set_progress(sink)
     from ytstudio import progress
-    progress.set_sink(log)
+    progress.set_sink(sink)
 
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 
     project.set("warnings", [])  # avisos frescos por ejecución
+    emit("info", f"Generación iniciada (desde «{from_phase or 'inicio'}» "
+                 f"hasta «{to_phase or 'fin'}»).")
+    run_start = time.time()
+    seen_warnings = 0
 
     for name, module, desc in PHASES:
+        cur["phase"] = name
         if project.phase_status(name) == "done":
             log(f"✔ {name:<10} {desc} (ya completada)")
             if name == to_phase:
                 break
             continue
 
-        log(f"▶ {name:<10} {desc}…")
+        sink(f"▶ {name:<10} {desc}…")
         start = time.time()
         try:
             module.run(project, cfg)
         except Exception as e:
+            secs = round(time.time() - start, 1)
             project.mark_phase(name, "failed", error=str(e))
+            emit("error", f"{desc}: {e}", seconds=secs)
             raise RuntimeError(f"La fase '{name}' falló: {e}") from e
-        project.mark_phase(name, "done", seconds=round(time.time() - start, 1))
-        log(f"✔ {name:<10} completada en {time.time() - start:.1f}s")
+        secs = round(time.time() - start, 1)
+        project.mark_phase(name, "done", seconds=secs)
+        # Avisos nuevos acumulados por esta fase (B-roll sin usar, NSFW, etc.)
+        warnings = project.get("warnings") or []
+        for w in warnings[seen_warnings:]:
+            emit("warn", w)
+        seen_warnings = len(warnings)
+        emit("info", f"{desc}: completada", seconds=secs)
+        log(f"✔ {name:<10} completada en {secs:.1f}s")
 
         if name == to_phase:
             break
+
+    cur["phase"] = None
+    emit("info", f"Generación finalizada en {time.time() - run_start:.1f}s.")

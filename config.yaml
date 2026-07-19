@@ -61,7 +61,11 @@ audio:
   outro_seconds: 2.0         # cola tras la última palabra (el fundido final
                              # nunca toca la voz; antes 3.5s + 3s de fundido
                              # dejaban casi todo el cierre en silencio)
-  scene_breath: 0.3          # respiro extra entre escenas (en pausas reales)
+  scene_breath: 0.3          # respiro base entre escenas (se suma a pause_after)
+  sentence_breath: 0.18      # respiro base al final de cada frase DENTRO de la
+                             # escena, escalado por el ritmo (pace) que elige el
+                             # director: ligado=0 · normal=1x · amplio=1.7x.
+                             # Siempre en huecos entre palabras (nunca corta voz)
   # Modo "narración propia" (cuando subes tu voz grabada):
   trim_silence: true         # recorta silencios largos de tu grabación
   silence_keep: 0.4          # deja pausas uniformes de N segundos

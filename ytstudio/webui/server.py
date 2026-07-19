@@ -18,6 +18,7 @@ import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import yaml
 
@@ -63,6 +64,17 @@ def get_version() -> dict:
 def api_changelog() -> dict:
     path = ROOT / "CHANGELOG.md"
     return {"content": path.read_text(encoding="utf-8") if path.exists() else ""}
+
+
+def api_events(query: dict) -> dict:
+    from ytstudio import eventlog
+    project = (query.get("project") or [None])[0]
+    try:
+        limit = int((query.get("limit") or ["300"])[0])
+    except ValueError:
+        limit = 300
+    return {"events": eventlog.recent(limit=min(2000, max(1, limit)),
+                                      project=project)}
 
 
 def api_estimate(slug: str) -> dict:
@@ -471,6 +483,15 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length) or b"{}")
 
+    def _download(self, data: bytes, filename: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Disposition",
+                         f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _serve_file(self, path: Path, no_cache: bool = False) -> None:
         if not path.is_file():
             self._json({"error": "No encontrado"}, 404)
@@ -519,8 +540,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             path = self.path.split("?")[0]
+            query = parse_qs(urlparse(self.path).query)
             if path in ("/", "/index.html"):
                 self._serve_file(STATIC_DIR / "index.html", no_cache=True)
+            elif path == "/api/events":
+                self._json(api_events(query))
+            elif path == "/api/events/download":
+                from ytstudio import eventlog
+                self._download(eventlog.raw_text().encode("utf-8"),
+                               "ytstudio-eventos.log")
             elif path == "/api/catalog" or path == "/api/config":
                 self._json(api_get_config())
             elif path == "/api/projects":

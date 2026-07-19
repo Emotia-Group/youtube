@@ -49,6 +49,33 @@ def assign_words(scenes: list[dict], words: list[dict]) -> dict[int, list[dict]]
     return out
 
 
+def video_time_fn(intro: float, insertions: list[tuple[float, float]]):
+    """Mapa GLOBAL de tiempo: convierte un instante del audio ORIGINAL (t) al
+    instante en el VIDEO montado. Es la única fuente de verdad para sincronizar
+    voz, subtítulos y rótulos — sustituye al viejo offset por escena, que no
+    podía representar pausas insertadas DENTRO de una escena.
+
+    video(t) = intro + t + (silencios insertados en puntos p <= t)
+
+    `insertions` = lista de (punto_en_audio_original, duración_del_silencio).
+    Como los puntos de inserción caen SIEMPRE en huecos entre palabras, ninguna
+    palabra coincide con un punto de inserción (el mapa no es ambiguo)."""
+    import bisect
+    pts = sorted(insertions)
+    ps = [p for p, _ in pts]
+    cum: list[float] = []
+    acc = 0.0
+    for _, d in pts:
+        acc += d
+        cum.append(acc)
+
+    def video(t: float) -> float:
+        k = bisect.bisect_right(ps, t)  # nº de inserciones con p <= t
+        return intro + t + (cum[k - 1] if k > 0 else 0.0)
+
+    return video
+
+
 def local_time(scene: dict, t: float) -> float:
     """Convierte un tiempo del audio ORIGINAL (t) al tiempo LOCAL dentro de la
     escena ya montada — sumando su aire de entrada (vo_offset, solo la
