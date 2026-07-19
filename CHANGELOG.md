@@ -9,6 +9,22 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.2 — 2026-07-19
+- EL % Y EL TIEMPO RESTANTE AHORA SE ACOTAN A LO QUE PEDISTE GENERAR: si
+  solo pediste generar «hasta Análisis» (o cualquier fase previa a
+  publicar el video completo), la barra ya no mostraba el estimado del
+  VIDEO COMPLETO (ej. «~22 min restantes» con apenas el 1% hecho, cuando en
+  segundos reales el análisis dura muy poco). Ahora estimate.py reparte el
+  tiempo estimado entre las fases del pipeline (ingesta, concepto, guion,
+  escenas, voz, B-roll, música, subtítulos, montaje, metadatos) y el
+  servidor solo suma las fases que de verdad van a correr en esa ejecución
+  — saltando además las que ya estén completadas al reanudar un proyecto a
+  mitad de camino, igual que hace el generador real.
+- AVISO CLARO CUANDO TERMINA CADA ETAPA: antes solo se sabía que el
+  programa seguía trabajando mirando el 🧾 Log de eventos con detalle; ahora
+  aparece un aviso emergente («✔ <fase> completada») cada vez que una etapa
+  termina, además de la actualización silenciosa de los indicadores.
+
 ## v0.24.1 — 2026-07-19
 - Al DUPLICAR un proyecto, ahora se pregunta el nombre ANTES de crear la
   copia — ese nombre pasa a ser el identificador interno del proyecto

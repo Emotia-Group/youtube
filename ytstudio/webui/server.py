@@ -468,14 +468,26 @@ def api_run(slug: str, body: dict) -> dict:
     from_phase = body.get("from") or None
     to_phase = body.get("to") or None
 
-    # Línea base para el % completo / tiempo restante en vivo: el mismo
-    # tiempo estimado que ya se muestra antes de generar (no se inventa un
-    # segundo número que podría contradecirlo).
+    # Línea base para el % completo / tiempo restante en vivo: SOLO las fases
+    # que realmente se van a ejecutar en esta corrida (entre from_phase y
+    # to_phase, saltando las que ya estén "done", igual que run_pipeline).
+    # Antes se usaba el estimado del video COMPLETO sin importar hasta dónde
+    # se pidiera generar, lo que mostraba "~22 min" al pedir solo "Análisis".
     try:
         from ytstudio.estimate import estimate as _estimate
         _proj = Project(slug)
         _est = _estimate(_proj, load_config(_proj.dir))
-        state["est_total_sec"] = max(20.0, float(_est.get("total_min_medio") or 0) * 60)
+        _phase_secs = _est.get("phase_seconds") or {}
+        lo = PHASE_ORDER.index(from_phase) if from_phase in PHASE_ORDER else 0
+        hi = (PHASE_ORDER.index(to_phase) if to_phase in PHASE_ORDER
+              else len(PHASE_ORDER) - 1)
+        scoped = sum(
+            float(_phase_secs.get(name, 0.0))
+            for name in PHASE_ORDER[lo:hi + 1]
+            if _proj.phase_status(name) != "done"
+        )
+        state["est_total_sec"] = max(20.0, scoped) if scoped > 0 else max(
+            20.0, float(_est.get("total_min_medio") or 0) * 60)
     except Exception:
         pass
 

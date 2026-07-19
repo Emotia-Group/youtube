@@ -82,11 +82,30 @@ def estimate(project, cfg: dict) -> dict:
 
     items: list[dict] = []
     notes: list[str] = []
+    # Segundos de cada fase del pipeline (PHASE_ORDER), para poder acotar el
+    # tiempo estimado a SOLO las fases que en verdad van a ejecutarse cuando
+    # se pide "hasta tal paso" o se reanuda a mitad de camino — antes el
+    # panel de progreso mostraba el ETA del VIDEO COMPLETO aunque solo se
+    # hubiera pedido, por ejemplo, hasta el guion.
+    phase_seconds: dict[str, float] = {}
 
-    def add(fase, detalle, cost_lo, cost_hi, min_lo, min_hi):
+    def add_phase_seconds(min_lo, min_hi, weights: dict[str, float]) -> None:
+        mid_sec = (min_lo + min_hi) / 2 * 60
+        for phase, w in weights.items():
+            phase_seconds[phase] = phase_seconds.get(phase, 0.0) + mid_sec * w
+
+    def add(fase, detalle, cost_lo, cost_hi, min_lo, min_hi,
+            phases: dict[str, float] | None = None):
         items.append({"fase": fase, "detalle": detalle,
                       "costo": _fmt_range(cost_lo, cost_hi),
                       "minutos": [round(min_lo, 1), round(min_hi, 1)]})
+        if phases:
+            add_phase_seconds(min_lo, min_hi, phases)
+
+    # Reparto aproximado del bloque de Inteligencia (una sola llamada
+    # combinada en la estimación) entre las fases que de verdad la consumen.
+    _LLM_SPLIT = {"ingest": 0.12, "concept": 0.10, "script": 0.28,
+                 "scenes": 0.35, "metadata": 0.15}
 
     # --- LLM (concepto, guion, escenas, rótulos, metadatos, visión) ---------
     if llm_name != "mock":
@@ -119,9 +138,10 @@ def estimate(project, cfg: dict) -> dict:
             f"~{n_calls} llamadas · guion de ~{int(words)} palabras"
             + (f" · visión de {vision_images} imágenes" if vision_images else ""),
             cost_lo * 1.0, cost_lo * 1.2,
-            n_calls * 15 / 60, n_calls * 50 / 60)
+            n_calls * 15 / 60, n_calls * 50 / 60, phases=_LLM_SPLIT)
     else:
-        add("Inteligencia (Claude)", "modo vista previa (sin API)", 0, 0, 0, 0.2)
+        add("Inteligencia (Claude)", "modo vista previa (sin API)", 0, 0, 0, 0.2,
+            phases=_LLM_SPLIT)
 
     # --- Voz -----------------------------------------------------------------
     if voice_assets:
@@ -131,20 +151,20 @@ def estimate(project, cfg: dict) -> dict:
         add("Voz (tu narración + Whisper)",
             f"transcripción de ~{audio_min:.0f} min",
             audio_min * stt_cost * 0.8, audio_min * stt_cost * 1.5,
-            0.5, 2)
+            0.5, 2, phases={"voiceover": 1.0})
     elif tts_name == "openai":
         chars = video_minutes * WORDS_PER_MINUTE * 6.2
         add("Voz en off (OpenAI TTS)", f"~{int(chars):,} caracteres".replace(",", " "),
             chars * TTS_PER_M_CHARS[0] / 1e6, chars * TTS_PER_M_CHARS[1] / 1e6,
-            n_scenes * 3 / 60, n_scenes * 8 / 60)
+            n_scenes * 3 / 60, n_scenes * 8 / 60, phases={"voiceover": 1.0})
     elif tts_name == "elevenlabs":
         add("Voz en off (ElevenLabs)", "se descuenta de tu plan", 0, 0,
-            n_scenes * 3 / 60, n_scenes * 10 / 60)
+            n_scenes * 3 / 60, n_scenes * 10 / 60, phases={"voiceover": 1.0})
         notes.append("ElevenLabs cobra por caracteres según tu suscripción "
                      "(no se estima aquí).")
     else:
         add("Voz en off", f"proveedor '{tts_name}' (sin costo por uso)", 0, 0,
-            0.2, 1)
+            0.2, 1, phases={"voiceover": 1.0})
 
     # --- Imágenes ------------------------------------------------------------
     perf = cfg.get("performance", {})
@@ -158,13 +178,14 @@ def estimate(project, cfg: dict) -> dict:
             f"{n_ai_images} imágenes (de {n_scenes} escenas, "
             f"{user_broll} con tu material) · {iw} en paralelo",
             n_ai_images * c[0], n_ai_images * c[1],
-            n_ai_images * s[0] / 60 / iw, n_ai_images * s[1] / 60 / iw)
+            n_ai_images * s[0] / 60 / iw, n_ai_images * s[1] / 60 / iw,
+            phases={"broll": 1.0})
         if img_name == "replicate":
             notes.append("Replicate con menos de $5 de crédito limita a 6 "
                          "imágenes/min: el tiempo puede alargarse.")
     elif n_ai_images:
         add("Imágenes", f"{n_ai_images} placeholders (modo vista previa)",
-            0, 0, 0.2, 1)
+            0, 0, 0.2, 1, phases={"broll": 1.0})
 
     # --- Video generativo ----------------------------------------------------
     if n_video_scenes:
@@ -177,16 +198,18 @@ def estimate(project, cfg: dict) -> dict:
             f"· {vw} en paralelo",
             cost_lo, cost_hi,
             n_video_scenes * VIDEO_SECONDS[0] / 60 / vw,
-            n_video_scenes * VIDEO_SECONDS[1] / 60 / vw)
+            n_video_scenes * VIDEO_SECONDS[1] / 60 / vw, phases={"broll": 1.0})
 
     # --- Música ---------------------------------------------------------------
     if music_name == "library":
         add("Música (tu biblioteca)", "selección con IA incluida arriba",
-            0, 0, 0.1, 0.5)
+            0, 0, 0.1, 0.5, phases={"music": 1.0})
     elif music_name == "replicate":
-        add("Música (MusicGen)", "1 pista generada", *MUSIC_COST, 1, 3)
+        add("Música (MusicGen)", "1 pista generada", *MUSIC_COST, 1, 3,
+            phases={"music": 1.0})
     else:
-        add("Música", f"proveedor '{music_name}'", 0, 0, 0.1, 0.5)
+        add("Música", f"proveedor '{music_name}'", 0, 0, 0.1, 0.5,
+            phases={"music": 1.0})
 
     # --- Enlaces de referencia -------------------------------------------------
     if links:
@@ -196,7 +219,7 @@ def estimate(project, cfg: dict) -> dict:
         add("Videos de referencia (enlaces)",
             f"{len(links)} enlace(s): descarga + análisis"
             f" (Whisper solo si no hay subtítulos)",
-            0, stt_hi, len(links) * 1, len(links) * 5)
+            0, stt_hi, len(links) * 1, len(links) * 5, phases={"ingest": 1.0})
 
     # --- Montaje (local, gratis) ------------------------------------------------
     rw = max(1, int(perf.get("parallel_render", 2)))
@@ -205,7 +228,8 @@ def estimate(project, cfg: dict) -> dict:
         f"{n_scenes} escenas · {video_minutes:.0f} min de video · "
         f"{rw} en paralelo",
         0, 0, video_minutes * 0.3 / render_speed,
-        (video_minutes * 0.9 + 1) / render_speed + 0.5)
+        (video_minutes * 0.9 + 1) / render_speed + 0.5,
+        phases={"assembly": 0.92, "subtitles": 0.08})
 
     if missing_key:
         notes.append("Algún proveedor configurado no tiene clave de API "
@@ -218,9 +242,16 @@ def estimate(project, cfg: dict) -> dict:
     notes.append("Estimación aproximada con tarifas públicas de julio 2026; "
                  "reanudar un proyecto NO repite fases ya completadas (no se "
                  "vuelve a pagar lo ya generado).")
+    # Piso de 5s por fase con algo de trabajo real: evita un ETA en 0 mientras
+    # la fase sigue corriendo de verdad (metadata/subtitles/publish son casi
+    # instantáneas pero no cero).
+    for name in ("ingest", "concept", "script", "scenes", "voiceover",
+                "broll", "music", "subtitles", "assembly", "metadata"):
+        if phase_seconds.get(name, 0.0) > 0.001:
+            phase_seconds[name] = max(phase_seconds[name], 5.0)
     return {"items": items, "total_costo": total_cost,
             "total_costo_medio": round((total_cost[0] + total_cost[1]) / 2, 2),
             "total_minutos": total_min,
             "total_min_medio": round((total_min[0] + total_min[1]) / 2, 1),
-            "notas": notes,
+            "notas": notes, "phase_seconds": phase_seconds,
             "escenas": n_scenes, "duracion_min": round(video_minutes, 1)}

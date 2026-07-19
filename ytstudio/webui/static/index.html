@@ -648,7 +648,7 @@ async function rerunFrom(phase){
 function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
 function startPoll(){
   stopPoll();
-  let lastCount=-1,wasRunning=false,lastPhase=null;
+  let lastCount=-1,wasRunning=false,lastPhase=null,toastedCount=-1;
   pollTimer=setInterval(async()=>{
     if(view!=='project'||!current){stopPoll();return}
     const log=await api(`/api/projects/${current}/log`);
@@ -657,6 +657,18 @@ function startPoll(){
       el.style.display='block';
       if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;}
       if(log.running&&log.phase!==lastPhase){lastPhase=log.phase;renderPhasesOnly(log.phase);}
+    }
+    // aviso claro de que el programa SIGUE trabajando: un toast por cada
+    // fase que termina, no solo el resultado final del video completo. La
+    // primera lectura solo fija la base (no reproduce fases ya viejas si
+    // se recarga la página a mitad de una corrida).
+    if(toastedCount<0){toastedCount=log.lines.length}
+    else if(log.lines.length>toastedCount){
+      for(const line of log.lines.slice(toastedCount)){
+        const m=/^✔\s+(\w+)\s+completada en ([\d.]+)s/.exec(line);
+        if(m)toast(`✔ ${phaseLabel(m[1])} completada (${m[2]}s)`,2200);
+      }
+      toastedCount=log.lines.length;
     }
     const pb=$('#progressbar');
     if(pb){
