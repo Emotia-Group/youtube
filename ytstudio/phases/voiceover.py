@@ -242,7 +242,10 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
             min(e, audio_total) - max(s, 0.0)
             for s, e in silences if s < audio_total)
         speech_tl = got - sum(e - s for s, e in detect_silences(out))
-        if abs(got - want) > 0.15 or abs(speech_tl - speech_src) > 0.6:
+        # Umbral de voz-hablada holgado (1.2s): silencedetect mide con ruido
+        # en los bordes cuando los respiros insertados quedan pegados a
+        # silencios reales — la señal DURA es la duración total (0.15s).
+        if abs(got - want) > 0.15 or abs(speech_tl - speech_src) > 1.2:
             check = (f"Autocomprobación de la voz: la pista mide {got:.2f}s "
                      f"(esperados {want:.2f}s) con {speech_tl:.2f}s de voz "
                      f"({speech_src:.2f}s en tu grabación). Hay una deriva "

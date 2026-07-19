@@ -715,25 +715,71 @@ def run(project, cfg) -> None:
 
     script = final_dir / "mezcla.filters"
     script.write_text(";\n".join(graph), encoding="utf-8")
+    # -t DURO al total del cuerpo: ningún stream (video, audio, subtítulos)
+    # puede exceder la duración del video — defensa definitiva contra
+    # cualquier entrada o muxer que intente estirar el resultado.
     run_ffmpeg([*args, "-filter_complex_script", str(script), *maps, *codecs,
-                "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+                "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}",
+                "-movflags", "+faststart",
                 str(output)], "mezcla final")
 
-    # AUTOCOMPROBACIÓN FINAL: el video terminado debe durar lo que el cuerpo
-    # (la pista de audio se recorta/rellena a ese total exacto). Cualquier
-    # deriva se reporta — el pipeline se verifica a sí mismo de punta a punta.
+    # AUTOCOMPROBACIÓN FINAL: el video terminado debe durar lo que el cuerpo.
+    # SIEMPRE se registra el diagnóstico por stream en el 🧾 Log de eventos —
+    # si algo deriva, el log identifica el stream exacto (video, audio o
+    # subtítulos) con sus duraciones medidas, no una cifra global ambigua.
+    from ytstudio import eventlog
+    slug = getattr(project, "slug", None)
     try:
-        final_dur = probe_duration(output)
+        diag = _stream_durations(output)
+        tl_dur = probe_duration(tl_path)
+        eventlog.log("info",
+                     f"Diagnóstico de sincronía — cuerpo:{total:.3f}s "
+                     f"voz:{tl_dur:.3f}s "
+                     + " ".join(f"{k}:{v:.3f}s" for k, v in diag.items()),
+                     project=slug, phase="assembly")
+        final_dur = max(diag.values()) if diag else probe_duration(output)
         if abs(final_dur - total) > 0.25:
-            from ytstudio import eventlog
-            msg = (f"Autocomprobación final: el video mide {final_dur:.2f}s y "
-                   f"se esperaban {total:.2f}s. Reporta este aviso.")
+            msg = (f"Autocomprobación final: hay un stream de "
+                   f"{final_dur:.2f}s y se esperaban {total:.2f}s "
+                   f"({' '.join(f'{k}={v:.2f}s' for k, v in diag.items())}). "
+                   "Reporta este aviso con el Log de eventos.")
             project.add_warning(msg)
-            eventlog.log("error", msg, project=getattr(project, "slug", None),
-                         phase="assembly")
+            eventlog.log("error", msg, project=slug, phase="assembly")
+            for s in scenes:
+                try:
+                    sp = scenes_dir / f"scene_{s['id']:03d}.mp4"
+                    eventlog.log("info",
+                                 f"  escena {s['id']}: mp4={probe_duration(sp):.3f}s "
+                                 f"esperada={float(s['duration']):.3f}s",
+                                 project=slug, phase="assembly")
+                except Exception:
+                    pass
         else:
             notify(f"✅ Sincronía verificada: video {final_dur:.2f}s = "
                    f"escenas {total:.2f}s (una sola línea de tiempo).")
     except Exception:
         pass
     project.set("final_video", str(output))
+
+
+def _stream_durations(path: Path) -> dict:
+    """Duración medida de CADA stream del archivo (video/audio/subtítulos) —
+    la duración 'global' de un mp4 es la del stream más largo y esconde cuál
+    se estiró."""
+    import json as _json
+    import subprocess
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "stream=codec_type,duration", "-of", "json", str(path)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out: dict = {}
+    try:
+        for i, s in enumerate(_json.loads(r.stdout).get("streams", [])):
+            key = f"{s.get('codec_type', 's')}{i}"
+            try:
+                out[key] = float(s.get("duration") or 0)
+            except (TypeError, ValueError):
+                pass
+    except Exception:
+        pass
+    return out

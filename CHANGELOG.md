@@ -9,6 +9,28 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.21.1 — 2026-07-19
+- Gracias al Log de eventos compartido, la autocomprobación de v0.21.0
+  atrapó una deriva real: el video final reportaba 94s cuando el cuerpo
+  medía 79s. La causa más probable (verificada en laboratorio): un
+  subtítulo cuyo fin quedaba más allá del final del video ESTIRA la pista
+  de subtítulos del mp4 — el contenedor «dura» más y el reproductor
+  muestra cola vacía y tiempos corridos.
+- TRIPLE DEFENSA:
+  · Ningún subtítulo puede terminar después del final del video (se
+    recortan al montar los cues).
+  · La mezcla final lleva un tope duro de duración (-t): ningún stream
+    puede exceder el cuerpo, pase lo que pase.
+  · El diagnóstico de sincronía ahora se registra SIEMPRE en el 🧾 Log de
+    eventos con la duración medida de CADA stream (video, audio,
+    subtítulos) + la pista de voz; si algo deriva, se registran además las
+    duraciones de cada escena — el log identifica el stream exacto, no una
+    cifra global ambigua.
+- Afinado el aviso de la autocomprobación de voz: el umbral de «segundos
+  hablados» era demasiado estricto (saltaba por ruido de medición aunque
+  la duración estuviera perfecta, como en tu log: 79.20s vs 79.21s). La
+  señal dura (duración total) mantiene su tolerancia estricta.
+
 ## v0.21.0 — 2026-07-19
 - UNA SOLA LÍNEA DE TIEMPO (cambio de arquitectura — la causa raíz del
   desfase en las transiciones, MEDIDA y demostrada): cada escena se

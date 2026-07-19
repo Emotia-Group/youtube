@@ -111,6 +111,14 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
     # Los cues por video_time son absolutos y ya vienen ordenados por palabra;
     # garantizar orden por si el respaldo se mezcló con el modo real.
     cues.sort(key=lambda c: c["start"])
+    # DEFENSA: ningún subtítulo puede pasar del final del video (la suma de
+    # duraciones de escena). Un cue colgando más allá estira la pista de
+    # subtítulos del mp4 y desincroniza la duración del contenedor.
+    limit = sum(float(s["duration"]) for s in scenes)
+    if limit > 0:
+        cues = [c for c in cues if c["start"] < limit - 0.05]
+        for c in cues:
+            c["end"] = min(c["end"], limit)
     return cues
 
 
