@@ -61,6 +61,14 @@ def get_version() -> dict:
                 "modified": False}
 
 
+# Versión del CÓDIGO CARGADO en este proceso (capturada al arrancar). Tras un
+# actualizar.bat, el disco tiene la versión nueva pero el proceso sigue siendo
+# el viejo hasta reiniciar iniciar.bat — get_version() leería el CHANGELOG
+# nuevo y engañaría. La UI compara ambas y pide reiniciar si difieren (antes
+# el síntoma era críptico: rutas nuevas del API respondían «No encontrado»).
+SERVER_VERSION = get_version().get("version", "")
+
+
 def api_changelog() -> dict:
     path = ROOT / "CHANGELOG.md"
     return {"content": path.read_text(encoding="utf-8") if path.exists() else ""}
@@ -381,6 +389,7 @@ def api_get_config() -> dict:
         "style_presets": STYLE_PRESETS,
         "keys": key_status(),
         "version": get_version(),
+        "server_version": SERVER_VERSION,
         "phases": [{"name": n, "desc": d, "label": PHASE_LABELS.get(n, n)}
                    for n, _, d in PHASES],
     }
@@ -645,6 +654,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(port: int = 8765, open_browser: bool = True) -> None:
     migrate_local_config()  # libera defaults congelados de versiones antiguas
+    from ytstudio import eventlog
+    eventlog.log("info",
+                 f"Programa iniciado ({SERVER_VERSION or 'versión desconocida'}).")
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}"
     print(f"🎬 ytstudio UI → {url}")

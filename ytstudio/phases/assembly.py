@@ -400,10 +400,17 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
         label = "v2"
     filters.append("[1:a]aresample=44100,aformat=channel_layouts=stereo,apad[a]")
 
+    # -frames:v EXACTO además de -t: la duración guardada va redondeada a 3
+    # decimales y con clips de video ffmpeg podía incluir un cuadro de más por
+    # escena (p.ej. -t 10.417 con duración real 10.41666 = 250 cuadros). Esos
+    # cuadros extra alargaban el cuerpo y desfasaban progresivamente los
+    # subtítulos y la voz. Con el número de cuadros explícito, cada escena mide
+    # EXACTAMENTE lo que el mapa de tiempos asume.
     run_ffmpeg([
         *inputs, "-i", str(vo),
         "-filter_complex", ";".join(filters),
-        "-map", f"[{label}]", "-map", "[a]", "-t", f"{dur:.3f}",
+        "-map", f"[{label}]", "-map", "[a]",
+        "-frames:v", str(frames), "-t", f"{dur:.3f}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
         str(out),

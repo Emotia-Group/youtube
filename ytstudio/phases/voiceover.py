@@ -24,18 +24,24 @@ def _ends_sentence(text: str) -> bool:
 
 def _safe_cuts(words: list[dict],
                silences: list[tuple[float, float]]) -> list[dict]:
-    """Puntos de corte SEGUROS: entre dos palabras RECONOCIDAS por Whisper
-    siempre hay una palabra completa antes y otra después, así que insertar
-    silencio ahí no puede partir ninguna palabra. Para cada hueco se busca el
-    punto de MENOR energía (el silencio real medido en la onda) — así el corte
-    es además inaudible. Devuelve, por índice de palabra i, el corte del hueco
-    entre words[i] y words[i+1]: {i, mid, wide}."""
+    """Puntos de corte del hueco entre words[i] y words[i+1]: {i, mid, wide}.
+
+    DOBLE verificación para poder insertar silencio: el punto debe estar entre
+    dos palabras reconocidas por Whisper (una completa antes y otra después)
+    Y dentro de un silencio MEDIDO en la onda que solape ese hueco (los
+    tiempos de Whisper derivan ±0.2-0.4s del audio real: un hueco de Whisper
+    sin silencio medido puede caer sobre una palabra de verdad). `wide` es la
+    anchura de ese solape verificado; el corte va en su punto medio.
+
+    Los huecos SIN silencio medido se devuelven con wide=0: sirven únicamente
+    como coordenada de frontera (agrupar palabras por escena) — JAMÁS para
+    insertar silencio en ellos."""
     cuts: list[dict] = []
     for i in range(len(words) - 1):
         g0, g1 = float(words[i]["end"]), float(words[i + 1]["start"])
         if g1 - g0 <= 0.02:
             continue  # palabras pegadas: no hay hueco donde cortar
-        # Silencio real (silencedetect) que solape el hueco → corte inaudible
+        # Silencio real (silencedetect) que solape el hueco de Whisper
         best = None
         for s0, s1 in silences:
             lo, hi = max(g0, s0), min(g1, s1)
@@ -44,7 +50,7 @@ def _safe_cuts(words: list[dict],
         if best is not None:
             mid, wide = (best[0] + best[1]) / 2, best[1] - best[0]
         else:
-            mid, wide = (g0 + g1) / 2, g1 - g0  # hueco corto sin silencio medido
+            mid, wide = (g0 + g1) / 2, 0.0  # coordenada sin respaldo medido
         cuts.append({"i": i, "mid": mid, "wide": wide})
     return cuts
 
@@ -104,29 +110,39 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
                 best = (d, c)
         return best[1] if best else None
 
-    # 1) Fronteras de escena re-ancladas a un hueco entre palabras (para que el
-    #    respiro entre escenas caiga en sitio seguro y las palabras se agrupen
-    #    de forma coherente). Si no hay hueco cerca, se conserva la frontera.
+    # 1) Fronteras de escena. La pausa entre escenas exige un corte RESPALDADO
+    #    por silencio medido (wide >= 0.15) cerca de la frontera — un fin de
+    #    frase o pausa natural de verdad. Si la frontera cae a mitad de frase
+    #    (sin silencio real cerca), NO se inserta pausa: la voz fluye a través
+    #    del corte visual, muy documental. (La versión anterior aceptaba
+    #    cualquier microhueco entre palabras y metía la pausa a mitad de
+    #    frase — el «corte» que se oía en la transición de escenas.)
     bounds = [0.0]
     boundary_pause = [0.0] * n  # pausa DESPUÉS de la escena i
     for i in range(1, n):
         b = float(user_scenes[i]["audio_start"])
-        c = nearest_cut(b, window=0.7, low=bounds[-1] + 0.4)
+        c = nearest_cut(b, window=0.7, low=bounds[-1] + 0.4, min_wide=0.15)
         if c is not None:
             bounds.append(c["mid"])
             pa = min(1.6, float(user_scenes[i - 1].get("pause_after") or 0.0))
             boundary_pause[i - 1] = breath + pa
         else:
-            bounds.append(min(max(b, bounds[-1] + 0.4), audio_total - 0.1))
+            # Sin pausa posible: re-anclar la frontera al hueco entre palabras
+            # más cercano (solo coordenada, para agrupar bien las palabras).
+            c2 = nearest_cut(b, window=0.45, low=bounds[-1] + 0.4)
+            nb = c2["mid"] if c2 is not None else b
+            bounds.append(min(max(nb, bounds[-1] + 0.4), audio_total - 0.1))
     bounds.append(audio_total)
 
     # 2) Inserciones de silencio (punto en el audio original → duración)
     insertions: list[tuple[float, float]] = []
+    boundary_pts: set[float] = set()
     for i in range(n - 1):
         if boundary_pause[i] > 0.001:
             insertions.append((bounds[i + 1], boundary_pause[i]))
+            boundary_pts.add(round(bounds[i + 1], 4))
     # 2b) Respiros intra-escena al final de cada frase (según el pace del
-    #     director), solo en huecos seguros dentro de la escena.
+    #     director), SOLO en cortes respaldados por silencio medido.
     n_sentence_breaths = 0
     for i, s in enumerate(user_scenes):
         pace = _pace_factor(s.get("pace"))
@@ -137,8 +153,10 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
             if not (a <= float(w["start"]) < b) or not _ends_sentence(w["text"]):
                 continue
             c = cut_by_word.get(wi)
-            if c is None or not (a < c["mid"] < b) or c["wide"] < 0.06:
+            if c is None or not (a < c["mid"] < b) or c["wide"] < 0.12:
                 continue
+            if round(c["mid"], 4) in boundary_pts:
+                continue  # ya lleva la pausa de frontera: no duplicar
             insertions.append((c["mid"], sent_breath * pace))
             n_sentence_breaths += 1
 

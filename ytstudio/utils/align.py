@@ -10,21 +10,22 @@ def flatten_words(segments: list[dict]) -> list[dict]:
     transcripción, en orden. Vacío si el proyecto es de una versión anterior
     sin timestamps por palabra (los llamadores deben tener un respaldo).
 
-    Filtra duplicados: dos palabras NUNCA pueden solaparse en el tiempo (nadie
-    pronuncia dos palabras a la vez) — si sus intervalos se solapan es que la
-    misma palabra quedó asignada a dos segmentos (bug ya corregido en la
-    transcripción, pero esto protege proyectos con datos ya guardados)."""
+    Filtra duplicados REALES: la misma palabra asignada a dos segmentos (bug
+    antiguo de la transcripción) aparece dos veces con el mismo texto y el
+    mismo tiempo de inicio. Solo se descarta ese caso — un simple solape de
+    tiempos NO basta, porque los timestamps de Whisper a veces se solapan
+    unos milisegundos entre palabras legítimas y se perderían palabras."""
     words: list[dict] = []
     for seg in segments or []:
         words.extend(seg.get("words") or [])
     words.sort(key=lambda w: w["start"])
     out: list[dict] = []
-    prev_end = -1.0
     for w in words:
-        if w["start"] < prev_end - 0.02:
-            continue  # se solapa con la palabra anterior: duplicado
+        if out and abs(float(w["start"]) - float(out[-1]["start"])) < 0.02 \
+                and ((w.get("text") or "").strip().lower()
+                     == (out[-1].get("text") or "").strip().lower()):
+            continue  # duplicado exacto (misma palabra, mismo instante)
         out.append(w)
-        prev_end = max(prev_end, float(w["end"]))
     return out
 
 

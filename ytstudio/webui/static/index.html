@@ -767,7 +767,11 @@ function renderVersion(){
   el.style.cursor='pointer';
   el.title='Ver qué cambió en cada versión';
   el.onclick=showChangelog;
-  el.innerHTML=`Versión: <b>${esc(v.version||v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
+  // El disco puede tener una versión más nueva que el PROCESO en ejecución
+  // (actualizar.bat sin reiniciar iniciar.bat): avisar en grande.
+  const stale=CAT.server_version&&v.version&&CAT.server_version!==v.version;
+  el.innerHTML=(stale?`<div style="background:#7a2e2e;color:#ffd7d7;padding:6px 8px;border-radius:8px;margin-bottom:6px;font-size:12px"><b>⚠ Actualización descargada (${esc(v.version)}) pero NO aplicada.</b><br>Cierra la ventana de iniciar.bat y ábrela de nuevo.</div>`:'')
+    +`Versión: <b>${esc((stale?CAT.server_version:v.version)||v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
     +`<span class="muted" style="font-size:11px"> · novedades 📋</span>`
     +(v.modified?'<br>⚠ hay cambios locales sin actualizar':'');
 }
@@ -794,7 +798,13 @@ let EVFILTER='all';
 async function showEvents(){
   const main=document.getElementById('main');
   let data;
-  try{data=await api('/api/events?limit=500')}catch(e){toast('⚠ '+e.message);return}
+  try{data=await api('/api/events?limit=500')}
+  catch(e){
+    if((e.message||'').includes('No encontrado'))
+      toast('⚠ El programa sigue ejecutando la versión anterior: cierra la ventana de iniciar.bat y ábrela de nuevo.');
+    else toast('⚠ '+e.message);
+    return;
+  }
   const icon={info:'•',warn:'⚠',error:'✕'};
   const color={info:'var(--muted)',warn:'#E8C46B',error:'#ff6b6b'};
   const evs=data.events.filter(e=>EVFILTER==='all'||e.level===EVFILTER);

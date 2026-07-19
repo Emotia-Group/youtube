@@ -3,6 +3,33 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v25 — 2026-07-19
+- ARREGLO de la regresión de v24 (desfase/corte en la transición de la
+  escena 1 a la 2, y desfase acumulado después):
+  · La pausa entre escenas exigía solo un hueco entre palabras según
+    Whisper — hasta un microhueco de 50ms A MITAD DE FRASE valía, y ahí se
+    metía la pausa (ese era el corte que se oía en la transición). Ahora
+    toda pausa exige DOBLE verificación: hueco entre palabras Y silencio
+    real MEDIDO en la onda (≥0.15s). Si la frontera cae a mitad de frase,
+    no se inserta nada: la voz fluye a través del corte visual.
+  · Las escenas con clip de video podían salir con UN CUADRO DE MÁS (por el
+    redondeo de la duración a milésimas): cada escena de video sumaba hasta
+    42ms y los subtítulos quemados se iban corriendo respecto a la voz —
+    desfase progresivo. Ahora cada escena se renderiza con el número EXACTO
+    de cuadros del mapa de tiempos.
+- AVISO CLARO DE REINICIO: tras actualizar.bat, si la ventana de
+  iniciar.bat sigue abierta con la versión anterior, la interfaz mostraba
+  la versión nueva pero el programa seguía siendo el viejo (por eso el log
+  de eventos decía «No encontrado»). Ahora la interfaz compara la versión
+  del programa EN EJECUCIÓN con la del disco y muestra un aviso rojo:
+  «cierra la ventana de iniciar.bat y ábrela de nuevo».
+- El log de eventos registra también el arranque del programa (útil para
+  confirmar que el reinicio aplicó la actualización).
+- Afinado el filtro de palabras duplicadas de v23: ya solo descarta
+  duplicados exactos (mismo texto y mismo instante) — un solape de
+  milisegundos entre palabras legítimas de Whisper ya no borra palabras
+  del subtítulo.
+
 ## v24 — 2026-07-19
 - SOLUCIÓN DE RAÍZ del corte de voz en las transiciones (el «se cortó al
   segundo 11»). Causa: las fronteras de escena se colocaban por TIEMPO y
