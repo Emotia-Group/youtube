@@ -318,6 +318,7 @@ def run(project, cfg) -> None:
         for _ in pool.map(_make_vo, scenes):
             pass  # propaga el primer error (fase reanudable)
 
+    fps = float(cfg.get("video", {}).get("fps", 24))
     total = 0.0
     for scene in scenes:
         out = vo_dir / f"vo_{scene['id']:03d}.mp3"
@@ -328,24 +329,61 @@ def run(project, cfg) -> None:
             pass
         else:
             # Voz sintética (TTS): se deja un respiro entre escenas y la pausa
-            # dramática (la música sube en él con el ducking).
+            # dramática (la música sube en él con el ducking). La duración se
+            # cuantiza a CUADROS ENTEROS: el video se renderiza en cuadros, y
+            # una duración con fracción de cuadro desalinearía audio y video
+            # medio milisegundo por escena (se acumula).
             scene_pad = padding + float(scene.get("pause_after") or 0.0)
             scene["vo_duration"] = round(probe_duration(out), 3)
-            scene["duration"] = round(scene["vo_duration"] + scene_pad, 3)
+            frames = max(1, round((scene["vo_duration"] + scene_pad) * fps))
+            scene["duration"] = round(frames / fps, 5)
         total += scene["duration"]
 
     # Cola de cierre también en TTS: la última imagen y la música respiran y
     # el fundido final no pisa la voz.
     if not use_user_voice and scenes:
         outro = max(1.0, float(cfg.get("audio", {}).get("outro_seconds", 2.0)))
-        scenes[-1]["duration"] = round(scenes[-1]["duration"] + outro, 3)
-        total += outro
+        frames = round((scenes[-1]["duration"] + outro) * fps)
+        add = round(frames / fps, 5) - scenes[-1]["duration"]
+        scenes[-1]["duration"] = round(frames / fps, 5)
+        total += add
 
     if use_user_voice:
         _sync_overlays(scenes, narration.get("segments") or [], voice_map)
+    else:
+        # UNA SOLA PISTA continua también con voz TTS: cada clip se coloca en
+        # el inicio EXACTO de su escena (la misma arquitectura que la
+        # narración propia). Las escenas de video van SIN audio — el audio por
+        # escena era la causa del desfase en las transiciones.
+        timeline = _build_tts_timeline(scenes, vo_dir)
+        project.set("voice_timeline", timeline.name)
+        project.set("voice_map", None)
 
     save_scenes(project, scenes)
     project.set("total_duration", round(total, 2))
+
+
+def _build_tts_timeline(scenes: list[dict], vo_dir):
+    """Compila los clips TTS en una única pista continua exacta: cada clip
+    arranca en el inicio de su escena y se rellena con silencio hasta la
+    escena siguiente (pad→trim a la duración exacta de la escena)."""
+    fmt = "aresample=44100,aformat=sample_fmts=s16:channel_layouts=stereo"
+    args: list[str] = []
+    graph: list[str] = []
+    labels: list[str] = []
+    for k, s in enumerate(scenes):
+        args += ["-i", str(vo_dir / s["vo_file"])]
+        graph.append(f"[{k}:a]{fmt},apad,atrim=0:{float(s['duration']):.5f},"
+                     f"asetpts=PTS-STARTPTS[p{k}]")
+        labels.append(f"[p{k}]")
+    graph.append(f"{''.join(labels)}concat=n={len(labels)}:v=0:a=1[out]")
+    out = vo_dir / "narration_timeline.wav"
+    script = vo_dir / "timeline.filters"
+    script.write_text(";\n".join(graph), encoding="utf-8")
+    run_ffmpeg([*args, "-filter_complex_script", str(script),
+                "-map", "[out]", "-c:a", "pcm_s16le", str(out)],
+               "línea de tiempo de la voz (TTS)")
+    return out
 
 
 def _sync_overlays(scenes: list[dict], segments: list[dict],

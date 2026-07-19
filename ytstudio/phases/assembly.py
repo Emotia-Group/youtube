@@ -354,11 +354,17 @@ def _plan_transitions(scenes: list[dict], cfg: dict,
 
 
 def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
+    """Renderiza la escena SOLO VIDEO (sin pista de audio). El audio del video
+    completo es UNA pista continua (voz + música + SFX) que se mezcla al final
+    sobre el cuerpo concatenado — meter audio por escena era la fuente del
+    desfase: el contenedor mp4 corría los cuadros ~23 ms (1 cuadro AAC) en
+    cada transición, y los cortes y rótulos llegaban tarde respecto a la voz
+    y los subtítulos. Sin pista de audio, la concatenación es EXACTA al
+    cuadro (verificado: 0.00 ms de error en 12 escenas)."""
     w, h, fps = cfg["video"]["width"], cfg["video"]["height"], cfg["video"]["fps"]
     dur = scene["duration"]
     frames = max(1, round(dur * fps))
 
-    vo = project.path("voiceover", scene["vo_file"])
     filters = []
 
     if scene.get("broll_video"):
@@ -398,21 +404,15 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     if segs:
         filters.append(f"[{label}]{','.join(segs)}[v2]")
         label = "v2"
-    filters.append("[1:a]aresample=44100,aformat=channel_layouts=stereo,apad[a]")
 
-    # -frames:v EXACTO además de -t: la duración guardada va redondeada a 3
-    # decimales y con clips de video ffmpeg podía incluir un cuadro de más por
-    # escena (p.ej. -t 10.417 con duración real 10.41666 = 250 cuadros). Esos
-    # cuadros extra alargaban el cuerpo y desfasaban progresivamente los
-    # subtítulos y la voz. Con el número de cuadros explícito, cada escena mide
-    # EXACTAMENTE lo que el mapa de tiempos asume.
+    # -frames:v EXACTO: cada escena mide exactamente los cuadros que el mapa
+    # de tiempos asume (sin -t redondeado que podía colar un cuadro de más).
     run_ffmpeg([
-        *inputs, "-i", str(vo),
+        *inputs,
         "-filter_complex", ";".join(filters),
-        "-map", f"[{label}]", "-map", "[a]",
-        "-frames:v", str(frames), "-t", f"{dur:.3f}",
+        "-map", f"[{label}]", "-an",
+        "-frames:v", str(frames),
         "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
         str(out),
     ], f"escena {scene['id']}")
 
@@ -531,6 +531,10 @@ def _render_signature(scenes, plans, cfg, project) -> str:
             return None
 
     payload = {
+        # Versión del formato de escena: subirla invalida TODAS las escenas
+        # cacheadas (v2 = escenas SOLO VIDEO; las viejas llevaban pista de
+        # audio, que desfasaba las transiciones).
+        "fmt": 2,
         "video": {k: v.get(k) for k in
                   ("width", "height", "fps", "transition", "overlays",
                    "overlay_accent")},
@@ -591,7 +595,10 @@ def run(project, cfg) -> None:
                 if done % 5 == 0 or done == len(jobs):
                     notify(f"🎬 Escena {done}/{len(jobs)} montada")
 
-    # 2) Concatenación de escenas (rutas con '/' también en Windows)
+    # 2) Concatenación de escenas (rutas con '/' también en Windows). Las
+    #    escenas son SOLO VIDEO: la concatenación es exacta al cuadro (con
+    #    pista de audio por escena, el contenedor corría los cuadros ~23 ms
+    #    por transición y los cortes/rótulos llegaban tarde respecto a la voz).
     concat_list = scenes_dir / "list.txt"
     scene_files = [(scenes_dir / "scene_{:03d}.mp4".format(s["id"])).resolve()
                    for s in scenes]
@@ -601,6 +608,22 @@ def run(project, cfg) -> None:
     body = final_dir / "cuerpo.mp4"
     run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list),
                 "-c", "copy", str(body)], "concatenación")
+
+    # AUTOCOMPROBACIÓN: el cuerpo debe durar EXACTAMENTE la suma de escenas
+    # (±1 cuadro). Si no, algo desalinearía voz/subtítulos — mejor un aviso
+    # claro ahora que un video desfasado.
+    fps = float(cfg["video"].get("fps", 24))
+    expected = sum(max(1, round(float(s["duration"]) * fps)) for s in scenes) / fps
+    body_dur = probe_duration(body)
+    if abs(body_dur - expected) > 1.5 / fps:
+        from ytstudio import eventlog
+        msg = (f"Autocomprobación del montaje: el cuerpo mide {body_dur:.3f}s "
+               f"y las escenas suman {expected:.3f}s (deriva "
+               f"{1000 * (body_dur - expected):+.0f} ms). Reporta este aviso — "
+               "indica un problema de sincronía en la concatenación.")
+        project.add_warning(msg)
+        eventlog.log("error", msg, project=getattr(project, "slug", None),
+                     phase="assembly")
 
     # 3) Mezcla de audio (envolvente de intensidad + ducking + SFX + loudness)
     #    y subtítulos. El grafo va en un archivo (-filter_complex_script):
@@ -613,10 +636,11 @@ def run(project, cfg) -> None:
 
     total = probe_duration(body)
 
-    # Voz: en narración propia se usa la grabación CONTINUA del usuario como
-    # pista única (alineada desde t=0 y ajustada a la duración del video), en
-    # vez de los trozos por escena — así suena exactamente como la grabó, sin
-    # cortes ni silencios entre escenas. En TTS se usa el audio del cuerpo.
+    # Voz: SIEMPRE una única pista continua (narration_timeline.wav) — con
+    # narración propia es tu grabación con respiros; con TTS son los clips
+    # colocados en el inicio exacto de cada escena. Las escenas van SIN audio
+    # (el audio por escena desfasaba las transiciones), así que esta pista es
+    # la única fuente de la voz.
     narration = project.get("narration")
     use_user_voice = bool(narration and any("audio_start" in s for s in scenes))
 
@@ -625,27 +649,31 @@ def run(project, cfg) -> None:
     args = ["-i", str(body), "-i", str(music), *sfx_args]
     afilters: list[str] = []
 
-    if use_user_voice:
-        notify("🎙 Voz: usando tu narración CONTINUA como pista única "
-               "(con respiros solo en tus pausas naturales).")
-        narr_idx = 2 + (len(sfx_args) // 2)
-        tl = project.get("voice_timeline")
-        tl_path = project.path("voiceover", tl) if tl else None
-        voice_src = (tl_path if tl_path and tl_path.exists()
-                     else project.path("input", narration["file"]))
-        args += ["-i", str(voice_src)]
-        base = (f"[{narr_idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
-                f"atrim=0:{total:.3f},apad=whole_dur={total:.3f}")
-        if duck:  # se consume 2 veces (sidechain + mezcla) → asplit obligatorio
-            afilters.append(f"{base},asplit=2[vsc][vmx]")
-            voice_sc, voice_mx = "vsc", "vmx"
+    tl = project.get("voice_timeline")
+    tl_path = project.path("voiceover", tl) if tl else None
+    if not (tl_path and tl_path.exists()):
+        if use_user_voice and narration.get("file") and \
+                project.path("input", narration["file"]).exists():
+            tl_path = project.path("input", narration["file"])  # respaldo
         else:
-            afilters.append(f"{base}[vmx]")
-            voice_sc, voice_mx = None, "vmx"
-        next_idx = narr_idx + 1
+            raise RuntimeError(
+                "Falta la pista continua de voz (narration_timeline.wav) — "
+                "este proyecto se generó con una versión anterior. Usa "
+                "«Rehacer desde Voz» para reconstruirla.")
+    notify("🎙 Voz: pista única continua para todo el video "
+           + ("(tu narración con respiros)." if use_user_voice
+              else "(clips TTS en los inicios exactos de escena)."))
+    narr_idx = 2 + (len(sfx_args) // 2)
+    args += ["-i", str(tl_path)]
+    base = (f"[{narr_idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
+            f"atrim=0:{total:.3f},apad=whole_dur={total:.3f}")
+    if duck:  # se consume 2 veces (sidechain + mezcla) → asplit obligatorio
+        afilters.append(f"{base},asplit=2[vsc][vmx]")
+        voice_sc, voice_mx = "vsc", "vmx"
     else:
-        voice_sc = voice_mx = "0:a"  # ffmpeg auto-divide los pads de entrada
-        next_idx = 2 + (len(sfx_args) // 2)
+        afilters.append(f"{base}[vmx]")
+        voice_sc, voice_mx = None, "vmx"
+    next_idx = narr_idx + 1
 
     envelope = _music_envelope(scenes, music_db, swing_db)
     afilters.append(f"[1:a]volume='{envelope}':eval=frame[m]")
@@ -690,4 +718,22 @@ def run(project, cfg) -> None:
     run_ffmpeg([*args, "-filter_complex_script", str(script), *maps, *codecs,
                 "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                 str(output)], "mezcla final")
+
+    # AUTOCOMPROBACIÓN FINAL: el video terminado debe durar lo que el cuerpo
+    # (la pista de audio se recorta/rellena a ese total exacto). Cualquier
+    # deriva se reporta — el pipeline se verifica a sí mismo de punta a punta.
+    try:
+        final_dur = probe_duration(output)
+        if abs(final_dur - total) > 0.25:
+            from ytstudio import eventlog
+            msg = (f"Autocomprobación final: el video mide {final_dur:.2f}s y "
+                   f"se esperaban {total:.2f}s. Reporta este aviso.")
+            project.add_warning(msg)
+            eventlog.log("error", msg, project=getattr(project, "slug", None),
+                         phase="assembly")
+        else:
+            notify(f"✅ Sincronía verificada: video {final_dur:.2f}s = "
+                   f"escenas {total:.2f}s (una sola línea de tiempo).")
+    except Exception:
+        pass
     project.set("final_video", str(output))

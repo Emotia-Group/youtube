@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.21.0 — 2026-07-19
+- UNA SOLA LÍNEA DE TIEMPO (cambio de arquitectura — la causa raíz del
+  desfase en las transiciones, MEDIDA y demostrada): cada escena se
+  renderizaba como un mp4 con su PROPIA pista de audio, y al concatenarlas
+  el contenedor corría los cuadros +23 ms (exactamente un cuadro de audio
+  AAC) en cada transición — los cortes de escena y los rótulos llegaban
+  tarde respecto a la voz y los subtítulos, que sí iban sobre la línea de
+  tiempo teórica. Por eso el desfase se sentía «a través de la transición
+  de cada escena» sin importar cuánto se afinara el resto.
+- El arreglo (verificado: 0.00 ms de error en las fronteras): las escenas
+  ahora son SOLO VIDEO — el audio del video completo es UNA pista continua
+  (voz + música + efectos) que se mezcla al final sobre el cuerpo entero.
+  La voz, los subtítulos, los rótulos y los efectos fluyen como un todo;
+  las escenas son solo lo visual que se pinta encima.
+- La voz TTS (guion escrito) usa ahora la MISMA arquitectura que la
+  narración propia: los clips se colocan en el inicio exacto de cada
+  escena dentro de una única pista continua (antes iban incrustados en el
+  audio de cada escena — la fuente del desfase).
+- EL PIPELINE SE VERIFICA A SÍ MISMO de punta a punta: al concatenar
+  comprueba que el cuerpo dura EXACTAMENTE la suma de escenas (±1 cuadro)
+  y al terminar comprueba el video final contra lo esperado. Si algo
+  deriva, aviso visible y registro en el 🧾 Log de eventos; si todo cuadra,
+  verás «✅ Sincronía verificada» en el progreso.
+- Los proyectos existentes re-renderizan sus escenas una única vez al
+  reanudar el montaje (formato nuevo sin audio); los proyectos de versiones
+  muy anteriores sin pista continua piden «Rehacer desde Voz» con un
+  mensaje claro.
+
 ## v0.20.1 — 2026-07-19
 - La REVISIÓN del B-roll subido por el director ahora es CONFIGURABLE: un
   interruptor en el Storyboard permite desactivarla para ahorrar tokens.
