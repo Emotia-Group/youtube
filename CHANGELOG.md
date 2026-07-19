@@ -3,6 +3,29 @@
 Cada ajuste publicado incrementa la versión. La versión activa se muestra
 arriba a la izquierda en la interfaz (junto a la fecha de actualización).
 
+## v23 — 2026-07-19
+- ARREGLO de las palabras repetidas en subtítulos («historia historia»): la
+  transcripción asignaba las palabras a los segmentos de Whisper por ventana
+  de tiempo, y dos segmentos vecinos pueden solaparse un poco — la misma
+  palabra caía en AMBOS y quedaba duplicada. Ahora cada palabra se asigna a
+  un único segmento (misma técnica que ya arregló la duplicación entre
+  escenas en v21).
+- RECUPERADA LA PUNTUACIÓN en subtítulos con sincronía por palabra: la API
+  de Whisper devuelve el tiempo de cada palabra SIN comas ni puntos (aunque
+  el texto completo del segmento sí los trae) — al reconstruir el subtítulo
+  palabra por palabra se perdía toda la puntuación. Ahora se recupera del
+  texto del segmento, conservando el tiempo real de cada palabra.
+- Margen de seguridad más generoso al anclar los respiros en silencios
+  reales (0.06s → 0.08s por lado, silencio mínimo detectable 0.15s → 0.18s):
+  refuerzo adicional contra cortes al filo de una palabra.
+- COLA DE CIERRE MÁS CORTA: outro (3.5s → 2s) y fundido final (3s → 1.5s).
+  Antes casi todo el cierre se iba en el fundido y se sentía como un hueco
+  vacío tras la última palabra; ahora respira lo justo y el fundido sigue
+  sin tocar nunca la voz.
+- Red de seguridad adicional: si un proyecto ya guardado tiene palabras
+  duplicadas (del bug anterior), se filtran automáticamente al usarlas — no
+  hace falta volver a transcribir para beneficiarte del arreglo.
+
 ## v22 — 2026-07-18
 - AUDITORÍA TOTAL DE SINCRONIZACIÓN (voz, subtítulos, rótulos y escenas).
   Causa raíz de la «voz cortada en varios tramos»: los respiros se cortaban

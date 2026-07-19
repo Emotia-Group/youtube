@@ -43,7 +43,7 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     audio_cfg = cfg.get("audio", {})
     breath = max(0.0, float(audio_cfg.get("scene_breath", 0.3)))
     intro = max(0.0, float(audio_cfg.get("intro_seconds", 0.8)))
-    outro = max(1.0, float(audio_cfg.get("outro_seconds", 3.5)))
+    outro = max(1.0, float(audio_cfg.get("outro_seconds", 2.0)))
 
     segs = narration.get("segments") or []
     seg_starts = [float(s["start"]) for s in segs]
@@ -52,21 +52,28 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     n = len(user_scenes)
 
     # Silencios REALES de la grabación, medidos en la onda (no estimados por
-    # Whisper): la única fuente de verdad sobre dónde se puede cortar.
-    silences = detect_silences(narration_file)
+    # Whisper): la única fuente de verdad sobre dónde se puede cortar. Se pide
+    # un silencio de al menos 0.18s (silencedetect puede marcar sus bordes con
+    # unos ms de imprecisión) y se deja un margen de seguridad de 0.08s a cada
+    # lado del punto de corte — así el corte cae siempre en silencio franco,
+    # nunca al filo de una palabra.
+    silences = detect_silences(narration_file, min_d=0.18)
+    MARGIN = 0.08
 
     def snap_to_silence(b: float) -> float | None:
         """Punto de corte DENTRO del silencio real más cercano a b (con margen
         de seguridad a cada lado), o None si no hay silencio medible cerca."""
         best = None
         for s0, s1 in silences:
+            if s1 - s0 < 2 * MARGIN + 0.02:
+                continue  # demasiado angosto para dejar margen a ambos lados
             d = 0.0 if s0 <= b <= s1 else min(abs(s0 - b), abs(s1 - b))
             if d <= 0.45 and (best is None or d < best[0]):
                 best = (d, s0, s1)
         if best is None:
             return None
         _, s0, s1 = best
-        return min(max(b, s0 + 0.06), max(s0 + 0.06, s1 - 0.06))
+        return min(max(b, s0 + MARGIN), s1 - MARGIN)
 
     # Fronteras fuente: el inicio de segmento de Whisper orienta, pero la
     # frontera definitiva se ancla DENTRO de un silencio medido. Si no lo
@@ -85,7 +92,7 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         b2 = min(max(b, bounds[-1] + 0.2), max(audio_total - 0.2, 0.2))
         if c is not None and b2 != b:
             # el ajuste de monotonía lo sacó del silencio → verificar de nuevo
-            c = b2 if any(s0 + 0.05 <= b2 <= s1 - 0.05
+            c = b2 if any(s0 + MARGIN <= b2 <= s1 - MARGIN
                           for s0, s1 in silences) else None
         cuttable.append(c is not None)
         bounds.append(b2)
@@ -223,7 +230,7 @@ def run(project, cfg) -> None:
         project.set("voice_timeline", timeline.name)
         if check:
             project.add_warning(check)
-        outro = cfg.get("audio", {}).get("outro_seconds", 3.5)
+        outro = cfg.get("audio", {}).get("outro_seconds", 2.0)
         notify(f"🎙 Narración propia: voz continua de {audio_total:.1f}s con "
                f"{n_breaths} respiros anclados en silencios REALES medidos en "
                f"tu grabación y {outro:.1f}s de cola final (el fundido nunca "
@@ -279,7 +286,7 @@ def run(project, cfg) -> None:
     # Cola de cierre también en TTS: la última imagen y la música respiran y
     # el fundido final no pisa la voz.
     if not use_user_voice and scenes:
-        outro = max(1.0, float(cfg.get("audio", {}).get("outro_seconds", 3.5)))
+        outro = max(1.0, float(cfg.get("audio", {}).get("outro_seconds", 2.0)))
         scenes[-1]["duration"] = round(scenes[-1]["duration"] + outro, 3)
         total += outro
 

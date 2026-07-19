@@ -53,13 +53,14 @@ audio:
                              # dramática de cada escena (dB de recorrido)
   sfx: true                  # efectos incidentales (whoosh/riser/boom) en cortes
   sfx_db: -18                # volumen de los efectos (propios en assets/sfx)
-  end_fade: 3                # fundido de cierre del audio al final (segundos)
+  end_fade: 1.5               # fundido de cierre del audio al final (segundos)
   # Respiración estilo documental (narración propia): los espacios en blanco
   # se insertan SOLO dentro de las pausas naturales de tu grabación — la voz
   # nunca se corta a destiempo.
   intro_seconds: 0.8         # aire antes de la primera palabra
-  outro_seconds: 3.5         # cola tras la última palabra (el fundido final
-                             # nunca toca la voz)
+  outro_seconds: 2.0         # cola tras la última palabra (el fundido final
+                             # nunca toca la voz; antes 3.5s + 3s de fundido
+                             # dejaban casi todo el cierre en silencio)
   scene_breath: 0.3          # respiro extra entre escenas (en pausas reales)
   # Modo "narración propia" (cuando subes tu voz grabada):
   trim_silence: true         # recorta silencios largos de tu grabación

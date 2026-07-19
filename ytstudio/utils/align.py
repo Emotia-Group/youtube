@@ -8,12 +8,24 @@ from __future__ import annotations
 def flatten_words(segments: list[dict]) -> list[dict]:
     """Todas las palabras (con tiempos reales, en el audio ORIGINAL) de la
     transcripción, en orden. Vacío si el proyecto es de una versión anterior
-    sin timestamps por palabra (los llamadores deben tener un respaldo)."""
+    sin timestamps por palabra (los llamadores deben tener un respaldo).
+
+    Filtra duplicados: dos palabras NUNCA pueden solaparse en el tiempo (nadie
+    pronuncia dos palabras a la vez) — si sus intervalos se solapan es que la
+    misma palabra quedó asignada a dos segmentos (bug ya corregido en la
+    transcripción, pero esto protege proyectos con datos ya guardados)."""
     words: list[dict] = []
     for seg in segments or []:
         words.extend(seg.get("words") or [])
     words.sort(key=lambda w: w["start"])
-    return words
+    out: list[dict] = []
+    prev_end = -1.0
+    for w in words:
+        if w["start"] < prev_end - 0.02:
+            continue  # se solapa con la palabra anterior: duplicado
+        out.append(w)
+        prev_end = max(prev_end, float(w["end"]))
+    return out
 
 
 def assign_words(scenes: list[dict], words: list[dict]) -> dict[int, list[dict]]:

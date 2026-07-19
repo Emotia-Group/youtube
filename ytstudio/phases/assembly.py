@@ -654,7 +654,7 @@ def run(project, cfg) -> None:
     n_mix = 3 if sfx_label else 2
     # Cierre: fundido de salida del audio completo (tras loudnorm, para que la
     # normalización no lo contrarreste) — el final deja de sentirse abrupto.
-    end_fade = float(cfg["audio"].get("end_fade", 3.0))
+    end_fade = float(cfg["audio"].get("end_fade", 1.5))
     fade = (f",afade=t=out:st={max(0.0, total - end_fade):.2f}:d={end_fade:.2f}"
             if end_fade > 0 else "")
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"

@@ -11,6 +11,24 @@ from pathlib import Path
 from ytstudio.utils.media import probe_duration
 
 
+def _restore_punctuation(seg_text: str, words: list[dict]) -> list[dict]:
+    """Repone comas y puntos en las palabras con tiempo.
+
+    La API de Whisper con timestamps por palabra devuelve cada palabra SIN
+    puntuación (aunque el texto del segmento sí la trae) — al reconstruir el
+    subtítulo desde las palabras (para tener el tiempo exacto) se perdían
+    todas las comas y puntos. El texto del segmento conserva la puntuación y
+    tiene las mismas palabras en el mismo orden, así que se emparejan por
+    posición y se usa el token puntuado (conservando el tiempo real)."""
+    tokens = seg_text.split()
+    if len(tokens) != len(words):
+        return words  # conteo distinto (caso raro): mejor no arriesgar el orden
+    out = []
+    for w, tok in zip(words, tokens):
+        out.append({**w, "text": tok})
+    return out
+
+
 class OpenAISTT:
     def __init__(self, cfg: dict):
         from openai import OpenAI
@@ -42,17 +60,34 @@ class OpenAISTT:
         words = [{"start": float(get(w, "start")), "end": float(get(w, "end")),
                   "text": (get(w, "word") or "").strip()}
                  for w in words_raw if (get(w, "word") or "").strip()]
+        words.sort(key=lambda w: w["start"])
 
         segments = getattr(result, "segments", None) or []
+        seg_starts = [float(get(s, "start")) for s in segments]
+        seg_bounds = seg_starts + [float(get(segments[-1], "end"))] if segments else []
+
+        # Asignación ÚNICA de cada palabra a un segmento por bisección (no por
+        # ventana ±0.05s): dos segmentos consecutivos pueden solaparse un poco
+        # en sus tiempos, y una ventana por segmento dejaba la misma palabra en
+        # AMBOS — la palabra aparecía duplicada en el subtítulo ("historia
+        # historia"). Con bisección cada palabra cae en un único segmento.
+        import bisect
+        seg_words: list[list[dict]] = [[] for _ in segments]
+        for w in words:
+            if not seg_bounds:
+                break
+            idx = bisect.bisect_right(seg_starts, w["start"]) - 1
+            idx = max(0, min(idx, len(segments) - 1))
+            seg_words[idx].append(w)
+
         out = []
-        for s in segments:
+        for s, sw in zip(segments, seg_words):
             text = (get(s, "text") or "").strip()
             if not text:
                 continue
             start, end = float(get(s, "start")), float(get(s, "end"))
-            seg_words = [w for w in words if start - 0.05 <= w["start"] <= end + 0.05]
             out.append({"start": start, "end": end, "text": text,
-                        "words": seg_words})
+                        "words": _restore_punctuation(text, sw)})
         return out
 
 
