@@ -374,6 +374,7 @@ def api_project_detail(slug: str) -> dict:
     detail["time_report"] = project.get("time_report")
     detail["manual_broll"] = project.get("manual_broll") or {}
     detail["broll_auto_replace"] = bool(project.get("broll_auto_replace"))
+    detail["broll_review"] = project.get("broll_review") is not False  # default on
     return detail
 
 
@@ -440,8 +441,12 @@ def api_scene_broll_delete(slug: str, scene_id: int) -> dict:
 
 def api_set_broll_policy(slug: str, body: dict) -> dict:
     project = Project(slug)
-    project.set("broll_auto_replace", bool(body.get("auto_replace")))
-    return {"broll_auto_replace": project.get("broll_auto_replace")}
+    if "auto_replace" in body:
+        project.set("broll_auto_replace", bool(body.get("auto_replace")))
+    if "review" in body:
+        project.set("broll_review", bool(body.get("review")))
+    return {"broll_auto_replace": bool(project.get("broll_auto_replace")),
+            "broll_review": project.get("broll_review") is not False}
 
 
 def api_run(slug: str, body: dict) -> dict:

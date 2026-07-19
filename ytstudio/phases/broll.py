@@ -230,10 +230,16 @@ def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
     Solo se revisa lo que cambió desde la última vez (no re-gasta tokens)."""
     if not placed:
         return
+    from ytstudio.progress import notify
+    # Revisión configurable: se puede desactivar para ahorrar tokens (no se
+    # gasta nada de visión IA; tu B-roll se usa tal cual, sin veredicto).
+    if project.get("broll_review") is False:
+        notify("👁 Revisión del director desactivada: tu B-roll se usa tal "
+               "cual (ahorro de tokens).")
+        return
     manual = project.get("manual_broll") or {}
     auto_replace = bool(project.get("broll_auto_replace"))
     lang = cfg.get("language", "es")
-    from ytstudio.progress import notify
     by_id = {s["id"]: s for s in scenes}
 
     def sig(info):

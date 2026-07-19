@@ -450,9 +450,12 @@ function usageTimeHtml(p){
   </div>`;
 }
 
-async function setBrollPolicy(on){
-  try{await api(`/api/projects/${current}/broll-policy`,{method:'PUT',body:JSON.stringify({auto_replace:on})});
-    toast(on?'El director reemplazará el B-roll que no encaje':'Se respetará siempre tu B-roll');
+async function setBrollPolicy(patch){
+  try{
+    await api(`/api/projects/${current}/broll-policy`,{method:'PUT',body:JSON.stringify(patch)});
+    if('review' in patch) toast(patch.review?'Revisión del director activada':'Revisión desactivada (ahorro de tokens)');
+    else if('auto_replace' in patch) toast(patch.auto_replace?'El director reemplazará el B-roll que no encaje':'Se respetará siempre tu B-roll');
+    await renderProject('Storyboard');  // refresca el estado (habilitar/deshabilitar)
   }catch(e){toast('⚠ '+e.message)}
 }
 async function uploadSceneBroll(sid,input){
@@ -493,10 +496,14 @@ async function renderTab(tab,p){
     el.innerHTML=`
       <div class="card" style="padding:12px 16px;font-size:13px">
         <b>🎬 Tu B-roll por escena (opcional)</b>
-        <p class="muted" style="margin:4px 0 6px">Sube tu propia imagen o video a las escenas que quieras — reutiliza B-roll de pruebas anteriores y ahorra tiempo y créditos. Lo que no subas, se genera con IA. Cada escena acepta el tipo que decidió el director (🎞 video o 🖼 imagen). Al terminar, el director revisa lo que subiste y te avisa si algo no encaja. Nada de esto afecta la voz, los subtítulos ni los tiempos.</p>
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
-          <input type="checkbox" style="width:auto" ${p.broll_auto_replace?'checked':''} onchange="setBrollPolicy(this.checked)">
-          <span class="muted">Dejar que el director <b>reemplace por IA</b> el B-roll que juzgue que no encaja (si lo desactivas, se respeta siempre tu elección y solo avisa).</span>
+        <p class="muted" style="margin:4px 0 6px">Sube tu propia imagen o video a las escenas que quieras — reutiliza B-roll de pruebas anteriores y ahorra tiempo y créditos. Lo que no subas, se genera con IA. Cada escena acepta el tipo que decidió el director (🎞 video o 🖼 imagen). Nada de esto afecta la voz, los subtítulos ni los tiempos.</p>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" style="width:auto" ${p.broll_review!==false?'checked':''} onchange="setBrollPolicy({review:this.checked})">
+          <span class="muted">El director <b>revisa con visión IA</b> si tu B-roll encaja con cada escena (consume algunos tokens). Desactívalo para ahorrar: tu material se usa tal cual, sin revisión.</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:${p.broll_review!==false?'pointer':'not-allowed'};opacity:${p.broll_review!==false?'1':'.5'}">
+          <input type="checkbox" style="width:auto" ${p.broll_auto_replace?'checked':''} ${p.broll_review!==false?'':'disabled'} onchange="setBrollPolicy({auto_replace:this.checked})">
+          <span class="muted">Si la revisión está activa, dejar que el director <b>reemplace por IA</b> el B-roll que juzgue que no encaja (si no, se respeta siempre tu elección y solo avisa).</span>
         </label>
       </div>`
     + p.scenes.map(s=>{
@@ -522,7 +529,7 @@ async function renderTab(tab,p){
                 <span class="badge">📎 ${esc(mb.orig||mb.file)}</span>
                 <button class="btn sec small" onclick="deleteSceneBroll(${s.id})">✕ Quitar (se generará con IA)</button>
               </div>
-              ${rev?`<div class="muted" style="font-size:12px;margin-top:4px;color:${rev.fits?'var(--ok)':'var(--err)'}">${rev.fits?'✓ El director aprobó este B-roll para la escena.':'⚠ El director cree que NO encaja: '+esc(rev.reason)}</div>`:'<div class="muted" style="font-size:12px;margin-top:4px">Se revisará al generar.</div>'}`
+              ${rev?`<div class="muted" style="font-size:12px;margin-top:4px;color:${rev.fits?'var(--ok)':'var(--err)'}">${rev.fits?'✓ El director aprobó este B-roll para la escena.':'⚠ El director cree que NO encaja: '+esc(rev.reason)}</div>`:`<div class="muted" style="font-size:12px;margin-top:4px">${p.broll_review!==false?'Se revisará al generar.':'Revisión desactivada — se usa tal cual.'}</div>`}`
             :`<label class="btn sec small" style="display:inline-block">⬆ Subir ${isVideo?'video o imagen':'imagen'} para esta escena
                 <input type="file" accept="${accept}" style="display:none" onchange="uploadSceneBroll(${s.id},this)"></label>
               <span class="muted" style="font-size:11px;margin-left:6px">o se genera con IA</span>`}

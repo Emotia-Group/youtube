@@ -9,6 +9,14 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.20.1 — 2026-07-19
+- La REVISIÓN del B-roll subido por el director ahora es CONFIGURABLE: un
+  interruptor en el Storyboard permite desactivarla para ahorrar tokens.
+  Desactivada, tu material se usa tal cual y no se gasta NADA de visión IA
+  (ni una llamada). El interruptor de «reemplazar lo que no encaje» queda
+  deshabilitado cuando la revisión está apagada (sin revisión no hay
+  veredicto que aplicar).
+
 ## v0.20.0 — 2026-07-19
 - B-ROLL MANUAL POR ESCENA (pestaña Storyboard): tras «Generar hasta el
   guion gráfico», ahora puedes subir tu propia imagen o video a las escenas
