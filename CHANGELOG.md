@@ -9,6 +9,30 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.5 — 2026-07-20
+- EL RECORTE DE VOZ, ATACADO POR EL LADO CORRECTO (y corrigiendo una
+  regresión que YO metí en v0.24.4). En v0.24.4 el recorte se hacía en el
+  trozo de silencio profundo MÁS GRANDE; cuando una respiración a mitad de
+  pausa partía ese silencio y el trozo mayor quedaba pegado a la palabra
+  siguiente, el recorte se MOVÍA hacia ella y se comía su arranque — por
+  eso en tu última prueba el «pedazo» recortado fue el más largo de todos.
+  La lección clave: los dos bordes de una pausa NO son igual de fiables.
+  La COLA de la palabra anterior decae rápido de fuerte a nada, así que su
+  borde de silencio es de fiar (basta una guarda corta). Pero el ARRANQUE
+  de la siguiente, si es una fricativa suave (la «s» de «Su padre») o
+  aireado, se mantiene por debajo de CUALQUIER umbral 100-250 ms: su borde
+  medido SIEMPRE llega tarde, ya dentro de la palabra. Por eso ahora el
+  recorte se hace SIEMPRE por el FRENTE de la pausa (justo tras la palabra
+  anterior) y deja una guarda GRANDE antes del arranque de la siguiente
+  (onset_guard, 0.45 s por defecto). El arranque se estima por lo más
+  temprano —y seguro— entre el silencio medido y el tiempo de Whisper.
+  Resultado: pase lo que pase con respiraciones, ritmo o umbrales, el
+  recorte nunca se acerca al arranque de la palabra siguiente. Ajustable en
+  config: audio.onset_guard (súbelo a 0.55-0.6 si aún oyeras algún recorte)
+  y audio.cut_guard (guarda tras la palabra anterior).
+- Si el recorte de v0.24.3/0.24.4 te dejó algún proyecto con la voz movida,
+  basta «Rehacer desde Voz» con esta versión para reconstruir la pista.
+
 ## v0.24.4 — 2026-07-20
 - EL ÚLTIMO RECORTE DE VOZ («Su padre, Filipo II», segundo 14): la guarda
   de v0.24.3 se medía desde donde la energía cruza el umbral de pausas
