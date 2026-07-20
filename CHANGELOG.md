@@ -9,6 +9,44 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.26.0 — 2026-07-20
+- MÁS MODELOS Y MÁS BARATOS, CON PROS Y CONTRAS A LA VISTA: cada modelo del
+  catálogo (⚙ Configuración) muestra ahora su costo aproximado y sus
+  ventajas ✚ / desventajas ✖. Nuevos modelos económicos: FLUX schnell
+  (~$0.003/imagen, 10x más barato), SDXL Lightning (~$0.0015, casi gratis,
+  para borradores), Imagen 4 Fast (bueno con texto en imagen), Seedance 1
+  Lite (~$0.06-0.15/clip de video) y LTX Video (el más rápido y barato).
+  La ESTIMACIÓN de costo/tiempo ahora es POR MODELO: al elegir uno
+  económico, el presupuesto previo baja de verdad (antes estimaba igual
+  con cualquier modelo del proveedor). Sobre la colección «try for free»
+  de Replicate: son corridas de PRUEBA gratuitas limitadas (al agotarlas
+  pide crédito) — sirve para probar un modelo antes de pagarlo, no como
+  vía gratuita permanente. Los ahorros reales están en: modelos económicos
+  para iterar + el final con el premium, Edge TTS (gratis), biblioteca de
+  música local y Ken Burns en vez de video IA.
+- 10 IDIOMAS CON NOMBRE COMPLETO: Español, Inglés, Chino mandarín, Hindi,
+  Francés, Árabe, Bengalí, Portugués, Ruso y Alemán — seleccionables en
+  ⚙ Configuración con su nombre completo (ya no la sigla). El idioma guía
+  TODO: guion, escenas, rótulos, metadatos, transcripción y el idioma del
+  stream de subtítulos del mp4. Edge TTS incluye ahora voces gratuitas
+  para los 10 idiomas (elige una voz DEL idioma: la voz no traduce).
+- FORMATOS CORTOS VERTICALES: al crear un proyecto eliges el formato —
+  🎬 YouTube largo (16:9) · 📱 YouTube Short (≤60s) · 📱 Reel de Instagram
+  (≤90s) · 📱 TikTok (~60s). Los verticales generan 9:16 (1080x1920) con
+  guion corto de gancho inmediato, escenas rápidas (~3s), imágenes y video
+  IA en 9:16 y subtítulos grandes quemados — listos para subir. El formato
+  es POR PROYECTO (no toca tu configuración global).
+- ✂ EDITOR DE ESCENAS (nueva pestaña): ajusta por escena el movimiento de
+  cámara (Ken Burns), la transición, el efecto de sonido, la intensidad
+  musical, y el rótulo (texto/encabezado/tipo — se re-ancla solo al momento
+  exacto en que se pronuncia); con voz TTS también la DURACIÓN de cada
+  escena. «Aplicar» + remontar: solo se rehace el montaje (rápido y sin
+  costo de IA). Nota honesta: no es un CapCut — la edición cuadro a cuadro
+  con línea de tiempo arrastrable no cabe con seguridad en esta
+  arquitectura; este editor cubre los ajustes que de verdad cambian el
+  resultado sin regenerar nada caro. El orden y la narración se editan
+  desde el Guion (eso sí regenera fases).
+
 ## v0.25.3 — 2026-07-20
 - ¡EL RECORTE, ENCONTRADO Y ELIMINADO DE RAÍZ! Con el audio final que
   subiste lo medí de verdad: la voz estaba INTACTA en la pista intermedia,

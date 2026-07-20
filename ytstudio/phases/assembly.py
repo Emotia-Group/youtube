@@ -21,8 +21,11 @@ FADE_OPEN = 0.6   # apertura y cierre del video (un poco más largo)
 FADE_SLOW = 0.55  # fundido dramático (tras un respiro/pausa)
 
 # Códigos ISO-639-2 para la pista de subtítulos del mp4
-_LANG3 = {"es": "spa", "en": "eng", "pt": "por", "fr": "fra", "de": "deu",
-          "it": "ita", "ja": "jpn", "ko": "kor", "zh": "chi", "ru": "rus"}
+# Código ISO 639-2 del stream de subtítulos, desde el catálogo de idiomas
+# (única fuente de verdad) + extras históricos.
+from ytstudio.catalog import LANGUAGES as _LANGS
+_LANG3 = {l["code"]: l["lang3"] for l in _LANGS}
+_LANG3.update({"it": "ita", "ja": "jpn", "ko": "kor"})
 
 
 def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:

@@ -12,6 +12,10 @@ class ReplicateVideo:
         self.client = replicate
         self.model = cfg["providers"]["videogen"].get(
             "model", "kwaivgi/kling-v1.6-standard")
+        # Aspecto según el formato del proyecto (16:9 largo · 9:16 vertical)
+        v = cfg.get("video", {})
+        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
+                       else "16:9")
 
     def generate(self, prompt: str, out: Path, image: Path | None = None,
                  seconds: float = 5.0) -> Path:
@@ -23,7 +27,7 @@ class ReplicateVideo:
         # el clip en bucle).
         duration = 10 if seconds > 7.5 else 5
         with contextlib.ExitStack() as stack:
-            inputs: dict = {"prompt": prompt, "aspect_ratio": "16:9",
+            inputs: dict = {"prompt": prompt, "aspect_ratio": self.aspect,
                             "duration": duration}
             if image is not None:
                 inputs["start_image"] = stack.enter_context(open(image, "rb"))
@@ -31,6 +35,7 @@ class ReplicateVideo:
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)
         from ytstudio import pricing, usage
-        usage.record("replicate", f"clip de video {duration}s", 1, "clip",
-                    pricing.video_cost_mid(duration))
+        usage.record("replicate",
+                     f"clip de video {duration}s ({self.model.split('/')[-1]})",
+                     1, "clip", pricing.video_cost_mid(duration, self.model))
         return out

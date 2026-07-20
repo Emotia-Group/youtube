@@ -25,12 +25,17 @@ CATALOG: dict = {
                 "label": "Claude (Anthropic)",
                 "env": "ANTHROPIC_API_KEY",
                 "models": [
-                    {"id": "claude-opus-4-8", "label": "Claude Opus 4.8 — máxima calidad narrativa (recomendado)"},
-                    {"id": "claude-sonnet-5", "label": "Claude Sonnet 5 — rápido y económico"},
-                    {"id": "claude-haiku-4-5", "label": "Claude Haiku 4.5 — borradores muy rápidos"},
+                    {"id": "claude-opus-4-8",
+                     "label": "Claude Opus 4.8 — ✚ máxima calidad narrativa y criterio de director · ✖ el más caro (~$5/$25 por MTok) y algo más lento"},
+                    {"id": "claude-sonnet-5",
+                     "label": "Claude Sonnet 5 — ✚ 40% más barato y más rápido, guiones muy sólidos · ✖ giros narrativos algo menos finos que Opus"},
+                    {"id": "claude-haiku-4-5",
+                     "label": "Claude Haiku 4.5 — ✚ 5x más barato y rapidísimo, ideal para PRUEBAS y borradores · ✖ guion más plano; revísalo antes de publicar"},
                 ],
                 "notes": "Escribe el guion, diseña el concepto, divide en escenas, "
-                         "genera metadatos SEO y analiza imágenes/videos de referencia.",
+                         "genera metadatos SEO y analiza imágenes/videos de referencia. "
+                         "Consejo de ahorro: itera la estructura con Haiku/Sonnet y "
+                         "genera la versión final con Opus.",
             },
             {"name": "mock", "label": "Mock (sin API, contenido de ejemplo)", "env": None,
              "models": [], "notes": "Para probar el pipeline sin gastar."},
@@ -73,15 +78,32 @@ CATALOG: dict = {
                 "label": "Edge TTS — gratuito (voces neuronales de Microsoft)",
                 "env": None,
                 "voices": [
-                    {"id": "es-MX-JorgeNeural", "label": "Jorge — masculina (México)"},
-                    {"id": "es-MX-DaliaNeural", "label": "Dalia — femenina (México)"},
-                    {"id": "es-ES-AlvaroNeural", "label": "Álvaro — masculina (España)"},
-                    {"id": "es-ES-ElviraNeural", "label": "Elvira — femenina (España)"},
-                    {"id": "es-CO-GonzaloNeural", "label": "Gonzalo — masculina (Colombia)"},
-                    {"id": "es-AR-TomasNeural", "label": "Tomás — masculina (Argentina)"},
-                    {"id": "es-US-AlonsoNeural", "label": "Alonso — masculina (EE.UU.)"},
+                    {"id": "es-MX-JorgeNeural", "label": "Jorge — masculina (Español, México)"},
+                    {"id": "es-MX-DaliaNeural", "label": "Dalia — femenina (Español, México)"},
+                    {"id": "es-ES-AlvaroNeural", "label": "Álvaro — masculina (Español, España)"},
+                    {"id": "es-CO-GonzaloNeural", "label": "Gonzalo — masculina (Español, Colombia)"},
+                    {"id": "en-US-GuyNeural", "label": "Guy — masculina (Inglés, EE.UU.)"},
+                    {"id": "en-US-JennyNeural", "label": "Jenny — femenina (Inglés, EE.UU.)"},
+                    {"id": "zh-CN-YunxiNeural", "label": "Yunxi — masculina (Chino mandarín)"},
+                    {"id": "zh-CN-XiaoxiaoNeural", "label": "Xiaoxiao — femenina (Chino mandarín)"},
+                    {"id": "hi-IN-MadhurNeural", "label": "Madhur — masculina (Hindi)"},
+                    {"id": "hi-IN-SwaraNeural", "label": "Swara — femenina (Hindi)"},
+                    {"id": "fr-FR-HenriNeural", "label": "Henri — masculina (Francés)"},
+                    {"id": "fr-FR-DeniseNeural", "label": "Denise — femenina (Francés)"},
+                    {"id": "ar-SA-HamedNeural", "label": "Hamed — masculina (Árabe)"},
+                    {"id": "ar-SA-ZariyahNeural", "label": "Zariyah — femenina (Árabe)"},
+                    {"id": "bn-BD-PradeepNeural", "label": "Pradeep — masculina (Bengalí)"},
+                    {"id": "bn-BD-NabanitaNeural", "label": "Nabanita — femenina (Bengalí)"},
+                    {"id": "pt-BR-AntonioNeural", "label": "Antonio — masculina (Portugués, Brasil)"},
+                    {"id": "pt-BR-FranciscaNeural", "label": "Francisca — femenina (Portugués, Brasil)"},
+                    {"id": "ru-RU-DmitryNeural", "label": "Dmitry — masculina (Ruso)"},
+                    {"id": "ru-RU-SvetlanaNeural", "label": "Svetlana — femenina (Ruso)"},
+                    {"id": "de-DE-ConradNeural", "label": "Conrad — masculina (Alemán)"},
+                    {"id": "de-DE-KatjaNeural", "label": "Katja — femenina (Alemán)"},
                 ],
-                "notes": "Gratis y sorprendentemente natural. Requiere `pip install edge-tts`.",
+                "notes": "Gratis y sorprendentemente natural. Requiere `pip install "
+                         "edge-tts`. IMPORTANTE: elige una voz DEL IDIOMA del video "
+                         "(la voz no traduce; lee el guion en su acento).",
             },
             {"name": "mock", "label": "Mock (silencio con duración realista)", "env": None,
              "voices": [], "notes": "Para validar tiempos y montaje sin TTS real."},
@@ -106,19 +128,34 @@ CATALOG: dict = {
                 "label": "Replicate — FLUX y otros",
                 "env": "REPLICATE_API_TOKEN",
                 "models": [
-                    {"id": "black-forest-labs/flux-1.1-pro", "label": "FLUX 1.1 Pro — fotorrealismo cinematográfico (recomendado para cine)"},
-                    {"id": "black-forest-labs/flux-dev", "label": "FLUX dev — buena calidad, más barato"},
-                    {"id": "black-forest-labs/flux-schnell", "label": "FLUX schnell — muy rápido y barato"},
-                    {"id": "recraft-ai/recraft-v3", "label": "Recraft v3 — ilustración y diseño"},
-                    {"id": "stability-ai/stable-diffusion-3.5-large", "label": "SD 3.5 Large — estilo alternativo"},
+                    {"id": "black-forest-labs/flux-1.1-pro",
+                     "label": "FLUX 1.1 Pro (~$0.04/img) — ✚ el mejor fotorrealismo cinematográfico · ✖ el más caro y no el más rápido"},
+                    {"id": "black-forest-labs/flux-dev",
+                     "label": "FLUX dev (~$0.025/img) — ✚ calidad muy cercana al Pro por menos · ✖ algo menos fiable en manos/texto"},
+                    {"id": "black-forest-labs/flux-schnell",
+                     "label": "FLUX schnell (~$0.003/img) — ✚ 10x más barato y casi instantáneo, ideal para PRUEBAS · ✖ menos detalle fino y microtexturas"},
+                    {"id": "bytedance/sdxl-lightning-4step",
+                     "label": "SDXL Lightning (~$0.0015/img) — ✚ casi gratis, 1-2s por imagen · ✖ calidad claramente inferior; solo borradores"},
+                    {"id": "google/imagen-4-fast",
+                     "label": "Imagen 4 Fast (~$0.02/img) — ✚ rápido y muy bueno con TEXTO dentro de la imagen · ✖ look menos 'cine' que FLUX"},
+                    {"id": "recraft-ai/recraft-v3",
+                     "label": "Recraft v3 (~$0.04/img) — ✚ ilustración/diseño gráfico de primera · ✖ no busca fotorrealismo"},
+                    {"id": "stability-ai/stable-diffusion-3.5-large",
+                     "label": "SD 3.5 Large (~$0.065/img) — ✚ estética alternativa artística · ✖ más caro que FLUX Pro y menos consistente"},
                 ],
-                "notes": "FLUX 1.1 Pro es la referencia para look cinematográfico/documental.",
+                "notes": "FLUX 1.1 Pro es la referencia para el look documental. Estrategia "
+                         "de AHORRO: prueba la estructura del video con schnell/Lightning "
+                         "(centavos) y regenera solo la versión final con Pro. Replicate "
+                         "regala corridas de PRUEBA limitadas en varios modelos "
+                         "(colección «try for free») — sirven para probar, no para "
+                         "producción continua: al agotarlas pide crédito.",
             },
             {
                 "name": "openai",
                 "label": "OpenAI gpt-image-1",
                 "env": "OPENAI_API_KEY",
-                "models": [{"id": "gpt-image-1", "label": "gpt-image-1"}],
+                "models": [{"id": "gpt-image-1",
+                            "label": "gpt-image-1 (~$0.07-0.25/img) — ✚ el que mejor obedece prompts complejos · ✖ caro, lento y look menos fotográfico"}],
                 "notes": "Excelente seguimiento del prompt; look menos fotográfico que FLUX.",
             },
             {"name": "mock", "label": "Mock (tarjetas placeholder)", "env": None,
@@ -134,15 +171,23 @@ CATALOG: dict = {
                 "label": "Replicate — Kling / Wan / Hailuo / LTX",
                 "env": "REPLICATE_API_TOKEN",
                 "models": [
-                    {"id": "kwaivgi/kling-v2.1", "label": "Kling v2.1 — el look más cinematográfico (imagen→video)"},
-                    {"id": "kwaivgi/kling-v1.6-standard", "label": "Kling v1.6 standard — buen balance costo/calidad"},
-                    {"id": "wan-video/wan-2.2-i2v-a14b", "label": "Wan 2.2 i2v — movimiento natural, open source"},
-                    {"id": "minimax/hailuo-02", "label": "Hailuo 02 (MiniMax) — física realista"},
-                    {"id": "lightricks/ltx-video", "label": "LTX Video — el más rápido y barato"},
+                    {"id": "kwaivgi/kling-v2.1",
+                     "label": "Kling v2.1 (~$0.25-0.50/clip 5s) — ✚ el look más cinematográfico · ✖ el más caro y tarda 3-6 min/clip"},
+                    {"id": "kwaivgi/kling-v1.6-standard",
+                     "label": "Kling v1.6 standard (~$0.13-0.35/clip) — ✚ buen balance costo/calidad · ✖ movimiento algo menos fluido que v2.1"},
+                    {"id": "wan-video/wan-2.2-i2v-a14b",
+                     "label": "Wan 2.2 i2v (~$0.15-0.30/clip) — ✚ movimiento natural, open source · ✖ a veces deriva del encuadre original"},
+                    {"id": "minimax/hailuo-02",
+                     "label": "Hailuo 02 (~$0.20-0.45/clip) — ✚ física realista (agua, tela, multitudes) · ✖ tiempos de cola variables"},
+                    {"id": "bytedance/seedance-1-lite",
+                     "label": "Seedance 1 Lite (~$0.06-0.15/clip) — ✚ MUY barato con calidad digna, ideal para probar · ✖ detalle menor en planos amplios"},
+                    {"id": "lightricks/ltx-video",
+                     "label": "LTX Video (~$0.04-0.10/clip) — ✚ el más rápido (~30s) y el más barato · ✖ calidad visiblemente menor; solo pruebas"},
                 ],
                 "notes": "Anima las escenas clave (gancho/clímax) partiendo de la imagen "
-                         "de la escena. Costo por clip de 5s: ~$0.10–0.50 según modelo. "
-                         "Controla cuántas escenas con max_scenes.",
+                         "de la escena. AHORRO: prueba con Seedance Lite/LTX y genera la "
+                         "final con Kling; o usa Ken Burns (gratis) — para documental "
+                         "largo casi no se nota. Controla cuántas escenas con max_scenes.",
             },
             {"name": "none", "label": "Ninguno — Ken Burns sobre imágenes (recomendado para videos largos)",
              "env": None, "models": [],
@@ -178,6 +223,91 @@ CATALOG: dict = {
         ],
     },
 }
+
+# ---------------------------------------------------------------------------
+# Idiomas soportados
+# ---------------------------------------------------------------------------
+# code → {label (para la interfaz), prompt (nombre que se le da al LLM para
+# que escriba TODO en ese idioma), lang3 (metadato de subtítulos del mp4)}.
+# Nota TTS: ElevenLabs (multilingual) y OpenAI TTS hablan todos estos idiomas
+# con las mismas voces; en Edge TTS la voz elegida DEBE ser del idioma
+# (ej. en-US-GuyNeural para inglés, hi-IN-MadhurNeural para hindi).
+
+LANGUAGES: list[dict] = [
+    {"code": "es", "label": "Español", "prompt": "español", "lang3": "spa"},
+    {"code": "en", "label": "Inglés (English)", "prompt": "inglés (English)", "lang3": "eng"},
+    {"code": "zh", "label": "Chino mandarín (中文)", "prompt": "chino mandarín simplificado (中文)", "lang3": "chi"},
+    {"code": "hi", "label": "Hindi (हिन्दी)", "prompt": "hindi (हिन्दी)", "lang3": "hin"},
+    {"code": "fr", "label": "Francés (Français)", "prompt": "francés (français)", "lang3": "fra"},
+    {"code": "ar", "label": "Árabe (العربية)", "prompt": "árabe estándar moderno (العربية)", "lang3": "ara"},
+    {"code": "bn", "label": "Bengalí (বাংলা)", "prompt": "bengalí (বাংলা)", "lang3": "ben"},
+    {"code": "pt", "label": "Portugués (Português)", "prompt": "portugués (português)", "lang3": "por"},
+    {"code": "ru", "label": "Ruso (Русский)", "prompt": "ruso (русский)", "lang3": "rus"},
+    {"code": "de", "label": "Alemán (Deutsch)", "prompt": "alemán (Deutsch)", "lang3": "deu"},
+]
+
+_LANG_BY_CODE = {l["code"]: l for l in LANGUAGES}
+
+
+def lang_name(cfg: dict) -> str:
+    """Nombre completo del idioma configurado, para instruir al LLM
+    («escribe en chino mandarín…») en vez de pasarle la sigla."""
+    code = cfg.get("language", "es")
+    return _LANG_BY_CODE.get(code, {}).get("prompt", code)
+
+
+# ---------------------------------------------------------------------------
+# Formatos de video (largo horizontal vs. corto vertical)
+# ---------------------------------------------------------------------------
+# El formato se elige POR PROYECTO al crearlo y se materializa como overrides
+# en el config.yaml del proyecto (load_config ya hace el merge). Todos los
+# verticales comparten 1080x1920; cambian la duración objetivo y la etiqueta.
+
+FORMATS: dict = {
+    "long": {
+        "label": "🎬 YouTube — video largo (16:9)",
+        "overrides": {},  # usa la configuración global tal cual
+    },
+    "short": {
+        "label": "📱 YouTube Short — vertical ≤60 s",
+        "target_minutes": 0.9,
+        "overrides": {
+            "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
+                      "target_minutes": 0.9, "burn_subtitles": True},
+            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+                          "max_lines": 2},
+            "providers": {"images": {"size": "1024x1536"}},
+        },
+    },
+    "reel": {
+        "label": "📱 Instagram Reel — vertical ≤90 s",
+        "target_minutes": 1.4,
+        "overrides": {
+            "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
+                      "target_minutes": 1.4, "burn_subtitles": True},
+            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+                          "max_lines": 2},
+            "providers": {"images": {"size": "1024x1536"}},
+        },
+    },
+    "tiktok": {
+        "label": "📱 TikTok — vertical ~60 s",
+        "target_minutes": 1.0,
+        "overrides": {
+            "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
+                      "target_minutes": 1.0, "burn_subtitles": True},
+            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+                          "max_lines": 2},
+            "providers": {"images": {"size": "1024x1536"}},
+        },
+    },
+}
+
+
+def is_vertical(cfg: dict) -> bool:
+    v = cfg.get("video", {})
+    return int(v.get("height", 1080)) > int(v.get("width", 1920))
+
 
 # ---------------------------------------------------------------------------
 # Presets de estilo cinematográfico

@@ -58,17 +58,22 @@ class ReplicateImages:
         # defecto marca como NSFW mucho contenido histórico/bélico legítimo
         # (batallas, documentales); 6 evita esos falsos positivos.
         self.safety = int(icfg.get("safety_tolerance", 6))
+        # Aspecto según el formato del proyecto (16:9 largo · 9:16 Short/Reel)
+        v = cfg.get("video", {})
+        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
+                       else "16:9")
 
     def generate(self, prompt: str, out: Path) -> Path:
         import urllib.request
         output = replicate_call(self.client, self.model, {
-            "prompt": prompt, "aspect_ratio": "16:9",
+            "prompt": prompt, "aspect_ratio": self.aspect,
             "output_format": "jpg", "safety_tolerance": self.safety,
         })
         url = output[0] if isinstance(output, list) else output
         urllib.request.urlretrieve(str(url), out)
         from ytstudio import pricing, usage
-        usage.record("replicate", "imagen", 1, "img", pricing.img_cost_mid("replicate"))
+        usage.record("replicate", f"imagen ({self.model.split('/')[-1]})", 1,
+                     "img", pricing.img_cost_mid("replicate", self.model))
         return out
 
 

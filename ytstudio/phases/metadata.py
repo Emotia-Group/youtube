@@ -85,7 +85,8 @@ def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
     scenes = load_scenes(project)
-    lang = cfg.get("language", "es")
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)  # nombre completo del idioma para el LLM
     chapters = _chapters(scenes)
     chapters_txt = "\n".join(f"{_ts(t)} {name}" for name, t in chapters)
 

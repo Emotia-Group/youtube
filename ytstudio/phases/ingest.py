@@ -190,7 +190,8 @@ def _describe_broll(project, llm, assets, input_dir, lang: str) -> None:
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
-    lang = cfg.get("language", "es")
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)  # nombre completo del idioma para el LLM
     _migrate_legacy_input(project)
     assets = project.get("assets") or []
     stt = None

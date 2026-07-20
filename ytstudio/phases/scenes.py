@@ -405,7 +405,8 @@ def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
     script_md = load_script(project)
-    lang = cfg.get("language", "es")
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)  # nombre completo del idioma para el LLM
     videogen_scenes = cfg["providers"]["videogen"].get("max_scenes", 0)
 
     target = scene_seconds(cfg, project)

@@ -20,7 +20,8 @@ def run(project, cfg) -> None:
     llm = get_llm(cfg)
     brief = project.get("brief")
     concept = project.get("concept")
-    lang = cfg.get("language", "es")
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)  # nombre completo del idioma para el LLM
     minutes = concept.get("duration_minutes") or cfg["video"].get("target_minutes", 10)
     target_words = minutes * WORDS_PER_MINUTE
     is_script = brief["input_type"] == "script" or brief.get("detected_type") == "script"
@@ -41,14 +42,26 @@ def run(project, cfg) -> None:
         project.set("script_words", len(script_md.split()))
         return
 
-    system = (
-        f"Eres guionista senior de videos largos de YouTube en {lang}. Escribes "
-        "narración hablada natural (para leerse en voz alta), con frases cortas, "
-        "transiciones fluidas y técnicas de retención: gancho inmediato, bucles "
-        "abiertos, preguntas retóricas y un cierre con llamada a la acción. "
-        "SOLO escribes el texto que dirá el narrador — sin acotaciones de cámara, "
-        "sin marcas de tiempo, sin indicaciones entre corchetes."
-    )
+    from ytstudio.catalog import is_vertical
+    if is_vertical(cfg):
+        system = (
+            f"Eres guionista senior de videos VERTICALES CORTOS (Shorts/Reels/"
+            f"TikTok) en {lang}. Escribes narración hablada de ~{int(minutes * 60)} "
+            "segundos: gancho demoledor en la PRIMERA frase (sin saludos ni "
+            "introducciones), una sola idea, frases cortísimas, cero relleno, "
+            "y un cierre con giro o llamada a la acción de una línea. "
+            "SOLO escribes el texto que dirá el narrador — sin acotaciones, "
+            "sin marcas de tiempo, sin indicaciones entre corchetes."
+        )
+    else:
+        system = (
+            f"Eres guionista senior de videos largos de YouTube en {lang}. Escribes "
+            "narración hablada natural (para leerse en voz alta), con frases cortas, "
+            "transiciones fluidas y técnicas de retención: gancho inmediato, bucles "
+            "abiertos, preguntas retóricas y un cierre con llamada a la acción. "
+            "SOLO escribes el texto que dirá el narrador — sin acotaciones de cámara, "
+            "sin marcas de tiempo, sin indicaciones entre corchetes."
+        )
 
     if is_script:
         prompt = (

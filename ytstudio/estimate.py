@@ -168,13 +168,16 @@ def estimate(project, cfg: dict) -> dict:
 
     # --- Imágenes ------------------------------------------------------------
     perf = cfg.get("performance", {})
+    img_model = prov.get("images", {}).get("model", "")
     if n_ai_images and img_name in IMG_COST:
-        c = IMG_COST[img_name]
-        s = IMG_SECONDS[img_name]
+        from ytstudio.pricing import img_cost_range, img_seconds_range
+        c = img_cost_range(img_name, img_model)
+        s = img_seconds_range(img_name, img_model)
         iw = max(1, int(perf.get("parallel_images", 4)))
         if img_name == "replicate":
             iw = min(iw, 2)
-        add(f"Imágenes IA ({img_name})",
+        model_tag = img_model.split("/")[-1] if img_model else img_name
+        add(f"Imágenes IA ({model_tag})",
             f"{n_ai_images} imágenes (de {n_scenes} escenas, "
             f"{user_broll} con tu material) · {iw} en paralelo",
             n_ai_images * c[0], n_ai_images * c[1],
@@ -189,16 +192,21 @@ def estimate(project, cfg: dict) -> dict:
 
     # --- Video generativo ----------------------------------------------------
     if n_video_scenes:
+        from ytstudio.pricing import video_cost_range, video_seconds_range
+        vid_model = prov.get("videogen", {}).get("model", "")
+        vc = video_cost_range(vid_model)
+        vs = video_seconds_range(vid_model)
         long_clips = 1 if scene_secs > 7.5 else 0
-        cost_lo = n_video_scenes * VIDEO_COST_5S[0] * (2 if long_clips else 1)
-        cost_hi = n_video_scenes * VIDEO_COST_5S[1] * 2
+        cost_lo = n_video_scenes * vc[0] * (2 if long_clips else 1)
+        cost_hi = n_video_scenes * vc[1] * 2
         vw = max(1, int(perf.get("parallel_video", 2)))
-        add("Video IA (Kling vía Replicate)",
+        vid_tag = vid_model.split("/")[-1] if vid_model else "Kling"
+        add(f"Video IA ({vid_tag} vía Replicate)",
             f"{n_video_scenes} clips de {'10' if scene_secs > 7.5 else '5'} s "
             f"· {vw} en paralelo",
             cost_lo, cost_hi,
-            n_video_scenes * VIDEO_SECONDS[0] / 60 / vw,
-            n_video_scenes * VIDEO_SECONDS[1] / 60 / vw, phases={"broll": 1.0})
+            n_video_scenes * vs[0] / 60 / vw,
+            n_video_scenes * vs[1] / 60 / vw, phases={"broll": 1.0})
 
     # --- Música ---------------------------------------------------------------
     if music_name == "library":

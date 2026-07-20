@@ -46,19 +46,31 @@ def run(project, cfg) -> None:
 
     llm = get_llm(cfg)
     brief = project.get("brief")
-    lang = cfg.get("language", "es")
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)  # nombre completo del idioma para el LLM
     target = cfg["video"].get("target_minutes", 10)
     preset = get_style_preset(cfg)
 
     from pathlib import Path
     frames = [Path(f) for f in brief.get("reference_frames", []) if Path(f).exists()]
 
-    system = (
-        f"Eres director creativo de un canal de YouTube de videos largos tipo "
-        f"faceless/documental. Trabajas en {lang}. Diseñas conceptos con máxima "
-        f"retención: gancho en los primeros 30 segundos, bucles abiertos, ritmo "
-        f"variable y cierre con llamada a la acción."
-    )
+    from ytstudio.catalog import is_vertical
+    if is_vertical(cfg):
+        system = (
+            f"Eres director creativo de contenido VERTICAL CORTO (YouTube "
+            f"Shorts / Reels / TikTok). Trabajas en {lang}. Diseñas piezas de "
+            f"~{int(target * 60)} segundos con máxima retención: gancho "
+            f"demoledor en el primer segundo, UNA sola idea potente, ritmo "
+            f"altísimo sin relleno, y cierre con giro o llamada a la acción "
+            f"breve. Composición pensada para pantalla vertical 9:16."
+        )
+    else:
+        system = (
+            f"Eres director creativo de un canal de YouTube de videos largos tipo "
+            f"faceless/documental. Trabajas en {lang}. Diseñas conceptos con máxima "
+            f"retención: gancho en los primeros 30 segundos, bucles abiertos, ritmo "
+            f"variable y cierre con llamada a la acción."
+        )
     prompt = (
         f"Brief del video:\n{json.dumps(brief, ensure_ascii=False, indent=2)[:8000]}\n\n"
         f"Duración objetivo: ~{target} minutos.\n\n"

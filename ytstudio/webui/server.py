@@ -23,7 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from ytstudio.catalog import CATALOG, STYLE_PRESETS, key_status
+from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES, STYLE_PRESETS,
+                              key_status)
 from ytstudio.config import ROOT, load_config
 from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
 from ytstudio.project import (DIRS, PROJECTS_DIR, Project, read_json_tolerant,
@@ -280,11 +281,21 @@ def api_create_project(body: dict) -> dict:
         except ValueError as e:
             raise ApiError(400, str(e))
 
-    # Preset de estilo por proyecto (override del global)
+    # Overrides POR PROYECTO (preset de estilo + formato) en su config.yaml —
+    # load_config(project.dir) los mezcla sobre la config global al generar.
+    overrides: dict = {}
     preset = body.get("style_preset")
     if preset and preset in STYLE_PRESETS:
+        overrides["style"] = {"preset": preset}
+    fmt = body.get("format") or "long"
+    if fmt in FORMATS and FORMATS[fmt].get("overrides"):
+        for k, v in FORMATS[fmt]["overrides"].items():
+            sub = overrides.setdefault(k, {})
+            sub.update(v)
+    project.set("format", fmt)
+    if overrides:
         (project.dir / "config.yaml").write_text(
-            yaml.safe_dump({"style": {"preset": preset}}, allow_unicode=True), encoding="utf-8")
+            yaml.safe_dump(overrides, allow_unicode=True), encoding="utf-8")
     return {"slug": slug, "assets": project.get("assets") or []}
 
 
@@ -547,11 +558,108 @@ def api_save_script(slug: str, body: dict) -> dict:
     return {"saved": True}
 
 
+# Campos del EDITOR de escenas y qué invalida cada uno. Regla: el editor solo
+# toca lo que se puede remontar BARATO (sin volver a llamar al LLM ni regenerar
+# B-roll): rótulos, animación, transición, sfx, intensidad musical y — solo en
+# modo TTS — la duración de la escena. La narración y el orden no se editan
+# aquí (cambiarlos exige regenerar voz/B-roll: hazlo desde el Guion).
+_EDIT_VISUAL = {"animation", "transition", "sfx", "music_intensity"}
+_EDIT_ANIMS = {"zoom_in", "zoom_out", "pan_left", "pan_right", "static"}
+
+
+def api_edit_scenes(slug: str, body: dict) -> dict:
+    from ytstudio.phases.scenes import load_scenes, save_scenes
+
+    project = Project(slug)
+    scenes = load_scenes(project)
+    if not scenes:
+        raise ApiError(404, "Este proyecto aún no tiene escenas.")
+    by_id = {int(s["id"]): s for s in scenes}
+    use_user_voice = any("audio_start" in s for s in scenes)
+
+    need_subtitles = need_assembly = overlay_changed = False
+    for e in (body.get("edits") or []):
+        s = by_id.get(int(e.get("id", -1)))
+        if s is None:
+            continue
+        if "animation" in e and e["animation"] in _EDIT_ANIMS:
+            s["animation"] = e["animation"]; need_assembly = True
+        if "transition" in e and e["transition"] in ("corte", "fundido"):
+            s["transition"] = e["transition"]; need_assembly = True
+        if "sfx" in e and e["sfx"] in ("ninguno", "whoosh", "riser", "boom"):
+            s["sfx"] = e["sfx"]; need_assembly = True
+        if "music_intensity" in e:
+            try:
+                s["music_intensity"] = min(1.0, max(0.0, float(e["music_intensity"])))
+                need_assembly = True
+            except (TypeError, ValueError):
+                pass
+        if "overlay_text" in e or "overlay_kicker" in e or "overlay_type" in e:
+            text = (e.get("overlay_text")
+                    if "overlay_text" in e
+                    else (s.get("overlay") or {}).get("text", "")) or ""
+            text = text.strip()[:44]
+            if text:
+                s["overlay"] = {
+                    "type": (e.get("overlay_type")
+                             or (s.get("overlay") or {}).get("type") or "dato"),
+                    "text": text,
+                    "kicker": ((e.get("overlay_kicker")
+                                if "overlay_kicker" in e
+                                else (s.get("overlay") or {}).get("kicker", ""))
+                               or "").strip()[:36],
+                    "emphasis": (s.get("overlay") or {}).get("emphasis", ""),
+                }
+            else:
+                s["overlay"] = None
+                s["overlay_at"] = None
+            s["on_screen_text"] = text
+            overlay_changed = need_assembly = True
+        if ("duration" in e and not use_user_voice and "audio_start" not in s
+                and s.get("vo_duration")):
+            # Solo TTS y tras la fase de voz: la duración es editable (con voz
+            # propia la manda la voz; antes de la voz no hay piso fiable)
+            try:
+                fps = float(load_config(project.dir).get("video", {}).get("fps", 24))
+                want = float(e["duration"])
+                floor = float(s.get("vo_duration") or 1.0) + 0.2
+                frames = max(1, round(max(floor, min(60.0, want)) * fps))
+                s["duration"] = round(frames / fps, 5)
+                need_subtitles = True
+            except (TypeError, ValueError):
+                pass
+
+    if not (need_subtitles or need_assembly):
+        return {"saved": False, "rerun_from": None}
+
+    if need_subtitles and not use_user_voice:
+        # La línea de tiempo TTS se recompila aquí mismo (barato, sin LLM)
+        from ytstudio.phases.voiceover import _build_tts_timeline
+        vo_dir = project.path("voiceover")
+        _build_tts_timeline(scenes, vo_dir)
+        project.set("total_duration",
+                    round(sum(float(s["duration"]) for s in scenes), 2))
+    if overlay_changed and use_user_voice:
+        # Re-anclar el rótulo al instante en que se pronuncia (sin re-fases)
+        from ytstudio.phases.voiceover import _sync_overlays
+        narration = project.get("narration") or {}
+        vmap = project.get("voice_map")
+        if vmap:
+            _sync_overlays(scenes, narration.get("segments") or [], vmap)
+
+    save_scenes(project, scenes)
+    rerun = "subtitles" if need_subtitles else "assembly"
+    project.reset_from(rerun, PHASE_ORDER)
+    return {"saved": True, "rerun_from": rerun}
+
+
 def api_get_config() -> dict:
     return {
         "config": load_config(),
         "catalog": CATALOG,
         "style_presets": STYLE_PRESETS,
+        "languages": LANGUAGES,
+        "formats": {k: {"label": v["label"]} for k, v in FORMATS.items()},
         "keys": key_status(),
         "version": get_version(),
         "server_version": SERVER_VERSION,
@@ -794,6 +902,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_rename_project(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/broll-policy", path):
                 self._json(api_set_broll_policy(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes", path):
+                self._json(api_edit_scenes(m.group(1), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
