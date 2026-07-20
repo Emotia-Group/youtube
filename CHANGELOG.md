@@ -9,6 +9,27 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.25.1 — 2026-07-20
+- EL «RECORTE LARGO» NO ERA UN RECORTE: EL LOG LO PROBÓ. En tu última prueba
+  las compresiones sumaban ~2.3 s en total (imposible que borren una frase
+  entera) y la pista de voz tenía la longitud completa esperada — o sea, NO
+  se borraba nada. Lo que oías como «recorte» era una frase CONSERVADA
+  (gracias a la salvaguarda de v0.25.0) pero dicha tan baja que no se oía:
+  solo la sílaba fuerte («ca» de «periférica») pasaba. Ahora, además de
+  conservarla, el programa REALZA esos tramos de habla baja hasta un nivel
+  audible (solo esos tramos; ni el silencio ni el resto se tocan) — la voz
+  que ya estaba ahí por fin se escucha. El aviso «🔊 Detecté habla muy baja»
+  sigue apareciendo para que, si quieres, regrabes esa parte con mejor
+  volumen; pero ya no se pierde ni se apaga.
+- SUBTÍTULOS SIN PALABRAS HUÉRFANAS NI TRIPLE LÍNEA: se troceaban POR ESCENA,
+  así que una frase que cruzaba la frontera de una escena quedaba partida y
+  dejaba una palabra sola («El» al empezar una escena, «Cuando» colgada al
+  final de otra y desapareciendo en un instante). Ahora los subtítulos se
+  trocean de forma GLOBAL sobre toda la narración: las frases fluyen a
+  través de las escenas y ninguna palabra queda huérfana. Además, ningún
+  subtítulo se solapa con el siguiente (ese solape era el que hacía aparecer
+  una tercera línea fugaz con la primera palabra del subtítulo siguiente).
+
 ## v0.25.0 — 2026-07-20
 - LA CAUSA REAL DEL RECORTE, POR FIN: no era un arranque suave — era una
   FRASE ENTERA borrada («Su padre, Filipo II, había pasado años convirtiendo

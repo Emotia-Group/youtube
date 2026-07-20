@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from ytstudio.phases.scenes import load_scenes, save_scenes
 from ytstudio.providers import get_tts
-from ytstudio.utils.media import (cut_segment, detect_silences, probe_duration,
-                                  run_ffmpeg)
+from ytstudio.utils.media import (boost_quiet_spans, cut_segment,
+                                  detect_silences, probe_duration, run_ffmpeg)
 
 
 _PACE_FACTOR = {"ligado": 0.0, "normal": 1.0, "amplio": 1.7}
@@ -301,6 +301,17 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         s["duration"] = round(durs[i], 3)
         s["vo_offset"] = round(intro, 3) if i == 0 else 0.0
 
+    # 3.5) REALZAR el habla dicha muy baja (los quiet_spans): Whisper la oyó
+    #    pero está por debajo del umbral y suena floja/inaudible — se quitaba
+    #    la sensación de «recorte» aunque la voz SÍ esté ahí. Se sube solo esos
+    #    tramos (nunca el silencio real ni el resto), y el WAV se corta desde
+    #    esta versión realzada (mismos tiempos, solo más volumen ahí).
+    wav_source = narration_file
+    if quiet_spans:
+        leveled = vo_dir / "narration_leveled.wav"
+        wav_source = boost_quiet_spans(
+            narration_file, [(s0, s1) for s0, s1, _ in quiet_spans], leveled)
+
     # 4) WAV: trozos de la fuente cortados SOLO dentro de silencios medidos.
     #    delta>0 inserta silencio en el punto; delta<0 SALTA ese tramo del
     #    silencio (nunca voz: los saltos viven en el interior de silencios
@@ -349,7 +360,7 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     out = vo_dir / "narration_timeline.wav"
     script = vo_dir / "timeline.filters"
     script.write_text(";\n".join(graph), encoding="utf-8")
-    run_ffmpeg(["-i", str(narration_file), "-filter_complex_script",
+    run_ffmpeg(["-i", str(wav_source), "-filter_complex_script",
                 str(script), "-map", "[out]", "-c:a", "pcm_s16le", str(out)],
                "línea de tiempo de la voz")
 
@@ -366,9 +377,14 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     try:
         got = probe_duration(out)
         want = vframes[-1] / fps
+        # La comprobación de voz se mide sobre la MISMA fuente con la que se
+        # cortó el WAV (realzada si hubo habla baja): así realzar un tramo no
+        # dispara una falsa deriva (ahora ese tramo cuenta como voz en ambos).
+        src_sils = (silences if wav_source is narration_file
+                    else detect_silences(wav_source, noise_db=-45))
         speech_src = audio_total - sum(
             min(e, audio_total) - max(s, 0.0)
-            for s, e in silences if s < audio_total)
+            for s, e in src_sils if s < audio_total)
         speech_tl = got - sum(e - s
                               for s, e in detect_silences(out, noise_db=-45))
         # Umbral de voz-hablada holgado (1.2s): silencedetect mide con ruido

@@ -9,8 +9,7 @@ palabra) se reparte proporcionalmente, como antes."""
 from __future__ import annotations
 
 from ytstudio.phases.scenes import load_scenes
-from ytstudio.utils.align import (assign_words, flatten_words, local_time,
-                                  video_time_fn)
+from ytstudio.utils.align import flatten_words, video_time_fn
 
 
 def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
@@ -29,13 +28,6 @@ def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
         lines.append(current)
     return ["\n".join(lines[i:i + max_lines])
             for i in range(0, len(lines), max_lines)]
-
-
-def _ends_clause(text: str) -> bool:
-    """Fin de oración o de cláusula fuerte (punto, coma, punto y coma…): un
-    buen sitio para cerrar un subtítulo corto al estilo cine."""
-    return (text or "").rstrip("»\"')”").endswith(
-        (".", "!", "?", "…", ",", ";", ":"))
 
 
 def _chunks_words(words: list[dict], max_chars: int, max_lines: int):
@@ -94,7 +86,6 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
                narration: dict | None = None,
                voice_map: dict | None = None) -> list[dict]:
     all_words = flatten_words((narration or {}).get("segments") or [])
-    word_map = assign_words(scenes, all_words) if all_words else {}
     # Con narración propia, el instante de cada palabra en el video sale del
     # mapa GLOBAL de tiempo (intro + inserciones) — la misma fuente de verdad
     # que usan los rótulos y el WAV de la voz. Sin él (TTS o proyecto antiguo)
@@ -104,25 +95,21 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
         V = video_time_fn(voice_map["intro"],
                           [(p, d) for p, d in voice_map["insertions"]])
     cues = []
-    t = 0.0
-    for scene in scenes:
-        sw = word_map.get(scene.get("id"), [])
-        if sw and V is not None:
-            # Timing REAL absoluto: cada bloque empieza/termina cuando tú dices
-            # esas palabras (video_time), no por proporción ni por escena.
-            for text, bwords in _chunks_words(sw, max_chars, max_lines):
-                start = V(float(bwords[0]["start"]))
-                end = max(start + 0.25, V(float(bwords[-1]["end"])))
-                cues.append({"start": start, "end": end, "text": text})
-        elif sw:
-            # Palabras reales pero sin mapa (raro): tiempo local por escena.
-            for text, bwords in _chunks_words(sw, max_chars, max_lines):
-                start = local_time(scene, bwords[0]["start"])
-                end = max(start + 0.25, local_time(scene, bwords[-1]["end"]))
-                cues.append({"start": t + start, "end": t + end, "text": text})
-        else:
-            # Respaldo (TTS, o proyectos de versiones anteriores sin
-            # timestamps por palabra): reparto proporcional por caracteres.
+    if all_words and V is not None:
+        # SUBTÍTULOS GLOBALES: se trocean TODAS las palabras juntas y se
+        # cronometran con el mapa de tiempo. Antes se troceaban POR ESCENA, y
+        # una frase que cruzaba la frontera de escena quedaba partida:
+        # dejaba palabras huérfanas («El» sola al empezar la escena, «Cuando»
+        # sola al final). Ahora la frase fluye a través de las escenas.
+        for text, bwords in _chunks_words(all_words, max_chars, max_lines):
+            start = V(float(bwords[0]["start"]))
+            end = max(start + 0.4, V(float(bwords[-1]["end"])))
+            cues.append({"start": start, "end": end, "text": text})
+    else:
+        # Respaldo (TTS o proyectos sin timestamps por palabra): reparto
+        # proporcional por caracteres, escena a escena.
+        t = 0.0
+        for scene in scenes:
             blocks = _chunks(scene["narration"], max_chars, max_lines)
             vo = scene["vo_duration"]
             total_chars = sum(len(b) for b in blocks) or 1
@@ -132,10 +119,14 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
                 cues.append({"start": t + offset, "end": t + offset + dur,
                             "text": block})
                 offset += dur
-        t += scene["duration"]
-    # Los cues por video_time son absolutos y ya vienen ordenados por palabra;
-    # garantizar orden por si el respaldo se mezcló con el modo real.
+            t += scene["duration"]
     cues.sort(key=lambda c: c["start"])
+    # SIN SOLAPES: cada subtítulo termina antes de que empiece el siguiente.
+    # Si dos cues se solapaban, ambos se dibujaban a la vez y aparecía una
+    # TERCERA línea fugaz (la primera palabra del siguiente subtítulo colada
+    # bajo el actual). Recortar el fin al inicio del siguiente lo evita.
+    for i in range(len(cues) - 1):
+        cues[i]["end"] = min(cues[i]["end"], cues[i + 1]["start"] - 0.03)
     # DEFENSA: ningún subtítulo puede pasar del final del video (la suma de
     # duraciones de escena). Un cue colgando más allá estira la pista de
     # subtítulos del mp4 y desincroniza la duración del contenedor.
@@ -144,6 +135,8 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
         cues = [c for c in cues if c["start"] < limit - 0.05]
         for c in cues:
             c["end"] = min(c["end"], limit)
+    # Descarta cues degenerados (fin <= inicio) que el de-solape pudiera crear.
+    cues = [c for c in cues if c["end"] > c["start"] + 0.05]
     return cues
 
 

@@ -154,6 +154,52 @@ def probe_duration(path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
+def _segment_mean_db(path: Path, s0: float, s1: float) -> float | None:
+    """Volumen medio (dBFS) del tramo [s0, s1] con volumedetect. None si no
+    se puede medir."""
+    res = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostdin", "-ss", f"{s0:.3f}",
+         "-to", f"{s1:.3f}", "-i", str(path), "-vn", "-af", "volumedetect",
+         "-f", "null", "-"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    for line in res.stderr.splitlines():
+        if "mean_volume:" in line:
+            try:
+                return float(line.split("mean_volume:")[1].split("dB")[0])
+            except (ValueError, IndexError):
+                return None
+    return None
+
+
+def boost_quiet_spans(src: Path, spans: list[tuple[float, float]], out: Path,
+                      *, target_db: float = -16.0, max_gain_db: float = 26.0,
+                      min_gain_db: float = 3.0) -> Path:
+    """Sube el volumen SOLO de los tramos indicados (habla dicha muy baja que
+    Whisper sí transcribió) para que se oigan, sin tocar el resto del audio ni
+    el silencio real. Cada tramo se mide y se realza hacia `target_db` de
+    media, con tope `max_gain_db`. Devuelve `out` (o copia intacta si no hay
+    nada útil que realzar)."""
+    import shutil
+    filters: list[str] = []
+    for s0, s1 in spans:
+        if s1 - s0 < 0.1:
+            continue
+        mean = _segment_mean_db(src, s0, s1)
+        if mean is None:
+            continue
+        gain = min(max_gain_db, target_db - mean)
+        if gain < min_gain_db:
+            continue
+        filters.append(
+            f"volume=enable='between(t,{s0:.3f},{s1:.3f})':volume={gain:.1f}dB")
+    if not filters:
+        shutil.copyfile(src, out)
+        return out
+    run_ffmpeg(["-i", str(src), "-vn", "-af", ",".join(filters),
+                "-c:a", "pcm_s16le", str(out)], "realzar habla baja")
+    return out
+
+
 def detect_silences(path: Path, noise_db: int = -38,
                     min_d: float = 0.15) -> list[tuple[float, float]]:
     """Silencios REALES medidos en la onda de audio con silencedetect.
