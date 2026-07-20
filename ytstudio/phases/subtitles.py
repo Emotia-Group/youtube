@@ -144,7 +144,11 @@ def run(project, cfg) -> None:
         try:
             med, n_pts = measure_sync_offset(tl_path,
                                              [c["start"] for c in cues])
-            if abs(med) > 0.12 and n_pts >= 3:
+            # Umbral BAJO (50 ms): con la mediana de ~15 arranques la medición
+            # es estable, así que corregir hasta ~0 no arriesga sobrecorregir.
+            # Antes el tope era 120 ms y dejaba pasar desfases de ~111 ms que
+            # sí se notaban (los subtítulos «un pelo tarde» que reportaste).
+            if abs(med) > 0.05 and n_pts >= 4:
                 limit = sum(float(s["duration"]) for s in scenes)
                 for c in cues:
                     c["start"] = min(max(0.0, c["start"] - med), limit - 0.3)

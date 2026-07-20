@@ -66,6 +66,10 @@ audio:
                              # el video (se COMPRIMEN saltando solo silencio
                              # medido, nunca voz; el ritmo/pace por escena del
                              # director lo escala: ligado acorta, amplio da aire)
+  cut_guard: 0.25            # margen intocable a cada lado al recortar una
+                             # pausa: el recorte nunca se acerca más de esto a
+                             # la voz medida, para no comerse un arranque suave
+                             # (subir a 0.3-0.35 si aún oyes algún recorte)
   sentence_breath: 0.18      # respiro base al final de cada frase DENTRO de la
                              # escena, escalado por el ritmo (pace) que elige el
                              # director: ligado=0 · normal=1x · amplio=1.7x.

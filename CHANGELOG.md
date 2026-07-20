@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.3 — 2026-07-20
+- EL «PEDAZO DE VOZ» RECORTADO EN LA TRANSICIÓN, RESUELTO DE RAÍZ: al
+  comprimir una pausa larga, el programa saltaba parte del silencio y
+  reanudaba la voz a solo 0.1 s del final del silencio MEDIDO. Pero
+  silencedetect marca el fin del silencio donde la energía cruza el umbral,
+  y un arranque de palabra suave o aireado ya suena 100-200 ms ANTES de ese
+  cruce: con solo 0.1 s de margen, ese arranque caía dentro del tramo
+  saltado y se recortaba — siempre en el mismo punto (la detección es
+  determinista), y el subtítulo sí mostraba la palabra porque la
+  transcripción sí la tenía. Ahora el recorte deja un margen de guarda
+  (cut_guard, 0.25 s por defecto) a AMBOS lados: nunca se acerca a la voz,
+  pase lo que pase con la precisión del umbral. En el mismo caso de prueba,
+  el margen final pasó de 0.1 s a 0.95 s. Ajustable en config
+  (audio.cut_guard); súbelo a 0.3-0.35 si aún oyeras algún recorte.
+- PUNTUACIÓN COMPLETA EN LOS SUBTÍTULOS QUEMADOS: los subtítulos se anclan
+  a los tiempos por palabra de Whisper (que vienen SIN signos), y la
+  puntuación se reponía emparejando posición a posición con el texto del
+  segmento. Si el conteo no cuadraba por un solo token (un número que
+  Whisper parte, unos puntos suspensivos sueltos), se abandonaba y el
+  bloque ENTERO perdía comas y puntos. Ahora se alinea por el núcleo de
+  cada palabra: cada palabra toma su token puntuado aunque el conteo no
+  cuadre, sin perder ni duplicar palabras.
+- SUBTÍTULOS Y RÓTULOS AÚN MÁS AJUSTADOS: el lazo de sincronía corregía el
+  desfase solo si superaba 120 ms, así que un desfase de ~111 ms (que sí se
+  nota) se colaba sin corregir. Como la medición se hace sobre la mediana
+  de ~15 arranques (muy estable), se bajó el tope a 50 ms: ahora se corrige
+  hasta dejarlo prácticamente en cero cada vez.
+
 ## v0.24.2 — 2026-07-19
 - EL % Y EL TIEMPO RESTANTE AHORA SE ACOTAN A LO QUE PEDISTE GENERAR: si
   solo pediste generar «hasta Análisis» (o cualquier fase previa a

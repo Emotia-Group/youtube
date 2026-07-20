@@ -87,6 +87,12 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     intro = max(0.0, float(audio_cfg.get("intro_seconds", 0.8)))
     outro = max(1.0, float(audio_cfg.get("outro_seconds", 2.0)))
     sent_breath = max(0.0, float(audio_cfg.get("sentence_breath", 0.18)))
+    # Margen de guarda al RECORTAR silencio: silencedetect marca el fin del
+    # silencio donde la energía cruza el umbral, pero un arranque de voz suave
+    # o aireado ya suena 100-200 ms ANTES de ese cruce. El recorte nunca se
+    # acerca más de cut_guard a ninguno de los dos bordes medidos, para no
+    # comerse ese arranque (el «pedazo de voz» recortado en la transición).
+    cut_guard = max(0.12, float(audio_cfg.get("cut_guard", 0.25)))
 
     words = flatten_words(narration.get("segments") or [])
     # Silencios donde SÍ se puede insertar un respiro: umbral estricto
@@ -196,11 +202,19 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         if abs(delta) < 0.06:
             continue
         if delta < 0:
-            # saltar el TRAMO FINAL del interior del silencio, dejando margen
-            # (el punto de salto queda estrictamente dentro del silencio)
-            skip_start = max(s0 + 0.1, min(point + 0.01, s1 - 0.1 + delta))
-            adjustments.append((skip_start, delta))
-            n_comp += 1
+            # Recortar SOLO el interior profundo del silencio, dejando
+            # cut_guard a CADA lado. Antes se resumía la voz a s1-0.1 (solo
+            # 100 ms del borde final): si el arranque de la palabra siguiente
+            # era suave, silencedetect situaba s1 tarde y ese arranque caía
+            # dentro del tramo saltado → se recortaba. Ahora se limita cuánto
+            # se quita para que ambos bordes conserven >= cut_guard: el
+            # recorte vive lejos de cualquier palabra, pase lo que pase con la
+            # precisión del umbral.
+            removable = natural - 2 * cut_guard
+            take = min(-delta, removable)
+            if take >= 0.06:
+                adjustments.append((round(s0 + cut_guard, 4), -take))
+                n_comp += 1
         else:
             adjustments.append((point, delta))
             n_ext += 1

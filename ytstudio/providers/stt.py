@@ -11,21 +11,49 @@ from pathlib import Path
 from ytstudio.utils.media import probe_duration
 
 
+def _core(s: str) -> str:
+    """Núcleo alfanumérico de un token (sin signos): base para emparejar el
+    token puntuado del segmento con la palabra cronometrada de Whisper."""
+    import re
+    import unicodedata
+    s = unicodedata.normalize("NFC", s or "")
+    return "".join(re.findall(r"[^\W_]+", s, flags=re.UNICODE)).lower()
+
+
 def _restore_punctuation(seg_text: str, words: list[dict]) -> list[dict]:
     """Repone comas y puntos en las palabras con tiempo.
 
     La API de Whisper con timestamps por palabra devuelve cada palabra SIN
     puntuación (aunque el texto del segmento sí la trae) — al reconstruir el
     subtítulo desde las palabras (para tener el tiempo exacto) se perdían
-    todas las comas y puntos. El texto del segmento conserva la puntuación y
-    tiene las mismas palabras en el mismo orden, así que se emparejan por
-    posición y se usa el token puntuado (conservando el tiempo real)."""
+    todas las comas y puntos. El texto del segmento conserva la puntuación.
+
+    Caso común: mismo número de tokens → emparejamiento por posición. Cuando
+    el conteo NO cuadra (un número que Whisper parte, un guion suelto, unos
+    puntos suspensivos como token aparte), ANTES se abandonaba y el segmento
+    ENTERO perdía la puntuación (los signos que faltaban en los subtítulos
+    quemados). Ahora se alinea por el núcleo alfanumérico de cada palabra:
+    cada palabra cronometrada toma el token puntuado cuyo núcleo coincide, y
+    la puntuación pegada a fronteras de token (comas, puntos) se conserva.
+    Una palabra sin token que le corresponda conserva su texto (sin signos)
+    en vez de arrastrar a todo el bloque."""
     tokens = seg_text.split()
-    if len(tokens) != len(words):
-        return words  # conteo distinto (caso raro): mejor no arriesgar el orden
-    out = []
-    for w, tok in zip(words, tokens):
-        out.append({**w, "text": tok})
+    if not words or not tokens:
+        return words
+    if len(tokens) == len(words):
+        return [{**w, "text": tok} for w, tok in zip(words, tokens)]
+    out: list[dict] = []
+    ti = 0
+    for w in words:
+        wc = _core(w.get("text", ""))
+        j = ti
+        while j < len(tokens) and wc and _core(tokens[j]) != wc:
+            j += 1
+        if wc and j < len(tokens):
+            out.append({**w, "text": tokens[j]})
+            ti = j + 1
+        else:
+            out.append({**w, "text": w.get("text", "")})  # sin par: intacta
     return out
 
 
