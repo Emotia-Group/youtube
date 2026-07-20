@@ -196,10 +196,24 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
 
     adjustments: list[tuple[float, float]] = []  # (punto, delta ±)
     n_ext = n_comp = 0
+    quiet_spans: list[tuple[float, float, int]] = []  # habla baja "silenciada"
     for s0, s1 in silences:
         natural = s1 - s0
         if natural < 0.3 or s1 <= 0.05 or s0 >= audio_total - 0.05:
             continue  # bordes: intro/outro los gestionan; cortos: se quedan
+        # SALVAGUARDA CONTRA EL BORRADO DE FRASES ENTERAS: silencedetect solo
+        # mira la ENERGÍA. Una frase dicha más bajo (te alejas del micro, un
+        # pasaje suave) puede caer por debajo de -45 dB y marcarse como
+        # "silencio" — comprimirla BORRARÍA la frase (era el «recorte» que se
+        # comía «Su padre, Filipo II…»). Pero Whisper SÍ la transcribió: si
+        # hay palabras cronometradas DENTRO de este hueco, NO es silencio,
+        # es voz baja, y no se toca jamás (ni recortar ni insertar).
+        inside = [w for w in words
+                  if min(float(w["end"]), s1) - max(float(w["start"]), s0)
+                  > 0.15]
+        if inside:
+            quiet_spans.append((round(s0, 2), round(s1, 2), len(inside)))
+            continue
         w_prev = last_word_before(s0)
         is_sent = w_prev is not None and _ends_sentence(w_prev.get("text", ""))
         pace = pace_of(s0)
@@ -342,7 +356,8 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     voice_map = {"intro": round(intro, 4), "outro": round(outro, 4),
                  "audio_total": round(audio_total, 4),
                  "insertions": [[round(p, 4), round(d, 4)] for p, d in ins_pts],
-                 "n_ext": n_ext, "n_comp": n_comp}
+                 "n_ext": n_ext, "n_comp": n_comp,
+                 "quiet_spans": quiet_spans}
     n_breaths = sum(1 for i in range(n - 1) if boundary_pause[i] > 0.001)
 
     # AUTOCOMPROBACIÓN: los ajustes solo añaden o quitan SILENCIO medido —
@@ -405,6 +420,19 @@ def run(project, cfg) -> None:
                f"por el frente de la pausa, dejando un margen amplio antes de "
                f"la palabra siguiente (jamás se toca ni una consonante suave) "
                f"+ {outro:.1f}s de cola final.")
+        # Aviso CLARO de voz baja "silenciada": Whisper oyó palabras donde la
+        # energía cae por debajo del umbral. NO se recorta (se protege), pero
+        # el creador debe saberlo: esa frase suena muy baja y conviene
+        # regrabarla más fuerte o subir su volumen.
+        quiet = voice_map.get("quiet_spans") or []
+        if quiet:
+            zonas = ", ".join(f"{s:.0f}-{e:.0f}s ({k} palabra(s))"
+                              for s, e, k in quiet[:6])
+            project.add_warning(
+                "🔊 Detecté habla MUY BAJA (por debajo del umbral de "
+                f"silencio) en: {zonas}. Esa parte se CONSERVA intacta (no se "
+                "recorta), pero suena floja: para que se oiga bien, regrábala "
+                "más cerca del micrófono o sube su volumen antes de subirla.")
 
     def _is_user_voice(scene: dict) -> bool:
         return "audio_start" in scene and narration_file is not None

@@ -9,6 +9,36 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.25.0 — 2026-07-20
+- LA CAUSA REAL DEL RECORTE, POR FIN: no era un arranque suave — era una
+  FRASE ENTERA borrada («Su padre, Filipo II, había pasado años convirtiendo
+  una provincia vulnerable y periféri…», de la que solo sobrevivía la sílaba
+  «ca»). El motivo: esa frase está dicha MÁS BAJO que el resto (te alejas
+  del micro, un pasaje suave), y cae por debajo del umbral de silencio
+  (-45 dB). silencedetect solo mira la ENERGÍA, así que la marcaba como
+  «silencio»… y el compresor de pausas la quitaba como si fuera aire muerto.
+  Encajaba con todo: el mismo punto siempre (esa frase siempre suena igual
+  de baja), «solo se oye ca» (esa sílaba sí pasaba el umbral), y ni la
+  autocomprobación saltaba (contaba la frase como silencio en ambos lados).
+  ARREGLO DE RAÍZ: Whisper SÍ transcribió esa frase, así que ahora, antes de
+  tocar cualquier hueco, se comprueba si hay PALABRAS cronometradas dentro.
+  Si las hay, NO es silencio: es voz baja y se conserva intacta, jamás se
+  recorta ni se rellena. Además el programa te AVISA («🔊 Detecté habla muy
+  baja en …»): esa parte se oirá floja, conviene regrabarla más cerca del
+  micro o subirle el volumen. Este fue el «recorte» que llevábamos días
+  persiguiendo.
+- SUBTÍTULOS ESTILO CINE (frases cortas): los subtítulos eran párrafos de
+  dos líneas llenas, poco profesionales. Ahora cada subtítulo es una frase
+  o cláusula BREVE, acorde a lo que se dice en ese instante: se corta al
+  terminar cada oración (. ! ? …) y en las comas/pausas fuertes, con líneas
+  más cortas (max_chars_per_line 32, antes 42). El texto en pantalla cambia
+  al ritmo de la voz, no en bloques largos. Ajustable en config.
+- Nota sobre los rótulos desfasados: al borrar una frase entera, TODO lo que
+  venía después se corría — de ahí el desfase de subtítulos y rótulos que
+  también viste. Al dejar de borrar esas frases, la línea de tiempo vuelve a
+  cuadrar; revisa los rótulos en una generación limpia y, si aún notaras
+  alguno movido, dímelo con el segundo exacto.
+
 ## v0.24.5 — 2026-07-20
 - EL RECORTE DE VOZ, ATACADO POR EL LADO CORRECTO (y corrigiendo una
   regresión que YO metí en v0.24.4). En v0.24.4 el recorte se hacía en el

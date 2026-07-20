@@ -89,8 +89,11 @@ audio:
                              # sílabas suaves — el director los gestiona.
   silence_keep: 0.4          # (histórico, ya sin efecto interno)
 subtitles:
-  max_chars_per_line: 42
-  max_lines: 2
+  max_chars_per_line: 32   # estilo cine: líneas cortas. El subtítulo se corta
+  max_lines: 2             # además al terminar cada oración/cláusula, así el
+                           # texto en pantalla es una frase breve acorde a lo
+                           # que se dice, no un párrafo (subir a 40 si prefieres
+                           # bloques algo más largos)
   font: Arial          # familia para subtítulos quemados (Arial existe en Win/Mac;
                        # en Linux fontconfig la sustituye automáticamente)
   font_size: 54

@@ -31,27 +31,52 @@ def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
             for i in range(0, len(lines), max_lines)]
 
 
+def _ends_clause(text: str) -> bool:
+    """Fin de oración o de cláusula fuerte (punto, coma, punto y coma…): un
+    buen sitio para cerrar un subtítulo corto al estilo cine."""
+    return (text or "").rstrip("»\"')”").endswith(
+        (".", "!", "?", "…", ",", ";", ":"))
+
+
 def _chunks_words(words: list[dict], max_chars: int, max_lines: int):
-    """Como _chunks, pero conservando qué palabras (con sus tiempos reales)
-    componen cada línea/bloque — para anclar el subtítulo a la voz real."""
-    lines: list[list[dict]] = []
-    current: list[dict] = []
-    current_text = ""
+    """Divide las palabras (con sus tiempos reales) en subtítulos CORTOS,
+    estilo cinematográfico: cada bloque es una frase o cláusula breve, nunca
+    dos oraciones juntas ni un párrafo largo.
+
+    Dos reglas de corte: (1) al superar max_chars por línea se pasa de línea,
+    y si ya hay max_lines se cierra el bloque; (2) al cerrar una oración
+    (. ! ? …) SIEMPRE se cierra el bloque; una coma/;/: cierra el bloque solo
+    si la línea ya tiene cuerpo (para no dejar retazos de una o dos palabras).
+    Así el texto en pantalla cambia al ritmo de lo que se dice."""
+    blocks: list[tuple[str, list[dict]]] = []
+    cur_lines: list[list[dict]] = [[]]     # palabras por línea del bloque actual
+    cur_texts: list[str] = [""]
+
+    def flush() -> None:
+        words_flat = [w for ln in cur_lines for w in ln]
+        if words_flat:
+            text = "\n".join(" ".join(w["text"] for w in ln)
+                             for ln in cur_lines if ln)
+            blocks.append((text, words_flat))
+        cur_lines.clear(); cur_lines.append([])
+        cur_texts.clear(); cur_texts.append("")
+
     for w in words:
-        candidate = f"{current_text} {w['text']}".strip()
-        if len(candidate) > max_chars and current:
-            lines.append(current)
-            current, current_text = [w], w["text"]
-        else:
-            current.append(w)
-            current_text = candidate
-    if current:
-        lines.append(current)
-    blocks = []
-    for i in range(0, len(lines), max_lines):
-        block_lines = lines[i:i + max_lines]
-        text = "\n".join(" ".join(w["text"] for w in ln) for ln in block_lines)
-        blocks.append((text, [w for ln in block_lines for w in ln]))
+        cand = f"{cur_texts[-1]} {w['text']}".strip()
+        if len(cand) > max_chars and cur_lines[-1]:
+            if len(cur_lines) >= max_lines:      # no cabe otra línea → nuevo bloque
+                flush()
+            else:
+                cur_lines.append([]); cur_texts.append("")
+        cur_lines[-1].append(w)
+        cur_texts[-1] = f"{cur_texts[-1]} {w['text']}".strip()
+        t = w["text"]
+        line_len = len(cur_texts[-1])
+        strong = t.rstrip("»\"')”").endswith((".", "!", "?", "…"))
+        soft = t.rstrip("»\"')”").endswith((",", ";", ":"))
+        if strong or (soft and line_len >= max(12, max_chars // 2)):
+            flush()
+    flush()
     return blocks
 
 
