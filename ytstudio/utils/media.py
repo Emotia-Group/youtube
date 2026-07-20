@@ -172,21 +172,25 @@ def _segment_mean_db(path: Path, s0: float, s1: float) -> float | None:
 
 
 def boost_quiet_spans(src: Path, spans: list[tuple[float, float]], out: Path,
-                      *, target_db: float = -16.0, max_gain_db: float = 26.0,
-                      min_gain_db: float = 3.0) -> Path:
+                      *, target_db: float = -18.0, max_gain_db: float = 20.0,
+                      min_gain_db: float = 3.0, floor_db: float = -55.0) -> Path:
     """Sube el volumen SOLO de los tramos indicados (habla dicha muy baja que
     Whisper sí transcribió) para que se oigan, sin tocar el resto del audio ni
     el silencio real. Cada tramo se mide y se realza hacia `target_db` de
-    media, con tope `max_gain_db`. Devuelve `out` (o copia intacta si no hay
-    nada útil que realzar)."""
+    media, con tope `max_gain_db`.
+
+    Salvaguarda: si el tramo mide por DEBAJO de `floor_db` es silencio de
+    verdad (no habla baja) — no se realza, para no amplificar el ruido de
+    fondo de una pausa. Devuelve `out` (o copia intacta si no hay nada que
+    realzar)."""
     import shutil
     filters: list[str] = []
     for s0, s1 in spans:
         if s1 - s0 < 0.1:
             continue
         mean = _segment_mean_db(src, s0, s1)
-        if mean is None:
-            continue
+        if mean is None or mean < floor_db:
+            continue  # silencio real: no amplificar ruido
         gain = min(max_gain_db, target_db - mean)
         if gain < min_gain_db:
             continue

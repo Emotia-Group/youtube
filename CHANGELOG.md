@@ -9,6 +9,21 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.25.2 — 2026-07-20
+- PROBADO CON TU AUDIO REAL: pasé tu grabación profesional por el
+  constructor de la línea de tiempo de voz y NO se pierde ni un segundo de
+  habla — los 8 recortes caen TODOS en silencio real (64.36 s de voz entran,
+  64.36 s salen). O sea, el motor de voz NO está borrando ninguna frase; el
+  «recorte» que oyes viene de otra parte de la cadena (lo estamos acotando).
+- ARREGLO de un falso positivo que tu audio destapó: la salvaguarda de «voz
+  baja» marcaba PAUSAS REALES (25 s, 32 s, 47 s, 62 s) como habla baja solo
+  porque una palabra de Whisper se desviaba ±0.3 s hacia esa pausa — y el
+  realce de v0.25.1 habría amplificado el ruido de fondo de esas pausas.
+  Ahora se exige que las palabras LLENEN el hueco (>55 %) y sean ≥2 para
+  marcarlo como voz baja, y el realce nunca toca nada por debajo de −55 dB
+  (silencio de verdad). En tu audio profesional ya no se marca ni realza
+  nada indebido.
+
 ## v0.25.1 — 2026-07-20
 - EL «RECORTE LARGO» NO ERA UN RECORTE: EL LOG LO PROBÓ. En tu última prueba
   las compresiones sumaban ~2.3 s en total (imposible que borren una frase

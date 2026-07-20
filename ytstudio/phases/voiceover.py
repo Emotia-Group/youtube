@@ -208,10 +208,19 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         # comía «Su padre, Filipo II…»). Pero Whisper SÍ la transcribió: si
         # hay palabras cronometradas DENTRO de este hueco, NO es silencio,
         # es voz baja, y no se toca jamás (ni recortar ni insertar).
+        # ¿hay habla dicha muy baja DENTRO de este "silencio"? Solo cuenta si
+        # las palabras de Whisper LLENAN buena parte del hueco. Los tiempos de
+        # Whisper derivan ±0.3s, así que UNA palabra que se coló en una pausa
+        # real no debe marcar toda la pausa como habla (eso pasaba con este
+        # audio profesional: pausas reales marcadas como "voz baja"). Se exige
+        # ≥2 palabras y que cubran > 55% del hueco: una frase dicha en voz
+        # baja SÍ lo llena; una palabra desviada, no.
         inside = [w for w in words
                   if min(float(w["end"]), s1) - max(float(w["start"]), s0)
-                  > 0.15]
-        if inside:
+                  > 0.05]
+        covered = sum(min(float(w["end"]), s1) - max(float(w["start"]), s0)
+                      for w in inside)
+        if len(inside) >= 2 and covered > 0.55 * natural:
             quiet_spans.append((round(s0, 2), round(s1, 2), len(inside)))
             continue
         w_prev = last_word_before(s0)
