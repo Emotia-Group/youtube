@@ -597,13 +597,7 @@ async function renderTab(tab,p){
     el.innerHTML=`<div class="card">
       <video controls src="/files/${current}/${p.final_video}"></video>
       <div class="row" style="margin-top:14px;align-items:flex-start">
-        ${p.thumbnail?`<div><h3>Miniatura</h3><img src="/files/${current}/${p.thumbnail}" style="width:320px;border-radius:8px"></div>`:''}
-        <div style="flex:1;min-width:280px">
-          <h3>Metadatos</h3>
-          <b>${esc(m.title||'')}</b>
-          <p class="muted" style="white-space:pre-wrap;max-height:180px;overflow-y:auto">${esc(m.description||'')}</p>
-          <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>
-        </div>
+        <div style="flex:1;min-width:280px">${metaOptionsHtml(p,m)}</div>
       </div>
       <br><div class="muted">Archivos: <a href="/files/${current}/${p.final_video}" download>video_final.mp4</a> ·
         <a href="/files/${current}/08_subtitles/subtitulos.srt" download>subtitulos.srt</a> ·
@@ -688,6 +682,44 @@ async function rerunFrom(phase){
   if(!confirm(`¿Rehacer desde el paso «${phaseLabel(phase)}»? Se regenerarán ese paso y los siguientes.`))return;
   try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:phase})});
     startPoll();renderProject();
+  }catch(e){toast('⚠ '+e.message)}
+}
+function metaOptionsHtml(p,m){
+  const to=m.title_options||[], dop=m.description_options||[], th=m.thumbnails||[];
+  const ch=m.chosen||{title:0,description:0,thumbnail:0};
+  const v=Date.now(); // evita miniaturas cacheadas al cambiar la elección
+  if(!to.length){ // proyectos de versiones anteriores: vista clásica
+    return `${p.thumbnail?`<h3>Miniatura</h3><img src="/files/${current}/${p.thumbnail}?v=${v}" style="width:320px;border-radius:8px">`:''}
+      <h3>Metadatos</h3><b>${esc(m.title||'')}</b>
+      <p class="muted" style="white-space:pre-wrap;max-height:180px;overflow-y:auto">${esc(m.description||'')}</p>
+      <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>`;
+  }
+  const sel=(on)=>`border:2px solid ${on?'var(--accent,#E8C46B)':'var(--line)'};border-radius:8px;cursor:pointer`;
+  return `
+    <h3>Miniatura — 3 diseños, elige la tuya</h3>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      ${th.map((f,i)=>`<div onclick="selectMeta('thumbnail',${i})" style="${sel(ch.thumbnail===i)};padding:4px;text-align:center">
+        <img src="/files/${current}/09_final/${f}?v=${v}" style="width:230px;border-radius:5px;display:block">
+        <small class="muted">${['🎬 Cine','💥 Impacto','◧ Panel'][i]||''} ${ch.thumbnail===i?'· ✓ elegida':''}</small>
+      </div>`).join('')}
+    </div>
+    <h3>Título — 3 estrategias de CTR</h3>
+    ${to.map((o,i)=>`<div onclick="selectMeta('title',${i})" style="${sel(ch.title===i)};padding:8px 10px;margin-bottom:6px">
+      <b>${esc(o.title)}</b> ${ch.title===i?'<span class="badge">✓ elegido</span>':''}
+      <div class="muted" style="font-size:12px">${esc(o.angle||'')}</div>
+    </div>`).join('')}
+    <h3>Descripción — 3 enfoques</h3>
+    ${dop.map((o,i)=>`<div onclick="selectMeta('description',${i})" style="${sel(ch.description===i)};padding:8px 10px;margin-bottom:6px">
+      <span class="badge">${esc(o.angle||`opción ${i+1}`)}</span> ${ch.description===i?'<span class="badge">✓ elegida</span>':''}
+      <p class="muted" style="white-space:pre-wrap;max-height:120px;overflow-y:auto;margin:6px 0 0;font-size:12.5px">${esc(o.description)}</p>
+    </div>`).join('')}
+    <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>`;
+}
+async function selectMeta(kind,i){
+  try{
+    await api(`/api/projects/${current}/metadata/select`,{method:'POST',body:JSON.stringify({kind,index:i})});
+    toast('✅ Elección guardada — se usará al publicar');
+    renderProject('Video');
   }catch(e){toast('⚠ '+e.message)}
 }
 async function applySceneEdits(){

@@ -138,11 +138,35 @@ class MockLLM:
             ]}
         if purpose == "metadata":
             return {
-                "title": "La historia que nadie te contó",
-                "description": "Un recorrido fascinante por una historia poco conocida.\n\n"
-                               "Capítulos:\n00:00 Introducción",
+                "title_options": [
+                    {"title": "La historia que nadie te contó",
+                     "angle": "curiosidad / bucle abierto"},
+                    {"title": "3 claves que lo explican todo",
+                     "angle": "dato / beneficio concreto"},
+                    {"title": "Todo lo que creías es falso",
+                     "angle": "contradicción / autoridad"},
+                ],
+                "description_options": [
+                    {"description": "Un recorrido fascinante por una historia "
+                                    "poco conocida.\n\nCapítulos:\n00:00 Introducción"
+                                    "\n\n#historia #documental",
+                     "angle": "SEO"},
+                    {"description": "¿Y si todo fue distinto?\n\nCapítulos:\n"
+                                    "00:00 Introducción\n\n#historia",
+                     "angle": "narrativa"},
+                    {"description": "La historia, directa y sin rodeos.\n\n"
+                                    "Capítulos:\n00:00 Introducción\n\n#historia",
+                     "angle": "directa"},
+                ],
                 "tags": ["historia", "documental", "curiosidades"],
-                "thumbnail_text": "NADIE TE LO CONTÓ",
+                "thumbnail_options": [
+                    {"kicker": "EXPEDIENTE", "text": "NADIE TE LO CONTÓ",
+                     "accent_word": "NADIE", "scene_id": 1},
+                    {"kicker": "", "text": "LA VERDAD OCULTA",
+                     "accent_word": "VERDAD", "scene_id": 2},
+                    {"kicker": "HISTORIA", "text": "TODO ERA FALSO",
+                     "accent_word": "FALSO", "scene_id": 3},
+                ],
             }
         if purpose == "ingest_analysis":
             return {

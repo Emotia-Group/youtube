@@ -9,6 +9,31 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.27.0 — 2026-07-20
+- MINIATURAS PROFESIONALES, 3 DISEÑOS POR VIDEO: nueva fase de diseño real
+  (no la banda oscura con texto de antes). Cada video recibe 3 miniaturas
+  con diseños distintos aplicando las reglas de las miniaturas ganadoras:
+  texto de 2-4 palabras GIGANTE legible en móvil, palabra de acento en el
+  color de marca del canal (la misma identidad que los rótulos), kicker de
+  contexto, alto contraste (gradientes/viñetas medidos, nunca texto
+  flotando), imagen realzada y punto focal despejado. Los diseños:
+  🎬 Cine (letterbox + gradiente + subrayado), 💥 Impacto (texto centrado
+  enorme con trazo grueso + píldora) y ◧ Panel (panel lateral con filo de
+  acento — máxima legibilidad en pequeño). El fondo de cada una es la
+  escena más icónica (la elige la IA entre tus imágenes reales; sin
+  repetir). En formatos verticales salen 1080x1920.
+- 3 TÍTULOS Y 3 DESCRIPCIONES CON ESTRATEGIA: cada título llega con un
+  ángulo de CTR distinto (curiosidad/bucle abierto · dato/beneficio ·
+  contradicción/autoridad, máx. 70 caracteres, keyword al frente) y cada
+  descripción con un enfoque distinto (SEO · narrativa · directa), todas
+  con capítulos reales y hashtags. En la pestaña ▶ Video eliges con un
+  clic la miniatura, el título y la descripción (la elección se guarda y
+  es la que se usa al publicar).
+- SIN IMPACTO EN LOS TIEMPOS: sigue siendo UNA sola llamada de IA (la
+  misma de antes, con algo más de texto de salida — un par de segundos) y
+  las miniaturas se dibujan en tu PC en milisegundos, sin generar imágenes
+  nuevas ni costo extra.
+
 ## v0.26.0 — 2026-07-20
 - MÁS MODELOS Y MÁS BARATOS, CON PROS Y CONTRAS A LA VISTA: cada modelo del
   catálogo (⚙ Configuración) muestra ahora su costo aproximado y sus

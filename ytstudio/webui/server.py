@@ -541,6 +541,44 @@ def _run_progress(slug: str) -> dict:
     return out
 
 
+def api_select_metadata(slug: str, body: dict) -> dict:
+    """Elige una de las 3 opciones de título / descripción / miniatura.
+    Actualiza metadata.json y (para la miniatura) copia la variante elegida
+    como miniatura.jpg — la que usa la publicación. Sin re-ejecutar fases."""
+    import shutil as _sh
+
+    kind = body.get("kind")
+    if kind not in ("title", "description", "thumbnail"):
+        raise ApiError(400, "kind debe ser title, description o thumbnail.")
+    try:
+        idx = int(body.get("index"))
+    except (TypeError, ValueError):
+        raise ApiError(400, "Falta el índice de la opción.")
+    project = Project(slug)
+    meta_path = project.dir / DIRS["final"] / "metadata.json"
+    if not meta_path.exists():
+        raise ApiError(404, "Aún no hay metadatos (ejecuta hasta 'metadata').")
+    meta = read_json_tolerant(meta_path)
+    options = meta.get(f"{kind}_options" if kind != "thumbnail"
+                       else "thumbnail_options") or []
+    files = meta.get("thumbnails") or []
+    limit = len(files) if kind == "thumbnail" else len(options)
+    if not 0 <= idx < limit:
+        raise ApiError(400, f"Opción {idx + 1} fuera de rango.")
+    if kind == "title":
+        meta["title"] = options[idx]["title"]
+    elif kind == "description":
+        meta["description"] = options[idx]["description"]
+    else:
+        _sh.copyfile(project.path("final", files[idx]),
+                     project.path("final", "miniatura.jpg"))
+    meta.setdefault("chosen", {})[kind] = idx
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2),
+                         encoding="utf-8")
+    project.set("metadata", {k: meta.get(k) for k in ("title", "tags", "thumbnail")})
+    return {"ok": True, "chosen": meta["chosen"]}
+
+
 def api_get_script(slug: str) -> dict:
     path = Project(slug).dir / DIRS["script"] / "guion.md"
     if not path.exists():
@@ -873,6 +911,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_add_assets(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
                 self._json(api_save_style_from_project(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/metadata/select", path):
+                self._json(api_select_metadata(m.group(1), self._body()))
             elif path == "/api/channels":
                 self._json(api_channel_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
