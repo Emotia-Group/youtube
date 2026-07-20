@@ -82,6 +82,11 @@ audio:
                              # escena, escalado por el ritmo (pace) que elige el
                              # director: ligado=0 · normal=1x · amplio=1.7x.
                              # Siempre en huecos entre palabras (nunca corta voz)
+  final_gain_db: 1.0         # ganancia fija de acabado de la mezcla (la voz ya
+                             # viene normalizada; esto la lleva a ~-14 LUFS,
+                             # apta para YouTube, SIN el loudnorm dinámico que
+                             # hundía la voz en las pausas dramáticas)
+  final_limit: 0.9           # tope del limitador de picos final (0.9 ≈ -0.9 dB)
   # Modo "narración propia" (cuando subes tu voz grabada):
   trim_silence: true         # recorta el silencio SOLO al inicio y al final
                              # (deja 0.25s de aire). Los silencios internos se

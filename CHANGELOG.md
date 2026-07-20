@@ -9,6 +9,25 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.25.3 — 2026-07-20
+- ¡EL RECORTE, ENCONTRADO Y ELIMINADO DE RAÍZ! Con el audio final que
+  subiste lo medí de verdad: la voz estaba INTACTA en la pista intermedia,
+  pero el video final tenía SILENCIO ABSOLUTO justo en «Su padre, Filipo
+  II… una provincia» (segundos 15-19). Aislé el culpable filtro por filtro:
+  el `loudnorm` de UNA SOLA PASADA de la mezcla final. Ese normalizador es
+  DINÁMICO: cuando el volumen baja —una pausa dramática de la voz, o el
+  «silencio estratégico» de la música en esa escena— sube la ganancia y
+  luego la frena en seco, hundiendo la mezcla ENTERA (tu voz incluida) a
+  casi-silencio (−90 dB) en ese punto. Por eso el «recorte» caía SIEMPRE en
+  la misma escena (la del cambio de música) y no se veía en la pista de voz.
+  ARREGLO: se quita ese loudnorm dinámico. La voz ya viene normalizada, así
+  que la mezcla final ahora lleva una ganancia fija + un limitador de picos
+  (alimiter): loudness estable ~−14 LUFS (apta para YouTube), sin tocar la
+  dinámica de la voz. Reproducido y verificado con medidas: con loudnorm la
+  voz se hundía; sin él, queda intacta. Ajustable: audio.final_gain_db.
+- Gracias por insistir con que tu grabación es profesional y por subir el
+  audio final: sin eso habría seguido buscando en el lado equivocado.
+
 ## v0.25.2 — 2026-07-20
 - PROBADO CON TU AUDIO REAL: pasé tu grabación profesional por el
   constructor de la línea de tiempo de voz y NO se pierde ni un segundo de

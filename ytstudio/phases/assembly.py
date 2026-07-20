@@ -706,8 +706,20 @@ def run(project, cfg) -> None:
     fade_d = max(end_fade, 2.5) if end_fade > 0 else 0.0
     fade = (f",afade=t=out:st={max(0.0, total - fade_d):.2f}:d={fade_d:.2f}"
             if fade_d > 0 else "")
+    # LOUDNESS: ganancia fija de acabado + limitador de picos (alimiter).
+    # ¡NO se usa el loudnorm de una sola pasada! Su normalización DINÁMICA
+    # reacciona a las caídas de volumen —una pausa dramática de la voz, un
+    # «silencio estratégico» de la música— SUBIENDO la ganancia y frenándola
+    # en seco, y hunde la mezcla ENTERA (voz incluida) a casi-silencio justo
+    # en esa escena. ERA la causa del «recorte» que se oía siempre en el
+    # mismo punto: se reprodujo y midió con el audio real (la voz caía a −90 dB
+    # con loudnorm, y quedaba intacta sin él). La voz ya viene normalizada
+    # (clean_narration I=−16); una ganancia fija + alimiter da una loudness
+    # estable (~−14 LUFS, apta para YouTube) SIN tocar la dinámica de la voz.
+    final_gain = float(cfg["audio"].get("final_gain_db", 1.0))
+    tp_limit = float(cfg["audio"].get("final_limit", 0.9))
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"
-                    f"loudnorm=I=-14:TP=-1.5:LRA=11{fade}[aout]")
+                    f"volume={final_gain}dB,alimiter=limit={tp_limit}{fade}[aout]")
 
     output = final_dir / "video_final.mp4"
     graph = list(afilters)
