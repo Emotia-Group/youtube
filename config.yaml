@@ -70,6 +70,11 @@ audio:
                              # pausa: el recorte nunca se acerca más de esto a
                              # la voz medida, para no comerse un arranque suave
                              # (subir a 0.3-0.35 si aún oyes algún recorte)
+  deep_silence_db: -55       # umbral de silencio PROFUNDO: los cortes al
+                             # comprimir/ampliar pausas solo se hacen donde la
+                             # onda queda por debajo de esto — una respiración
+                             # o una «s» suave (~-48 dB) quedan por encima y
+                             # jamás se tocan (a -45 contaban como silencio)
   sentence_breath: 0.18      # respiro base al final de cada frase DENTRO de la
                              # escena, escalado por el ritmo (pace) que elige el
                              # director: ligado=0 · normal=1x · amplio=1.7x.

@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.24.4 — 2026-07-20
+- EL ÚLTIMO RECORTE DE VOZ («Su padre, Filipo II», segundo 14): la guarda
+  de v0.24.3 se medía desde donde la energía cruza el umbral de pausas
+  (-45 dB). Pero una consonante suave como esa «s» inicial suena a ~-48 dB
+  — MÁS silenciosa que el umbral — así que el detector la contaba como
+  parte del silencio y la guarda se medía desde la vocal siguiente: si la
+  «s» duraba más de 0.25 s, su cola seguía cayendo en el tramo saltado
+  (por eso el recorte se hizo más pequeño pero no desapareció). Ahora hay
+  una SEGUNDA medición más estricta (-55 dB, configurable en
+  audio.deep_silence_db) donde una respiración o una «s» suave SÍ cuentan
+  como voz, y todo corte vive únicamente en ese interior profundo con la
+  guarda a cada lado. En el caso de prueba que reproduce tu frase, el
+  recorte de v0.24.3 reanudaba 0.1 s DENTRO de la «s»; ahora termina 0.6 s
+  ANTES de que arranque.
+- VALLA ADICIONAL CON LA TRANSCRIPCIÓN: el recorte tampoco puede pasar del
+  arranque de la palabra siguiente según Whisper (ni empezar antes del
+  final de la anterior). Si Whisper deriva hacia dentro de la pausa, solo
+  restringe más — nunca abre la puerta a cortar voz.
+- LAS PAUSAS DEL DIRECTOR TAMPOCO PARTEN RESPIRACIONES: al AMPLIAR una
+  pausa, el silencio se insertaba en el punto medio del hueco — que podía
+  caer justo en mitad de una respiración suave, partiéndola en dos (un
+  microcorte audible). El punto de inserción ahora se reubica al interior
+  profundo del silencio. (En tu última prueba hubo «1 ampliada» justo en
+  esa transición — este era el otro sospechoso.)
+- Si algún ajuste no encuentra interior profundo (ruido de fondo alto), se
+  usa la guarda ancha de antes y el log lo AVISA con «⚠ N ajuste(s) sin
+  interior profundo medible» — si ves ese aviso, compártelo.
+
 ## v0.24.3 — 2026-07-20
 - EL «PEDAZO DE VOZ» RECORTADO EN LA TRANSICIÓN, RESUELTO DE RAÍZ: al
   comprimir una pausa larga, el programa saltaba parte del silencio y

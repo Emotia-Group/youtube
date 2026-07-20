@@ -99,6 +99,27 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     # (-45 dB) — la voz suave o aireada queda por encima y ya no se confunde
     # con silencio (insertar una pausa sobre una sílaba aireada la partía).
     silences = detect_silences(narration_file, noise_db=-45, min_d=0.08)
+    # Interior PROFUNDO de cada silencio, con una SEGUNDA medición aún más
+    # estricta: una fricativa suave (la «s» de «Su padre», ~-48 dB) o una
+    # respiración quedan por DEBAJO del umbral de pausas (-45) y el detector
+    # las da por silencio — así que la guarda de cut_guard se medía desde la
+    # frontera equivocada y la cola de esa consonante caía en el tramo
+    # saltado. A -55 dB esos sonidos sí cuentan como voz: TODO punto donde la
+    # onda se corta (saltar silencio o insertar uno) debe vivir en este
+    # interior profundo, lejos de cualquier sonido por débil que sea.
+    deep_db = int(audio_cfg.get("deep_silence_db", -55))
+    deep_silences = detect_silences(narration_file, noise_db=deep_db,
+                                    min_d=0.05)
+
+    def deep_interior(a: float, b: float):
+        """Mayor tramo de silencio PROFUNDO dentro de [a, b] (o None)."""
+        best = None
+        for d0, d1 in deep_silences:
+            lo, hi = max(a, d0), min(b, d1)
+            if hi - lo > 0 and (best is None or hi - lo > best[1] - best[0]):
+                best = (lo, hi)
+        return best
+
     cuts = _safe_cuts(words, silences)
     cut_by_word = {c["i"]: c for c in cuts}
 
@@ -167,7 +188,7 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         return 1.0
 
     adjustments: list[tuple[float, float]] = []  # (punto, delta ±)
-    n_ext = n_comp = 0
+    n_ext = n_comp = n_shallow = 0
     for s0, s1 in silences:
         natural = s1 - s0
         if natural < 0.3 or s1 <= 0.05 or s0 >= audio_total - 0.05:
@@ -201,22 +222,47 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
         delta = target - natural
         if abs(delta) < 0.06:
             continue
+        iv = deep_interior(s0, s1)
         if delta < 0:
-            # Recortar SOLO el interior profundo del silencio, dejando
-            # cut_guard a CADA lado. Antes se resumía la voz a s1-0.1 (solo
-            # 100 ms del borde final): si el arranque de la palabra siguiente
-            # era suave, silencedetect situaba s1 tarde y ese arranque caía
-            # dentro del tramo saltado → se recortaba. Ahora se limita cuánto
-            # se quita para que ambos bordes conserven >= cut_guard: el
-            # recorte vive lejos de cualquier palabra, pase lo que pase con la
-            # precisión del umbral.
-            removable = natural - 2 * cut_guard
-            take = min(-delta, removable)
+            # Recortar SOLO dentro del interior PROFUNDO (-55 dB) del
+            # silencio, con cut_guard a CADA lado. La guarda medida desde la
+            # frontera a -45 dB no bastaba: una «s» suave o una respiración
+            # (~-48 dB) contaban como silencio para el detector de pausas y
+            # el recorte se comía su cola. A -55 dB esos sonidos son voz.
+            if iv is not None and iv[1] - iv[0] >= 2 * cut_guard + 0.06:
+                lo, hi = iv[0] + cut_guard, iv[1] - cut_guard
+            else:
+                # Sin interior profundo utilizable (suelo de ruido alto): se
+                # usa el silencio a -45 dB con la guarda — y las vallas de
+                # Whisper de abajo siguen protegiendo.
+                lo, hi = s0 + cut_guard, s1 - cut_guard
+                n_shallow += 1
+            # VALLA extra con los tiempos de Whisper: el recorte jamás pasa
+            # del arranque (según la transcripción) de la palabra siguiente
+            # ni empieza antes del final de la anterior. Si Whisper deriva
+            # hacia dentro de la pausa, solo restringe más (nunca menos).
+            w_prev2 = None
+            for w in words:
+                if float(w["start"]) < s0:
+                    w_prev2 = w
+                else:
+                    break
+            if w_prev2 is not None:
+                lo = max(lo, float(w_prev2["end"]) + 0.08)
+            w_next2 = next((w for w in words if float(w["start"]) >= s0), None)
+            if w_next2 is not None:
+                hi = min(hi, float(w_next2["start"]) - 0.08)
+            take = min(-delta, hi - lo)
             if take >= 0.06:
-                adjustments.append((round(s0 + cut_guard, 4), -take))
+                adjustments.append((round(lo, 4), -take))
                 n_comp += 1
         else:
-            adjustments.append((point, delta))
+            # Insertar silencio TAMBIÉN exige un punto en el interior
+            # profundo: partir una respiración o una fricativa suave por la
+            # mitad con la pausa del director sonaba a microcorte.
+            if iv is not None and iv[1] - iv[0] >= 0.3:
+                point = min(max(point, iv[0] + 0.12), iv[1] - 0.12)
+            adjustments.append((round(point, 4), delta))
             n_ext += 1
     insertions = sorted(adjustments)
     n_sentence_breaths = n_ext  # para el mensaje de progreso
@@ -296,7 +342,7 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
     voice_map = {"intro": round(intro, 4), "outro": round(outro, 4),
                  "audio_total": round(audio_total, 4),
                  "insertions": [[round(p, 4), round(d, 4)] for p, d in ins_pts],
-                 "n_ext": n_ext, "n_comp": n_comp}
+                 "n_ext": n_ext, "n_comp": n_comp, "n_shallow": n_shallow}
     n_breaths = sum(1 for i in range(n - 1) if boundary_pause[i] > 0.001)
 
     # AUTOCOMPROBACIÓN: los ajustes solo añaden o quitan SILENCIO medido —
@@ -352,12 +398,16 @@ def run(project, cfg) -> None:
         if check:
             project.add_warning(check)
         outro = voice_map["outro"]
+        shallow = int(voice_map.get("n_shallow") or 0)
         notify(f"🎙 Narración propia: {audio_total:.1f}s de voz íntegra. El "
                f"director ajustó las pausas a su ritmo: "
                f"{voice_map.get('n_comp', 0)} recortadas y "
-               f"{voice_map.get('n_ext', 0)} ampliadas — siempre DENTRO de "
-               f"silencios medidos (la voz jamás se toca) + {outro:.1f}s de "
-               "cola final.")
+               f"{voice_map.get('n_ext', 0)} ampliadas — solo en el interior "
+               f"PROFUNDO de silencios medidos (ni una respiración ni una "
+               f"consonante suave se tocan) + {outro:.1f}s de cola final."
+               + (f" ⚠ {shallow} ajuste(s) sin interior profundo medible "
+                  "(¿ruido de fondo alto?): se usó la guarda ancha."
+                  if shallow else ""))
 
     def _is_user_voice(scene: dict) -> bool:
         return "audio_start" in scene and narration_file is not None
