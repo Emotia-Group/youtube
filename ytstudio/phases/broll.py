@@ -370,6 +370,124 @@ def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
                f"B-roll no encajaba ({ids}).")
 
 
+def _character_image(project):
+    """Imagen del personaje narrador (categoría 🧑), o None."""
+    for a in (project.get("assets") or []):
+        if a.get("category") == "personaje" and a.get("kind") == "image":
+            p = project.path("input", a["file"])
+            if p.exists():
+                return p
+    return None
+
+
+def _generate_character_scenes(project, scenes: list[dict], broll_dir,
+                               cfg: dict) -> set[int]:
+    """Escenas de PERSONAJE (lipsync): el personaje habla el tramo EXACTO de
+    audio de su escena (vo_XXX.mp3, cortado de la pista única de voz). El clip
+    entra al montaje como video MUDO — la voz la pone la pista continua, así
+    que los labios quedan en sincronía sin tocar el motor de tiempos.
+
+    Degradación limpia: sin proveedor/clave, o si un clip falla, esa escena
+    usa la imagen fija del personaje con Ken Burns (y se avisa)."""
+    from ytstudio.progress import notify
+
+    overrides = project.get("shot_overrides") or {}
+    for s in scenes:
+        ov = overrides.get(str(s["id"]))
+        if ov in ("personaje", "broll"):
+            s["shot"] = ov
+    char_scenes = [s for s in scenes if s.get("shot") == "personaje"]
+    if not char_scenes:
+        return set()
+    img = _character_image(project)
+    if img is None:
+        for s in char_scenes:
+            s["shot"] = "broll"
+        project.add_warning(
+            "Hay escenas marcadas como PERSONAJE pero no subiste su imagen "
+            "(categoría 🧑 Personaje en Archivos): se generan como B-roll.")
+        return set()
+
+    def _still_fallback(targets: list[dict]) -> None:
+        import shutil as _sh
+        dest = broll_dir / f"personaje{img.suffix.lower() or '.jpg'}"
+        if not dest.exists():
+            _sh.copyfile(img, dest)
+        for s in targets:
+            s["broll_image"] = dest.name
+            s["broll_type"] = "image"
+            s.pop("broll_video", None)
+            s["broll_source"] = "lipsync"
+            if s.get("animation") == "static":
+                s["animation"] = "zoom_in"
+
+    from ytstudio.providers import get_lipsync
+    ls = get_lipsync(cfg)
+    if ls is None:
+        _still_fallback(char_scenes)
+        project.add_warning(
+            "Lipsync desactivado o sin REPLICATE_API_TOKEN: el personaje "
+            "aparece como imagen fija con movimiento (sin hablar). Actívalo "
+            "en ⚙ Configuración → Personaje narrador.")
+        return {s["id"] for s in char_scenes}
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from ytstudio import usage as usage_mod
+    from ytstudio.utils.media import run_ffmpeg
+    usage_items = usage_mod.get_state()
+    vo_dir = project.path("voiceover")
+    workers = max(1, int(cfg.get("performance", {}).get("parallel_video", 2)))
+    todo = [s for s in char_scenes
+            if not (broll_dir / f"lipsync_{s['id']:03d}.mp4").exists()]
+    if todo:
+        notify(f"🧑 Generando {len(todo)} escena(s) de PERSONAJE con lipsync "
+               f"({ls.model.split('/')[-1]}, {workers} en paralelo — tarda "
+               "minutos por clip)…")
+
+    def _gen(s: dict) -> None:
+        usage_mod.bind(usage_items)
+        clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
+        if clip.exists():  # reanudable
+            return
+        vo = vo_dir / f"vo_{s['id']:03d}.mp3"
+        if not vo.exists():
+            raise RuntimeError(f"Falta el audio de la escena {s['id']} "
+                               "(rehaz desde Voz).")
+        ls.generate(img, vo, clip, seconds=float(s.get("duration") or 5))
+
+    failed: list[dict] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_gen, s): s for s in char_scenes}
+        for future in as_completed(futures):
+            s = futures[future]
+            try:
+                future.result()
+                notify(f"🧑 Personaje listo (escena {s['id']})")
+            except Exception as e:
+                failed.append(s)
+                notify(f"⚠ Lipsync de la escena {s['id']} falló — usará la "
+                       f"imagen fija del personaje. {e}")
+    ok = [s for s in char_scenes if s not in failed
+          and (broll_dir / f"lipsync_{s['id']:03d}.mp4").exists()]
+    for s in ok:
+        clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
+        poster = broll_dir / f"lipsync_{s['id']:03d}.jpg"
+        if not poster.exists():
+            run_ffmpeg(["-i", str(clip), "-frames:v", "1", str(poster)],
+                       "fotograma del personaje")
+        s["broll_video"] = clip.name
+        s["broll_image"] = poster.name
+        s["broll_type"] = "video"
+        s["broll_source"] = "lipsync"
+    if failed:
+        _still_fallback(failed)
+        project.add_warning(
+            f"El lipsync falló en {len(failed)} escena(s) "
+            f"({', '.join(str(s['id']) for s in failed)}): usan la imagen "
+            "fija del personaje. «Rehacer desde Imágenes» reintenta solo esas.")
+    return {s["id"] for s in char_scenes}
+
+
 def run(project, cfg) -> None:
     images = get_images(cfg)
     videogen = get_videogen(cfg)
@@ -382,6 +500,19 @@ def run(project, cfg) -> None:
     #    el director lo revisa con visión (encaja o no, con aviso).
     placed_manual = _place_manual_broll(project, scenes, broll_dir, cfg)
     _review_manual_broll(project, llm, scenes, placed_manual, broll_dir, cfg)
+
+    # 0b) PERSONAJE narrador con lipsync: las escenas que el director marcó
+    #     como 'personaje' (más tus ajustes del Editor) muestran al personaje
+    #     hablando su tramo exacto de la narración. Ganan sobre cualquier
+    #     otro material de esa escena.
+    lipsync_ids = _generate_character_scenes(project, scenes, broll_dir, cfg)
+    if lipsync_ids & placed_manual:
+        project.add_warning(
+            "Escena(s) "
+            + ", ".join(str(i) for i in sorted(lipsync_ids & placed_manual))
+            + ": son de PERSONAJE, así que tu B-roll manual de esas escenas "
+            "no se usa (cámbialas a B-roll en el Editor si lo prefieres).")
+        placed_manual -= lipsync_ids
 
     # 1) B-roll propio del creador: asignación SEMÁNTICA (cada material va a
     #    la escena cuya narración ilustra, según su descripción de visión).
@@ -433,6 +564,9 @@ def run(project, cfg) -> None:
     if placed_manual:
         mapping = {i: a for i, a in mapping.items()
                    if scenes[i]["id"] not in placed_manual}
+    # Las escenas de PERSONAJE (lipsync) ya tienen su material
+    mapping = {i: a for i, a in mapping.items()
+               if scenes[i].get("broll_source") != "lipsync"}
 
     # Caché HONESTA del material por escena: cada escena se firma con lo que
     # debe mostrar (hash del prompt IA, o el archivo propio asignado). Si al
@@ -452,8 +586,8 @@ def run(project, cfg) -> None:
         sigs = {}
     stale: list[int] = []
     for idx, s in enumerate(scenes):
-        if s["id"] in placed_manual:
-            continue  # material manual: se gestiona en 06_broll/manual/, aparte
+        if s["id"] in placed_manual or s.get("broll_source") == "lipsync":
+            continue  # manual y personaje: material gestionado aparte
         if idx in mapping:
             sig = "user:" + user_assets[mapping[idx]]["file"]
         else:
@@ -496,7 +630,7 @@ def run(project, cfg) -> None:
     vid_workers = max(1, int(perf.get("parallel_video", 2)))
 
     ai_scenes = [s for s in scenes
-                 if s.get("broll_source") not in ("user", "manual")]
+                 if s.get("broll_source") not in ("user", "manual", "lipsync")]
 
     # 2a) Imágenes. Un fallo de INFRAESTRUCTURA (auth, red) detiene la fase
     #     (reanudable). Un rechazo de CONTENIDO (NSFW) de UNA imagen no puede

@@ -86,6 +86,20 @@ def get_videogen(cfg: dict):
     return {"replicate": videogen.ReplicateVideo}[name](cfg)
 
 
+def get_lipsync(cfg: dict):
+    """Proveedor de personaje con lipsync, o None (sin clave / desactivado):
+    sin él, las escenas de personaje degradan a su imagen fija con Ken Burns."""
+    from ytstudio.providers import lipsync
+    name = cfg.get("providers", {}).get("lipsync", {}).get("name", "replicate")
+    if name in ("none", "", None):
+        return None
+    env_var = _REQUIRED_KEYS.get(name)
+    if env_var and not os.environ.get(env_var):
+        _warn_mock("lipsync", name, env_var)
+        return None
+    return {"replicate": lipsync.ReplicateLipsync}[name](cfg)
+
+
 def get_music(cfg: dict):
     from ytstudio.providers import music
     name = _resolve("music", cfg["providers"]["music"]["name"])

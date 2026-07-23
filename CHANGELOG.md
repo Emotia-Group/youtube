@@ -9,6 +9,32 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.28.0 — 2026-07-20
+- 🧑 PERSONAJE NARRADOR CON LIPSYNC (nuevo tipo de video): sube tu voz + la
+  IMAGEN del personaje (nueva categoría «🧑 Personaje narrador» al crear el
+  proyecto) y el personaje narra EN CÁMARA con lipsync sobre tu audio real,
+  intercalado con B-roll (tuyo o generado). Tú eliges el % DE PRESENCIA
+  (15/30/45/60% al crear, 30% recomendado) y el DIRECTOR decide en qué
+  momentos aparece con criterio narrativo: el gancho y el cierre piden la
+  cara del narrador (primera persona), los picos dramáticos también, y el
+  resto ilustra con B-roll. Puedes forzar personaje/B-roll escena a escena
+  desde el ✂ Editor (regenera solo esas escenas).
+- CÓMO FUNCIONA POR DENTRO (y por qué no rompe la sincronía): cada escena
+  de personaje se genera con el tramo EXACTO de audio de esa escena
+  (cortado de la pista única de voz) y entra al montaje como video MUDO —
+  la voz la pone la misma pista continua de siempre, así que los labios
+  quedan sincronizados sin tocar el motor de tiempos que estabilizamos.
+- MODELOS con pros/contras en ⚙ Configuración → Personaje narrador:
+  Sonic (~$0.02-0.05/seg, económico, por defecto) · OmniHuman de ByteDance
+  (~$0.10-0.16/seg, calidad cine: gestos y emoción) · SadTalker (casi
+  gratis, básico). ⚠ El lipsync se cobra POR SEGUNDO de personaje en
+  pantalla: la estimación previa lo refleja según tu % de presencia y el
+  modelo (ej. 2 min al 30%: ~$1-2 con Sonic, ~$4-6 con OmniHuman).
+  Estrategia: itera con Sonic y genera la final con OmniHuman.
+- DEGRADACIÓN LIMPIA: sin clave de Replicate (o si un clip falla), esas
+  escenas usan la imagen fija del personaje con movimiento Ken Burns y se
+  avisa — el video siempre se termina.
+
 ## v0.27.0 — 2026-07-20
 - MINIATURAS PROFESIONALES, 3 DISEÑOS POR VIDEO: nueva fase de diseño real
   (no la banda oscura con texto de antes). Cada video recibe 3 miniaturas

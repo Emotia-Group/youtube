@@ -418,6 +418,7 @@ def run(project, cfg) -> None:
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
         _normalize_creative(scenes)
+        _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
         return
 
@@ -429,6 +430,7 @@ def run(project, cfg) -> None:
         if scenes:
             _assign_video_scenes(scenes, cfg)
             _normalize_creative(scenes)
+            _assign_shots(project, scenes, cfg)
             _write_outputs(project, scenes)
             return
 
@@ -471,7 +473,61 @@ def run(project, cfg) -> None:
         s["id"] = i  # ids consecutivos garantizados
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
     _normalize_creative(scenes)
+    _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)
+
+
+def _assign_shots(project, scenes: list[dict], cfg: dict) -> None:
+    """Reparte qué escenas muestran al PERSONAJE narrador (lipsync) y cuáles
+    B-roll, respetando el % de presencia elegido con criterio NARRATIVO — con
+    las señales que el propio director ya puso en las escenas:
+
+      · el gancho (escena 1) y el cierre (última) piden la cara del narrador
+        (primera persona: abre y cierra mirando a cámara),
+      · los picos dramáticos (music_intensity alta) y los arranques de
+        sección son los otros momentos naturales de personaje,
+      · el resto ilustra con B-roll.
+
+    Determinista y sin costo: usa las señales existentes, no llama al LLM.
+    El usuario puede forzar escena a escena desde el Editor (shot_overrides)."""
+    ch = project.get("character") or {}
+    has_img = any(a.get("category") == "personaje" and a.get("kind") == "image"
+                  for a in (project.get("assets") or []))
+    # imagen añadida después (sin % configurado) → 30% por defecto
+    share = ch.get("presence")
+    share = 0.3 if (has_img and share is None) else float(share or 0.0)
+    if not has_img or share <= 0 or not scenes:
+        for s in scenes:
+            s.pop("shot", None)
+        return
+    # peso de cada escena ≈ su duración (span de audio o nº de palabras)
+    def weight(s):
+        if s.get("audio_start") is not None and s.get("audio_end") is not None:
+            return max(0.5, float(s["audio_end"]) - float(s["audio_start"]))
+        return max(1, len((s.get("narration") or "").split()))
+    total = sum(weight(s) for s in scenes)
+    score = []
+    last_section = None
+    for i, s in enumerate(scenes):
+        pts = float(s.get("music_intensity") or 0.5)
+        if i == 0:
+            pts += 2.0            # gancho en primera persona
+        if i == len(scenes) - 1:
+            pts += 1.6            # cierre mirando a cámara
+        if s.get("section") != last_section:
+            pts += 0.3            # arranque de bloque narrativo (bono leve:
+                                  # nunca debe ganarle a un clímax real)
+        last_section = s.get("section")
+        score.append((pts, i))
+    acc = 0.0
+    chosen: set[int] = set()
+    for _, i in sorted(score, reverse=True):
+        if acc / total >= share:
+            break
+        chosen.add(i)
+        acc += weight(scenes[i])
+    for i, s in enumerate(scenes):
+        s["shot"] = "personaje" if i in chosen else "broll"
 
 
 def _write_outputs(project, scenes: list[dict]) -> None:

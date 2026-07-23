@@ -51,6 +51,16 @@ VIDEO_MODEL_SECONDS = {
     "bytedance/seedance-1-lite": (60, 180),
 }
 MUSIC_COST = (0.05, 0.15)         # MusicGen por pista
+# Lipsync (personaje narrador): USD por SEGUNDO de personaje en pantalla —
+# es la generación más cara del pipeline; el % de presencia manda el costo.
+LIPSYNC_PER_SEC = {
+    "bytedance/omni-human": (0.10, 0.16),
+    "zsxkib/sonic": (0.02, 0.05),
+    "cjwbw/sadtalker": (0.005, 0.02),
+}
+LIPSYNC_DEFAULT_PER_SEC = (0.02, 0.06)
+# segundos de CÓMPUTO por segundo de clip (para estimar el tiempo)
+LIPSYNC_COMPUTE_FACTOR = (2.0, 6.0)
 TTS_PER_M_CHARS = (12.0, 30.0)    # OpenAI tts-1 / tts-1-hd por millón de caracteres
 STT_PER_MIN = 0.006               # Whisper por minuto de audio
 VISION_TOKENS_PER_IMAGE = 1500    # tokens de entrada aproximados por imagen
@@ -94,6 +104,15 @@ def video_cost_mid(seconds: float, model: str = "") -> float:
 def music_cost_mid() -> float:
     lo, hi = MUSIC_COST
     return (lo + hi) / 2
+
+
+def lipsync_cost_range(model: str = "") -> tuple[float, float]:
+    return LIPSYNC_PER_SEC.get(model, LIPSYNC_DEFAULT_PER_SEC)
+
+
+def lipsync_cost_mid(seconds: float, model: str = "") -> float:
+    lo, hi = lipsync_cost_range(model)
+    return round(seconds * (lo + hi) / 2, 4)
 
 
 def tts_cost(chars: int) -> float:

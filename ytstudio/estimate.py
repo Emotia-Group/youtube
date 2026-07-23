@@ -208,6 +208,35 @@ def estimate(project, cfg: dict) -> dict:
             n_video_scenes * vs[0] / 60 / vw,
             n_video_scenes * vs[1] / 60 / vw, phases={"broll": 1.0})
 
+    # --- Personaje narrador con lipsync ---------------------------------------
+    ch = project.get("character") or {}
+    has_char = any(a.get("category") == "personaje" for a in assets)
+    presence = ch.get("presence")
+    presence = 0.3 if (has_char and presence is None) else float(presence or 0)
+    if has_char and presence > 0:
+        ls_name = active(prov.get("lipsync", {}).get("name", "replicate"))
+        ls_model = prov.get("lipsync", {}).get("model", "")
+        char_secs = presence * video_minutes * 60
+        if ls_name == "replicate":
+            from ytstudio.pricing import (LIPSYNC_COMPUTE_FACTOR,
+                                          lipsync_cost_range)
+            lc = lipsync_cost_range(ls_model)
+            vw = max(1, int(perf.get("parallel_video", 2)))
+            add(f"Personaje lipsync ({ls_model.split('/')[-1] or 'lipsync'})",
+                f"~{char_secs:.0f}s de personaje en pantalla "
+                f"({presence * 100:.0f}% del video) · {vw} en paralelo",
+                char_secs * lc[0], char_secs * lc[1],
+                char_secs * LIPSYNC_COMPUTE_FACTOR[0] / 60 / vw,
+                char_secs * LIPSYNC_COMPUTE_FACTOR[1] / 60 / vw,
+                phases={"broll": 1.0})
+            notes.append("El lipsync se cobra por segundo de personaje en "
+                         "pantalla: baja el % de presencia o usa un modelo "
+                         "económico para reducirlo.")
+        else:
+            add("Personaje (imagen fija)",
+                "sin clave de lipsync: el personaje aparece sin hablar",
+                0, 0, 0, 0.2, phases={"broll": 1.0})
+
     # --- Música ---------------------------------------------------------------
     if music_name == "library":
         add("Música (tu biblioteca)", "selección con IA incluida arriba",

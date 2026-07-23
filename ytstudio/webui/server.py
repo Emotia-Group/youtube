@@ -280,6 +280,13 @@ def api_create_project(body: dict) -> dict:
                       data=base64.b64decode(f["data_base64"]))
         except ValueError as e:
             raise ApiError(400, str(e))
+    # Personaje narrador: % del video en que aparece haciendo lipsync
+    if any(f.get("category") == "personaje" for f in files):
+        try:
+            pres = min(60, max(0, int(body.get("character_presence") or 30)))
+        except (TypeError, ValueError):
+            pres = 30
+        project.set("character", {"presence": pres / 100})
 
     # Overrides POR PROYECTO (preset de estilo + formato) en su config.yaml —
     # load_config(project.dir) los mezcla sobre la config global al generar.
@@ -380,6 +387,10 @@ def api_project_detail(slug: str) -> dict:
     scenes_file = project.dir / DIRS["scenes"] / "scenes.json"
     if scenes_file.exists():
         detail["scenes"] = read_json_tolerant(scenes_file)["scenes"]
+    detail["has_character"] = any(
+        a.get("category") == "personaje" and a.get("kind") == "image"
+        for a in (project.get("assets") or []))
+    detail["character"] = project.get("character") or {}
     final = project.dir / DIRS["final"] / "video_final.mp4"
     detail["final_video"] = f"{DIRS['final']}/video_final.mp4" if final.exists() else None
     thumb = project.dir / DIRS["final"] / "miniatura.jpg"
@@ -615,11 +626,18 @@ def api_edit_scenes(slug: str, body: dict) -> dict:
     by_id = {int(s["id"]): s for s in scenes}
     use_user_voice = any("audio_start" in s for s in scenes)
 
-    need_subtitles = need_assembly = overlay_changed = False
+    need_broll = need_subtitles = need_assembly = overlay_changed = False
+    shot_overrides = dict(project.get("shot_overrides") or {})
     for e in (body.get("edits") or []):
         s = by_id.get(int(e.get("id", -1)))
         if s is None:
             continue
+        if (e.get("shot") in ("personaje", "broll")
+                and e["shot"] != s.get("shot")):
+            # forzar personaje/B-roll en esta escena → regenerar su material
+            s["shot"] = e["shot"]
+            shot_overrides[str(s["id"])] = e["shot"]
+            need_broll = True
         if "animation" in e and e["animation"] in _EDIT_ANIMS:
             s["animation"] = e["animation"]; need_assembly = True
         if "transition" in e and e["transition"] in ("corte", "fundido"):
@@ -667,9 +685,11 @@ def api_edit_scenes(slug: str, body: dict) -> dict:
             except (TypeError, ValueError):
                 pass
 
-    if not (need_subtitles or need_assembly):
+    if not (need_broll or need_subtitles or need_assembly):
         return {"saved": False, "rerun_from": None}
 
+    if need_broll:
+        project.set("shot_overrides", shot_overrides)
     if need_subtitles and not use_user_voice:
         # La línea de tiempo TTS se recompila aquí mismo (barato, sin LLM)
         from ytstudio.phases.voiceover import _build_tts_timeline
@@ -686,7 +706,8 @@ def api_edit_scenes(slug: str, body: dict) -> dict:
             _sync_overlays(scenes, narration.get("segments") or [], vmap)
 
     save_scenes(project, scenes)
-    rerun = "subtitles" if need_subtitles else "assembly"
+    rerun = ("broll" if need_broll
+             else "subtitles" if need_subtitles else "assembly")
     project.reset_from(rerun, PHASE_ORDER)
     return {"saved": True, "rerun_from": rerun}
 

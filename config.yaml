@@ -33,6 +33,10 @@ providers:
     name: none
     model: kwaivgi/kling-v1.6-standard
     max_scenes: 0
+  lipsync:
+    name: replicate           # personaje narrador (imagen + voz → lipsync);
+    model: zsxkib/sonic       # económico por defecto — cambia a
+                              # bytedance/omni-human para calidad cine
   music:
     name: mock
     model: meta/musicgen

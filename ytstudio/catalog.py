@@ -199,6 +199,33 @@ CATALOG: dict = {
              "hint": "Solo las N escenas de mayor impacto se generan en video; el resto usa Ken Burns."},
         ],
     },
+    "lipsync": {
+        "title": "Personaje narrador con lipsync (imagen + tu voz → habla en cámara)",
+        "config_path": ["providers", "lipsync"],
+        "options": [
+            {
+                "name": "replicate",
+                "label": "Replicate — lipsync",
+                "env": "REPLICATE_API_TOKEN",
+                "models": [
+                    {"id": "zsxkib/sonic",
+                     "label": "Sonic (~$0.02-0.05/seg) — ✚ económico, ideal para ITERAR el flujo · ✖ busto parlante: gestos y cuerpo limitados"},
+                    {"id": "bytedance/omni-human",
+                     "label": "OmniHuman (~$0.10-0.16/seg) — ✚ calidad CINE: gestos, cuerpo y emoción, sirve hasta con dibujos · ✖ el más caro y tarda minutos por clip"},
+                    {"id": "cjwbw/sadtalker",
+                     "label": "SadTalker (~$0.005-0.02/seg) — ✚ casi gratis · ✖ cabeza casi estática, calidad básica; solo pruebas"},
+                ],
+                "notes": "Sube la IMAGEN del personaje (categoría 🧑 Personaje) y tu "
+                         "voz: el personaje narra en cámara con lipsync y el director "
+                         "lo intercala con B-roll según el % de presencia que elijas. "
+                         "OJO AL COSTO: se cobra por SEGUNDO de personaje en pantalla "
+                         "(un video de 2 min al 30% ≈ 36 s de lipsync). Estrategia: "
+                         "itera con Sonic y genera la versión final con OmniHuman.",
+            },
+            {"name": "none", "label": "Desactivado", "env": None, "models": [],
+             "notes": "Las escenas de personaje usan su imagen fija con Ken Burns."},
+        ],
+    },
     "music": {
         "title": "Música de fondo",
         "config_path": ["providers", "music"],

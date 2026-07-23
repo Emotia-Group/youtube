@@ -25,7 +25,7 @@ IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 TEXT_EXT = {".txt", ".md"}
 DOC_EXT = {".pdf", ".docx", ".doc", ".pptx", ".xlsx", ".xls"}
 
-CATEGORIES = ("guion", "voz", "broll", "referencia")
+CATEGORIES = ("guion", "voz", "broll", "referencia", "personaje")
 
 ANALYSIS_SCHEMA = {
     "type": "object",

@@ -262,6 +262,14 @@ async function showNew(){
         ${Object.entries(CAT.formats||{}).map(([k,f])=>`<option value="${k}">${esc(f.label)}</option>`).join('')}
       </select></label>
     <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos verticales (Short/Reel/TikTok) generan 9:16 con guion corto de gancho, escenas rápidas y subtítulos grandes quemados — listos para subir.</p>
+    <label class="f"><span>🧑 Presencia del personaje en pantalla (solo si subes su imagen en «Personaje narrador»)</span>
+      <select id="np-charpres" style="width:auto">
+        <option value="15">~15% — apariciones puntuales</option>
+        <option value="30" selected>~30% — gancho, momentos clave y cierre (recomendado)</option>
+        <option value="45">~45% — muy presente</option>
+        <option value="60">~60% — el video es sobre todo el personaje</option>
+      </select></label>
+    <p class="muted" style="font-size:12px;margin:2px 0 8px">⚠ El lipsync se cobra por segundo de personaje en pantalla: más presencia = más costo (la estimación previa lo refleja). El director decide en QUÉ momentos aparece con criterio narrativo; luego puedes forzarlo escena a escena en el Editor.</p>
     <label class="f"><span>2 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
       <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
     <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
@@ -299,6 +307,7 @@ const UPLOAD_CATS=[
   ['voz','🎙 Tu voz / narración','Si subes tu narración grabada, se usa TAL CUAL en el video: se recortan los silencios largos y cada escena se alinea a lo que dices (mp3, wav, m4a…)','audio/*'],
   ['broll','🎬 Tu B-roll (imágenes y videos)','Tus propias imágenes/videos: se usan directamente en el montaje del video','image/*,video/*'],
   ['referencia','🎨 Referencia de estilo','Imagen, video o documento (PDF, docx…) cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*,.pdf,.docx,.doc,.pptx,.txt,.md'],
+  ['personaje','🧑 Personaje narrador','La imagen del personaje que narrará EN CÁMARA con lipsync sobre tu voz (foto frontal clara). El director lo intercala con B-roll según el % de presencia que elijas','image/*'],
 ];
 function uploadCatsHtml(){
   return `<div class="upcats">${UPLOAD_CATS.map(([k,label,hint,accept])=>`
@@ -344,6 +353,7 @@ async function createProject(){
     const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
       {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k,
        format:$('#np-format')?.value||'long',
+       character_presence:parseInt($('#np-charpres')?.value||'30'),
        channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
@@ -529,6 +539,7 @@ async function renderTab(tab,p){
         ${thumb?`<img src="${thumb}" loading="lazy">`:'<div style="width:240px" class="muted">sin imagen aún</div>'}
         <div style="flex:1">
           <div class="num">ESCENA ${s.id} — ${esc(s.section)}
+            ${s.shot==='personaje'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">🧑 personaje</span>':''}
             <span class="badge">${s.animation}</span><span class="badge">${isVideo?'🎞 video':'🖼 imagen'}</span>
             ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}
             ${s.broll_source==='manual'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">tu B-roll</span>':''}</div>
@@ -573,6 +584,7 @@ async function renderTab(tab,p){
             <div class="num">ESCENA ${s.id} — ${esc(s.section)} <span class="badge">${(s.duration||0).toFixed(1)}s</span></div>
             <p class="muted" style="margin:4px 0;font-size:12px">${esc((s.narration||'').slice(0,140))}${(s.narration||'').length>140?'…':''}</p>
             <div class="row" style="gap:8px;flex-wrap:wrap;font-size:12px">
+              ${p.has_character?`<label title="Quién ocupa la pantalla: el personaje hablando (lipsync, tiene costo por segundo) o B-roll ilustrativo">🧑 <select class="ed-shot"><option value="broll" ${s.shot!=='personaje'?'selected':''}>🎞 B-roll</option><option value="personaje" ${s.shot==='personaje'?'selected':''}>🧑 Personaje</option></select></label>`:''}
               <label>🎥 <select class="ed-anim">${ANIMS.map(([v,l])=>`<option value="${v}" ${s.animation===v?'selected':''}>${l}</option>`).join('')}</select></label>
               <label>🔀 <select class="ed-trans">${TRANS.map(([v,l])=>`<option value="${v}" ${s.transition===v?'selected':''}>${l}</option>`).join('')}</select></label>
               <label>🔊 <select class="ed-sfx">${SFXS.map(([v,l])=>`<option value="${v}" ${(s.sfx||'ninguno')===v?'selected':''}>${l}</option>`).join('')}</select></label>
@@ -730,6 +742,7 @@ async function applySceneEdits(){
     e.sfx=d.querySelector('.ed-sfx').value;
     e.music_intensity=parseFloat(d.querySelector('.ed-mi').value);
     const dur=d.querySelector('.ed-dur');if(dur)e.duration=parseFloat(dur.value);
+    const shot=d.querySelector('.ed-shot');if(shot)e.shot=shot.value;
     e.overlay_text=d.querySelector('.ed-ovtext').value;
     e.overlay_kicker=d.querySelector('.ed-ovkick').value;
     e.overlay_type=d.querySelector('.ed-ovtype').value;
@@ -739,7 +752,10 @@ async function applySceneEdits(){
     const r=await api(`/api/projects/${current}/scenes`,{method:'PUT',body:JSON.stringify({edits})});
     if(!r.saved){toast('Sin cambios que aplicar');return}
     toast('✅ Cambios guardados');
-    if(confirm('Cambios guardados. ¿Remontar el video ahora? (solo montaje — no regenera voz, imágenes ni guion)')){
+    const msg=r.rerun_from==='broll'
+      ?'Cambios guardados. Cambiaste personaje/B-roll de alguna escena: al regenerar se crea el material de ESAS escenas (el resto se reutiliza de caché). ¿Regenerar ahora?'
+      :'Cambios guardados. ¿Remontar el video ahora? (solo montaje — no regenera voz, imágenes ni guion)';
+    if(confirm(msg)){
       await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:r.rerun_from})});
       startPoll();renderProject();
     }
