@@ -387,10 +387,14 @@ def api_project_detail(slug: str) -> dict:
     scenes_file = project.dir / DIRS["scenes"] / "scenes.json"
     if scenes_file.exists():
         detail["scenes"] = read_json_tolerant(scenes_file)["scenes"]
-    detail["has_character"] = any(
-        a.get("category") == "personaje" and a.get("kind") == "image"
-        for a in (project.get("assets") or []))
+    from ytstudio.characters import narrator as _narr, roster as _roster
+    detail["has_character"] = _narr(project) is not None
     detail["character"] = project.get("character") or {}
+    by_id = {a["id"]: a for a in (project.get("assets") or [])}
+    detail["characters_roster"] = [
+        {**c, "files": [by_id[i]["file"] for i in (c.get("asset_ids") or [])
+                        if i in by_id]}
+        for c in _roster(project)]
     final = project.dir / DIRS["final"] / "video_final.mp4"
     detail["final_video"] = f"{DIRS['final']}/video_final.mp4" if final.exists() else None
     thumb = project.dir / DIRS["final"] / "miniatura.jpg"
@@ -550,6 +554,99 @@ def _run_progress(slug: str) -> dict:
             out["percent"] = min(99, round(100 * elapsed / est))
             out["eta_seconds"] = max(0, round(est - elapsed))
     return out
+
+
+def _materialized_roster(project) -> list[dict]:
+    """Elenco persistido (materializa la migración v0.28 al primer cambio)."""
+    from ytstudio.characters import roster
+    chars = roster(project)
+    if chars and not project.get("characters"):
+        project.set("characters", chars)
+    return project.get("characters") or []
+
+
+def api_character_create(slug: str, body: dict) -> dict:
+    from ytstudio.phases.ingest import add_asset
+
+    project = Project(slug)
+    name = (body.get("name") or "").strip()[:40]
+    if not name:
+        raise ApiError(400, "Ponle un nombre al personaje.")
+    chars = _materialized_roster(project)
+    if any(c["name"].strip().lower() == name.lower() for c in chars):
+        raise ApiError(409, f"Ya existe un personaje llamado «{name}».")
+    asset_ids = []
+    for f in (body.get("files") or []):
+        a = add_asset(project, Path(Path(f["name"]).name), "personaje",
+                      data=base64.b64decode(f["data_base64"]))
+        asset_ids.append(a["id"])
+    ch = {"id": f"ch{max((int(c['id'][2:]) for c in chars if c['id'][2:].isdigit()), default=0) + 1}",
+          "name": name, "description": (body.get("description") or "").strip()[:300],
+          "asset_ids": asset_ids, "narrator": bool(body.get("narrator"))}
+    if ch["narrator"]:
+        for c in chars:
+            c["narrator"] = False
+    chars.append(ch)
+    project.set("characters", chars)
+    if ch["narrator"] and not project.get("character"):
+        project.set("character", {"presence": 0.3})
+    return {"characters": chars,
+            "hint": "Rehaz desde «Escenas» para que el director use el "
+                    "elenco actualizado."}
+
+
+def api_character_update(slug: str, cid: str, body: dict) -> dict:
+    project = Project(slug)
+    chars = _materialized_roster(project)
+    ch = next((c for c in chars if c["id"] == cid), None)
+    if ch is None:
+        raise ApiError(404, "Personaje no encontrado.")
+    if "name" in body and (body["name"] or "").strip():
+        ch["name"] = body["name"].strip()[:40]
+    if "description" in body:
+        ch["description"] = (body["description"] or "").strip()[:300]
+    if "narrator" in body:
+        if body["narrator"]:
+            for c in chars:
+                c["narrator"] = c["id"] == cid
+        else:
+            ch["narrator"] = False
+    project.set("characters", chars)
+    return {"characters": chars}
+
+
+def api_character_add_files(slug: str, cid: str, body: dict) -> dict:
+    from ytstudio.phases.ingest import add_asset
+
+    project = Project(slug)
+    chars = _materialized_roster(project)
+    ch = next((c for c in chars if c["id"] == cid), None)
+    if ch is None:
+        raise ApiError(404, "Personaje no encontrado.")
+    for f in (body.get("files") or []):
+        a = add_asset(project, Path(Path(f["name"]).name), "personaje",
+                      data=base64.b64decode(f["data_base64"]))
+        ch.setdefault("asset_ids", []).append(a["id"])
+    project.set("characters", chars)
+    return {"characters": chars}
+
+
+def api_character_delete(slug: str, cid: str) -> dict:
+    from ytstudio.phases.ingest import remove_asset
+
+    project = Project(slug)
+    chars = _materialized_roster(project)
+    ch = next((c for c in chars if c["id"] == cid), None)
+    if ch is None:
+        raise ApiError(404, "Personaje no encontrado.")
+    for aid in (ch.get("asset_ids") or []):
+        remove_asset(project, aid)
+    was_narrator = bool(ch.get("narrator"))
+    chars = [c for c in chars if c["id"] != cid]
+    if was_narrator and chars and not any(c.get("narrator") for c in chars):
+        chars[0]["narrator"] = True  # el rol de narrador no se queda huérfano
+    project.set("characters", chars)
+    return {"characters": chars}
 
 
 def api_select_metadata(slug: str, body: dict) -> dict:
@@ -934,6 +1031,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_style_from_project(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/metadata/select", path):
                 self._json(api_select_metadata(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters", path):
+                self._json(api_character_create(m.group(1), self._body()), 201)
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)/files", path):
+                self._json(api_character_add_files(m.group(1), m.group(2), self._body()))
             elif path == "/api/channels":
                 self._json(api_channel_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
@@ -965,6 +1066,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_set_broll_policy(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes", path):
                 self._json(api_edit_scenes(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):
+                self._json(api_character_update(m.group(1), m.group(2), self._body()))
             else:
                 self._json({"error": "No encontrado"}, 404)
         except ApiError as e:
@@ -978,6 +1081,8 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
                 self._json(api_delete_asset(m.group(1), int(m.group(2))))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):
+                self._json(api_character_delete(m.group(1), m.group(2)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes/(\d+)/broll", path):
                 self._json(api_scene_broll_delete(m.group(1), int(m.group(2))))
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):

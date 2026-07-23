@@ -30,6 +30,10 @@ IMG_MODEL_COST = {
     "recraft-ai/recraft-v3": (0.04, 0.05),
     "stability-ai/stable-diffusion-3.5-large": (0.06, 0.07),
     "gpt-image-1": (0.07, 0.25),
+    # modelos de IDENTIDAD (escenas con personajes del elenco)
+    "google/nano-banana": (0.035, 0.045),
+    "bytedance/seedream-4": (0.03, 0.05),
+    "black-forest-labs/flux-kontext-pro": (0.04, 0.05),
 }
 IMG_MODEL_SECONDS = {
     "black-forest-labs/flux-schnell": (1, 4),

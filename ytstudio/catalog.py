@@ -161,6 +161,16 @@ CATALOG: dict = {
             {"name": "mock", "label": "Mock (tarjetas placeholder)", "env": None,
              "models": [], "notes": "Degradados con el texto del prompt, para previews."},
         ],
+        "extra_fields": [
+            {"key": "ref_model", "type": "text",
+             "label": "Modelo de IDENTIDAD para escenas con personajes del elenco",
+             "hint": "Genera guiándose por las fotos de referencia del personaje "
+                     "(misma cara en todo el video). Opciones: google/nano-banana "
+                     "(~$0.04/img, multi-referencia, recomendado) · "
+                     "bytedance/seedream-4 (multi-referencia, gran fidelidad) · "
+                     "black-forest-labs/flux-kontext-pro (look FLUX, 1 sola "
+                     "referencia). Requiere REPLICATE_API_TOKEN."},
+        ],
     },
     "videogen": {
         "title": "Video generativo por escena (opcional)",

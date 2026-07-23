@@ -26,6 +26,9 @@ providers:
   images:
     name: mock
     model: black-forest-labs/flux-1.1-pro
+    ref_model: google/nano-banana   # identidad de personajes del elenco:
+                                    # genera con sus fotos de referencia
+                                    # (misma cara en todas sus escenas)
     size: 1536x1024          # gpt-image-1 horizontal (16:9); solo aplica a openai
     safety_tolerance: 6      # FLUX 1(estricto)-6(permisivo): evita falsos NSFW
                              # en contenido histórico/bélico (solo aplica a FLUX)

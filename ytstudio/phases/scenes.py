@@ -122,6 +122,53 @@ TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
 
 
+def _schema_with_cast(base_schema: dict, cast_names: list[str]) -> dict:
+    """Copia del schema de escenas con el campo 'characters' (enum del
+    ELENCO): el director etiqueta qué personajes aparecen en cada escena.
+    Solo se añade cuando hay elenco — sin él, el schema queda intacto."""
+    import copy
+    if not cast_names:
+        return base_schema
+    schema = copy.deepcopy(base_schema)
+    item = schema["properties"]["scenes"]["items"]
+    item["properties"]["characters"] = {
+        "type": "array", "items": {"type": "string", "enum": cast_names}}
+    item["required"] = [*item["required"], "characters"]
+    return schema
+
+
+def _cast_rules(project) -> tuple[list[str], str]:
+    """(nombres del elenco, bloque de reglas para el prompt del director)."""
+    from ytstudio.characters import cast_brief, roster
+    names = [c.get("name") for c in roster(project) if c.get("name")]
+    if not names:
+        return [], ""
+    rules = (
+        "\nELENCO DEL VIDEO (personajes con IDENTIDAD VISUAL FIJA — sus "
+        "escenas se generan con sus fotos de referencia):\n"
+        + cast_brief(project) + "\n"
+        "- 'characters': los nombres del ELENCO que aparecen VISUALMENTE en "
+        "esa escena (lista vacía si ninguno). Sé preciso: solo cuando la "
+        "escena de verdad los muestra.\n"
+        "- En el broll_prompt de esas escenas descríbelos por su ROL y acción "
+        "(ej. 'the young king raising his sword'), NO inventes sus rasgos: la "
+        "cara y el aspecto los ponen las fotos de referencia.\n")
+    return names, rules
+
+
+def _normalize_cast(scenes: list[dict], cast_names: list[str]) -> None:
+    """Sanea las etiquetas: solo nombres del elenco, sin duplicados."""
+    valid = {n.strip().lower(): n for n in cast_names}
+    for s in scenes:
+        seen, out = set(), []
+        for n in (s.get("characters") or []):
+            k = (n or "").strip().lower()
+            if k in valid and k not in seen:
+                out.append(valid[k])
+                seen.add(k)
+        s["characters"] = out
+
+
 def scene_seconds(cfg: dict, project=None) -> float:
     """Ritmo visual: cada cuántos segundos cambia la imagen. Prioridad:
     referencia analizada en ESTE proyecto > estilo guardado del canal >
@@ -338,7 +385,8 @@ def _scene_from_group(group: list[dict], idx: int) -> dict:
     }
 
 
-def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
+def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
+                     project=None) -> None:
     """Rellena broll_prompt / on_screen_text / section de escenas ya fijadas por
     el audio, para que el B-roll sea coherente con lo que se dice en cada tramo.
     Modifica `scenes` en el sitio."""
@@ -366,6 +414,8 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
         }}},
         "required": ["scenes"], "additionalProperties": False,
     }
+    cast_names, cast_rules = _cast_rules(project) if project else ([], "")
+    schema = _schema_with_cast(schema, cast_names)
     narr = "\n".join(f"[{s['id']}] {s['narration']}" for s in scenes)
     system = (
         f"Eres a la vez director de fotografía, editor senior y director "
@@ -385,6 +435,7 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
         + "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
         "- section: título temático corto del tramo (para los capítulos).\n\n"
         + CREATIVE_RULES
+        + cast_rules
         + f"\nNARRACIÓN POR ESCENA:\n{narr}")
     result = llm.complete_json(system, prompt, schema=schema,
                                max_tokens=32000, purpose="broll_fixed")
@@ -393,12 +444,16 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes) -> None:
         b = got[i] if i < len(got) else {}
         s["broll_prompt"] = b.get("broll_prompt") or f"{prefix}, {s['narration'][:50]}"
         s["broll_type"] = b.get("broll_type", "image")
+        if cast_names:
+            s["characters"] = b.get("characters") or []
         s["animation"] = b.get("animation", s["animation"])
         if b.get("section"):
             s["section"] = b["section"]
         for key in _CREATIVE_PROPS:
             if key in b:
                 s[key] = b[key]
+    if cast_names:
+        _normalize_cast(scenes, cast_names)
 
 
 def run(project, cfg) -> None:
@@ -415,7 +470,8 @@ def run(project, cfg) -> None:
     narration = project.get("narration")
     if narration and narration.get("segments"):
         scenes = _group_narration(narration["segments"], target)
-        _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes)
+        _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
+                         project=project)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
         _normalize_creative(scenes)
         _assign_shots(project, scenes, cfg)
@@ -466,11 +522,17 @@ def run(project, cfg) -> None:
         + f"\nGUION:\n<<<\n{script_md}\n>>>"
     )
 
-    result = llm.complete_json(system, prompt, schema=SCENES_SCHEMA,
+    cast_names, cast_rules = _cast_rules(project)
+    if cast_rules:
+        prompt += cast_rules
+    result = llm.complete_json(system, prompt,
+                               schema=_schema_with_cast(SCENES_SCHEMA,
+                                                        cast_names),
                                max_tokens=64000, purpose="scenes")
     scenes = result["scenes"]
     for i, s in enumerate(scenes, start=1):
         s["id"] = i  # ids consecutivos garantizados
+    _normalize_cast(scenes, cast_names)
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
     _normalize_creative(scenes)
     _assign_shots(project, scenes, cfg)
@@ -490,10 +552,10 @@ def _assign_shots(project, scenes: list[dict], cfg: dict) -> None:
 
     Determinista y sin costo: usa las señales existentes, no llama al LLM.
     El usuario puede forzar escena a escena desde el Editor (shot_overrides)."""
+    from ytstudio.characters import narrator
     ch = project.get("character") or {}
-    has_img = any(a.get("category") == "personaje" and a.get("kind") == "image"
-                  for a in (project.get("assets") or []))
-    # imagen añadida después (sin % configurado) → 30% por defecto
+    has_img = narrator(project) is not None
+    # narrador añadido después (sin % configurado) → 30% por defecto
     share = ch.get("presence")
     share = 0.3 if (has_img and share is None) else float(share or 0.0)
     if not has_img or share <= 0 or not scenes:

@@ -9,6 +9,32 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.29.0 — 2026-07-20
+- 👥 ELENCO CON CONSISTENCIA VISUAL (personajes coherentes en TODO el
+  video): en 📎 Archivos hay ahora un bloque «Elenco» donde creas los
+  personajes del video — nombre, descripción y UNA O VARIAS FOTOS de
+  referencia cada uno (varios personajes por video). El director lee el
+  guion y ETIQUETA en qué escenas aparece cada personaje (se ve con
+  insignias 👥 en el Storyboard), y esas imágenes se generan con un modelo
+  de IDENTIDAD guiado por sus fotos: la misma cara y el mismo aspecto en
+  todas sus escenas, no una persona distinta cada vez.
+- MODELO DE IDENTIDAD configurable (⚙ Configuración → Imágenes): Nano
+  Banana de Google por defecto (~$0.04/img, acepta VARIAS fotos de
+  referencia a la vez) · Seedream 4 (multi-referencia, gran fidelidad) ·
+  FLUX Kontext Pro (look FLUX, una referencia). Solo las escenas CON
+  personajes usan este modelo; el resto sigue con tu modelo de siempre
+  (mismo orden de costo, sin sorpresa en el presupuesto).
+- PERSONAJE SIN FOTOS: se le genera UNA referencia (retrato coherente con
+  el estilo del video, usando su descripción) y se reutiliza en todas sus
+  escenas — consistencia también para personajes 100% IA.
+- INTEGRADO CON EL NARRADOR (v0.28): el personaje marcado como «narrador»
+  es el que habla en cámara con lipsync, usando su foto del elenco. Los
+  prompts del director describen a los personajes por su ROL y acción — la
+  cara la ponen las referencias, no la imaginación del modelo.
+- La caché por escena ahora incluye su elenco: si cambias qué personaje
+  aparece en una escena, solo ESA escena se regenera. Tras cambiar el
+  elenco, rehaz desde «Escenas» para que el director lo use.
+
 ## v0.28.0 — 2026-07-20
 - 🧑 PERSONAJE NARRADOR CON LIPSYNC (nuevo tipo de video): sube tu voz + la
   IMAGEN del personaje (nueva categoría «🧑 Personaje narrador» al crear el

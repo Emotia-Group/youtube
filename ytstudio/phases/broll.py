@@ -370,13 +370,22 @@ def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
                f"B-roll no encajaba ({ids}).")
 
 
-def _character_image(project):
-    """Imagen del personaje narrador (categoría 🧑), o None."""
-    for a in (project.get("assets") or []):
-        if a.get("category") == "personaje" and a.get("kind") == "image":
-            p = project.path("input", a["file"])
-            if p.exists():
-                return p
+def _character_image(project, cfg: dict | None = None):
+    """Imagen del personaje NARRADOR (del elenco): su primera foto subida o,
+    si no tiene, su referencia autogenerada. None si no hay narrador."""
+    from ytstudio.characters import (character_images, ensure_reference,
+                                     narrator)
+    ch = narrator(project)
+    if ch is None:
+        return None
+    imgs = character_images(project, ch)
+    if imgs:
+        return imgs[0]
+    if cfg is not None:
+        try:
+            return ensure_reference(project, cfg, ch)
+        except Exception:
+            return None
     return None
 
 
@@ -399,7 +408,7 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
     char_scenes = [s for s in scenes if s.get("shot") == "personaje"]
     if not char_scenes:
         return set()
-    img = _character_image(project)
+    img = _character_image(project, cfg)
     if img is None:
         for s in char_scenes:
             s["shot"] = "broll"
@@ -591,8 +600,9 @@ def run(project, cfg) -> None:
         if idx in mapping:
             sig = "user:" + user_assets[mapping[idx]]["file"]
         else:
-            sig = hashlib.md5(
-                (s.get("broll_prompt") or "").encode("utf-8")).hexdigest()
+            sig_src = ((s.get("broll_prompt") or "") + "|chars:"
+                       + ",".join(s.get("characters") or []))
+            sig = hashlib.md5(sig_src.encode("utf-8")).hexdigest()
         key = str(s["id"])
         cached = list(broll_dir.glob(f"scene_{s['id']:03d}.*"))
         if sigs.get(key) not in (None, sig) and cached:
@@ -640,11 +650,48 @@ def run(project, cfg) -> None:
     palette = (concept.get("visual_style") or {}).get("palette") or []
     nsfw_scenes: list[int] = []
 
+    # ELENCO: referencias de identidad por personaje, resueltas EN SERIE antes
+    # del pool (genera la referencia del personaje sin fotos una sola vez).
+    from ytstudio.characters import references_for
+    from ytstudio.providers.images import get_ref_images
+    ref_images = get_ref_images(cfg)
+    cast_needed = sorted({n for s in ai_scenes
+                          for n in (s.get("characters") or [])})
+    char_refs: dict[str, list] = {}
+    if cast_needed:
+        if ref_images is None:
+            project.add_warning(
+                "Hay escenas con personajes del ELENCO pero falta "
+                "REPLICATE_API_TOKEN para el modelo de identidad: se generan "
+                "sin referencia (la cara puede variar entre escenas).")
+        else:
+            for n in cast_needed:
+                char_refs[n] = references_for(project, cfg, [n])
+
+    def _scene_refs(scene: dict) -> list:
+        out = []
+        for n in (scene.get("characters") or []):
+            for p in char_refs.get(n, []):
+                if p not in out:
+                    out.append(p)
+        return out[:6]
+
     def _gen_image(scene: dict) -> None:
         usage_mod.bind(usage_items)
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
         if img.exists():  # reanudable
             return
+        # Escena con personajes del elenco → modelo de IDENTIDAD con sus
+        # fotos de referencia (misma cara en todas sus escenas).
+        refs = _scene_refs(scene)
+        if refs and ref_images is not None:
+            try:
+                ref_images.generate_with_refs(scene["broll_prompt"], refs, img)
+                return
+            except Exception as e:
+                if not _is_content_error(e):
+                    raise
+                # rechazo de contenido → sigue el flujo normal suavizado
         try:
             images.generate(scene["broll_prompt"], img)
             return

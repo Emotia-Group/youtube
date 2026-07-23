@@ -77,6 +77,60 @@ class ReplicateImages:
         return out
 
 
+# Modelos de CONSISTENCIA DE IDENTIDAD (escenas con personajes del elenco):
+# generan la imagen guiándose por las fotos de referencia del personaje.
+# Cada modelo espera las referencias con un nombre de input distinto.
+_REF_INPUTS = {
+    "google/nano-banana": ("image_input", True),      # lista de imágenes
+    "bytedance/seedream-4": ("image_input", True),
+    "black-forest-labs/flux-kontext-pro": ("input_image", False),  # una sola
+    "black-forest-labs/flux-kontext-max": ("input_image", False),
+}
+
+
+class ReplicateRefImages:
+    """Generación con referencias de personaje vía Replicate."""
+
+    def __init__(self, cfg: dict):
+        import replicate
+        self.client = replicate
+        icfg = cfg.get("providers", {}).get("images", {}) or {}
+        self.model = icfg.get("ref_model", "google/nano-banana")
+        v = cfg.get("video", {})
+        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
+                       else "16:9")
+
+    def generate_with_refs(self, prompt: str, refs: list[Path],
+                           out: Path) -> Path:
+        import contextlib
+        import urllib.request
+        key, is_list = _REF_INPUTS.get(self.model, ("image_input", True))
+        with contextlib.ExitStack() as stack:
+            files = [stack.enter_context(open(p, "rb")) for p in refs]
+            inputs: dict = {"prompt": prompt,
+                            key: files if is_list else files[0],
+                            "aspect_ratio": self.aspect}
+            if "nano-banana" in self.model:
+                inputs["output_format"] = "jpg"
+            output = replicate_call(self.client, self.model, inputs)
+        url = output[0] if isinstance(output, list) else output
+        urllib.request.urlretrieve(str(url), out)
+        from ytstudio import pricing, usage
+        usage.record("replicate",
+                     f"imagen con personaje ({self.model.split('/')[-1]})",
+                     1, "img", pricing.img_cost_mid("replicate", self.model))
+        return out
+
+
+def get_ref_images(cfg: dict):
+    """Generador con referencias, o None (sin token): las escenas con
+    personaje caen al generador normal (sin identidad fija) con aviso."""
+    import os
+    if not os.environ.get("REPLICATE_API_TOKEN"):
+        return None
+    return ReplicateRefImages(cfg)
+
+
 class MockImages:
     """Tarjetas placeholder (degradado + texto del prompt) generadas con PIL.
     Permiten previsualizar el montaje completo sin generar imágenes reales."""
