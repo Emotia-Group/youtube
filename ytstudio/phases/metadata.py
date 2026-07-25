@@ -13,18 +13,23 @@ from ytstudio.providers import get_llm
 
 _OPT = {"type": "object", "additionalProperties": False}
 
+# NOTA: NADA de minItems/maxItems en los arrays. La API de structured output
+# de Anthropic solo admite minItems 0 o 1 y rechaza el schema entero con
+# «For 'array' type, 'minItems' values other than 0 or 1 are not supported».
+# El «exactamente 3» se pide en el PROMPT y lo garantiza _norm_meta() (que
+# rellena o recorta) — así el contrato se cumple sin schema inválido.
 METADATA_SCHEMA = {
     "type": "object",
     "properties": {
         "title_options": {
-            "type": "array", "minItems": 3, "maxItems": 3,
+            "type": "array",
             "items": {**_OPT, "properties": {
                 "title": {"type": "string"},
                 "angle": {"type": "string"}},
                 "required": ["title", "angle"]},
         },
         "description_options": {
-            "type": "array", "minItems": 3, "maxItems": 3,
+            "type": "array",
             "items": {**_OPT, "properties": {
                 "description": {"type": "string"},
                 "angle": {"type": "string"}},
@@ -32,7 +37,7 @@ METADATA_SCHEMA = {
         },
         "tags": {"type": "array", "items": {"type": "string"}},
         "thumbnail_options": {
-            "type": "array", "minItems": 3, "maxItems": 3,
+            "type": "array",
             "items": {**_OPT, "properties": {
                 "kicker": {"type": "string"},
                 "text": {"type": "string"},

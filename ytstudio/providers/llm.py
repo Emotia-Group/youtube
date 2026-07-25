@@ -7,6 +7,45 @@ import json
 import mimetypes
 from pathlib import Path
 
+# Palabras clave de JSON Schema que la API de structured output NO admite.
+# Un schema con cualquiera de ellas se rechaza ENTERO con un error 400 críptico
+# a mitad del pipeline (pasó de verdad: 'minItems: 3' tumbó la fase de
+# metadatos tras haber pagado ya todas las fases anteriores). Se valida ANTES
+# de llamar — y también en el mock, para que las pruebas locales sin clave
+# detecten un schema inválido igual que lo haría la API real.
+_UNSUPPORTED_KEYWORDS = (
+    "maxItems", "minLength", "maxLength", "pattern", "format",
+    "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
+    "multipleOf", "uniqueItems", "oneOf", "anyOf", "allOf", "not", "$ref",
+)
+
+
+def check_schema(schema, _path: str = "schema") -> None:
+    """Verifica que un JSON Schema sea compatible con structured output.
+    Lanza ValueError con la ruta exacta del problema (no un 400 genérico)."""
+    if isinstance(schema, list):
+        for i, item in enumerate(schema):
+            check_schema(item, f"{_path}[{i}]")
+        return
+    if not isinstance(schema, dict):
+        return
+    for key in _UNSUPPORTED_KEYWORDS:
+        if key in schema:
+            raise ValueError(
+                f"Schema no admitido por la API en {_path}: '{key}' no está "
+                "soportado en structured output. Quítalo del schema y exige "
+                "esa restricción en el PROMPT (y sanea el resultado en "
+                "código).")
+    # minItems solo admite 0 o 1
+    if "minItems" in schema and schema["minItems"] not in (0, 1):
+        raise ValueError(
+            f"Schema no admitido por la API en {_path}: 'minItems' solo "
+            f"acepta 0 o 1 (tiene {schema['minItems']!r}). Pide la cantidad "
+            "exacta en el PROMPT y ajústala en código.")
+    for key, value in schema.items():
+        if isinstance(value, (dict, list)):
+            check_schema(value, f"{_path}.{key}")
+
 
 class ClaudeLLM:
     is_mock = False
@@ -40,6 +79,7 @@ class ClaudeLLM:
             messages=[{"role": "user", "content": content}],
         )
         if schema is not None:
+            check_schema(schema)  # falla claro ANTES de gastar la llamada
             kwargs["output_config"] = {"format": {"type": "json_schema", "schema": schema}}
 
         with self.client.messages.stream(**kwargs) as stream:
@@ -82,11 +122,16 @@ class MockLLM:
     def complete(self, system: str, prompt: str, *, schema: dict | None = None,
                  images=None, max_tokens: int = 16000, purpose: str = "") -> str:
         if schema is not None:
+            # El mock valida el schema IGUAL que la API: así un schema
+            # inválido se detecta en las pruebas locales (sin clave) y no en
+            # producción a mitad del pipeline.
+            check_schema(schema)
             return json.dumps(self._mock_for(purpose), ensure_ascii=False)
         return self._mock_text(purpose)
 
     def complete_json(self, system: str, prompt: str, *, schema: dict,
                       images=None, max_tokens: int = 16000, purpose: str = "") -> dict:
+        check_schema(schema)
         return self._mock_for(purpose)
 
     # --- contenidos de ejemplo ---

@@ -9,6 +9,25 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.29.1 — 2026-07-23
+- ARREGLADO EL FALLO EN LA FASE DE METADATOS («For 'array' type, 'minItems'
+  values other than 0 or 1 are not supported»): en v0.27.0, al añadir las 3
+  opciones de título/descripción/miniatura, exigí «exactamente 3» dentro del
+  esquema técnico con «minItems: 3». La API de Anthropic no admite ese
+  valor y rechazaba la petición entera — justo en la ÚLTIMA fase, después de
+  haber pagado ya todo lo anterior. Ahora el «exactamente 3» se pide en el
+  prompt y lo garantiza el código (si el modelo devuelve 5 se recortan, si
+  devuelve 1 se completan), sin esquema inválido. Las 3 opciones de todo
+  siguen igual.
+- POR QUÉ NO LO DETECTARON LAS PRUEBAS (y por qué no volverá a pasar): las
+  pruebas locales usan un modelo simulado que aceptaba cualquier esquema, así
+  que el error solo aparecía con la API real. Ahora hay un VALIDADOR de
+  esquemas que corre tanto en la API real (falla claro ANTES de gastar la
+  llamada, indicando la ruta exacta del problema) como en el modelo simulado
+  — así cualquier esquema incompatible salta en las pruebas locales, sin
+  necesidad de clave. Se validaron los 19 esquemas del programa: todos
+  correctos.
+
 ## v0.29.0 — 2026-07-20
 - 👥 ELENCO CON CONSISTENCIA VISUAL (personajes coherentes en TODO el
   video): en 📎 Archivos hay ahora un bloque «Elenco» donde creas los
