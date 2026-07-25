@@ -71,8 +71,8 @@ class ReplicateMusic:
         self.model = cfg["providers"]["music"].get("model", "meta/musicgen")
 
     def generate(self, mood: str, seconds: float, out: Path) -> Path:
-        import urllib.request
-        from ytstudio.providers.replicate_util import replicate_call
+        from ytstudio.providers.replicate_util import (replicate_call,
+                                                        download_with_retry)
         # MusicGen genera hasta ~30s; se generan y loopean
         raw = out.with_suffix(".raw.mp3")
         output = replicate_call(self.client, self.model, {
@@ -82,7 +82,7 @@ class ReplicateMusic:
             "model_version": "stereo-large",
         })
         url = output[0] if isinstance(output, list) else output
-        urllib.request.urlretrieve(str(url), raw)
+        download_with_retry(str(url), raw)
         run_ffmpeg(["-stream_loop", "-1", "-i", str(raw), "-vn",
                     "-t", f"{seconds:.2f}",
                     "-c:a", "libmp3lame", "-q:a", "4", str(out)],

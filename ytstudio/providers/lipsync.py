@@ -29,8 +29,8 @@ class ReplicateLipsync:
     def generate(self, image: Path, audio: Path, out: Path,
                  seconds: float) -> Path:
         import contextlib
-        import urllib.request
-        from ytstudio.providers.replicate_util import replicate_call
+        from ytstudio.providers.replicate_util import (replicate_call,
+                                                        download_with_retry)
         img_key, aud_key, extras = _MODEL_INPUTS.get(
             self.model, ("image", "audio", {}))
         with contextlib.ExitStack() as stack:
@@ -39,7 +39,7 @@ class ReplicateLipsync:
                       **extras}
             output = replicate_call(self.client, self.model, inputs)
         url = output[0] if isinstance(output, list) else output
-        urllib.request.urlretrieve(str(url), out)
+        download_with_retry(str(url), out)
         from ytstudio import pricing, usage
         usage.record("replicate",
                      f"lipsync {seconds:.0f}s ({self.model.split('/')[-1]})",

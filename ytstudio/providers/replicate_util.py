@@ -53,6 +53,23 @@ def _reset_seconds(msg: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _is_transient_network_error(e: Exception) -> bool:
+    """Cortes de red pasajeros (reinicio de conexión, timeout, DNS
+    momentáneo): no son un problema del modelo ni de la cuenta, se resuelven
+    solos con un reintento. Cubre tanto errores tipados (ConnectionError,
+    TimeoutError — incluye ConnectionResetError/ConnectionAbortedError en
+    cualquier SO) como el WinError 10054/10053 que Windows reporta como texto
+    dentro de una excepción genérica al atravesar capas de librerías."""
+    if isinstance(e, (ConnectionError, TimeoutError)):
+        return True
+    msg = str(e).lower()
+    return any(s in msg for s in (
+        "winerror 10054", "winerror 10053", "winerror 10060",
+        "connection reset", "connection aborted", "forcibly closed",
+        "remote end closed connection", "read timed out", "timed out",
+    ))
+
+
 def _once(client, model: str, inputs: dict):
     version_id = _resolve_version(client, model)
     if version_id:
@@ -67,8 +84,10 @@ def _once(client, model: str, inputs: dict):
     return client.run(model, input=inputs)
 
 
-def replicate_call(client, model: str, inputs: dict, max_retries: int = 10):
+def replicate_call(client, model: str, inputs: dict, max_retries: int = 10,
+                    net_retries: int = 5):
     import time
+    net_attempt = 0
     for attempt in range(max_retries + 1):
         try:
             return _once(client, model, inputs)
@@ -89,6 +108,17 @@ def replicate_call(client, model: str, inputs: dict, max_retries: int = 10):
                     f"⏳ Replicate limita las peticiones (crédito bajo): "
                     f"esperando {delay:.0f}s y reintentando "
                     f"({attempt + 1}/{max_retries})…")
+                time.sleep(delay)
+                continue
+            # Corte de red pasajero (ej. WinError 10054 al reiniciarse la
+            # conexión): antes esto detenía la fase entera a la primera; se
+            # reintenta con espera creciente antes de rendirse.
+            if _is_transient_network_error(e) and net_attempt < net_retries:
+                net_attempt += 1
+                delay = min(2 ** net_attempt, 30)
+                _notify(
+                    f"⚠ Corte de red pasajero con Replicate: reintentando en "
+                    f"{delay}s ({net_attempt}/{net_retries})…")
                 time.sleep(delay)
                 continue
             _raise_clear(e, msg, low, model)
@@ -128,4 +158,32 @@ def _raise_clear(e, msg, low, model):
             "nombre en ⚙ Configuración o deja el modelo por defecto. Si es un "
             "modelo con versión, puede que esa versión ya no exista."
         ) from e
+    if _is_transient_network_error(e):
+        raise RuntimeError(
+            f"Corte de conexión con Replicate tras varios reintentos: {msg} "
+            "Suele ser Wi-Fi/VPN inestable o el propio Replicate cortando la "
+            "descarga a medio camino — revisa tu conexión y pulsa «Generar "
+            "video» de nuevo para reanudar desde aquí."
+        ) from e
     raise
+
+
+def download_with_retry(url: str, out, max_retries: int = 5) -> None:
+    """urlretrieve() con el mismo reintento ante cortes de red pasajeros que
+    replicate_call(): la descarga del resultado es una petición de red aparte
+    y puede cortarse aunque la predicción ya haya terminado bien."""
+    import time
+    import urllib.request
+    for attempt in range(max_retries + 1):
+        try:
+            urllib.request.urlretrieve(url, out)
+            return
+        except Exception as e:
+            if _is_transient_network_error(e) and attempt < max_retries:
+                delay = min(2 ** (attempt + 1), 30)
+                _notify(
+                    f"⚠ Corte de red pasajero al descargar el resultado: "
+                    f"reintentando en {delay}s ({attempt + 1}/{max_retries})…")
+                time.sleep(delay)
+                continue
+            raise

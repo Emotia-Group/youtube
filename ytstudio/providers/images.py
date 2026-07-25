@@ -64,13 +64,13 @@ class ReplicateImages:
                        else "16:9")
 
     def generate(self, prompt: str, out: Path) -> Path:
-        import urllib.request
+        from ytstudio.providers.replicate_util import download_with_retry
         output = replicate_call(self.client, self.model, {
             "prompt": prompt, "aspect_ratio": self.aspect,
             "output_format": "jpg", "safety_tolerance": self.safety,
         })
         url = output[0] if isinstance(output, list) else output
-        urllib.request.urlretrieve(str(url), out)
+        download_with_retry(str(url), out)
         from ytstudio import pricing, usage
         usage.record("replicate", f"imagen ({self.model.split('/')[-1]})", 1,
                      "img", pricing.img_cost_mid("replicate", self.model))
@@ -103,7 +103,7 @@ class ReplicateRefImages:
     def generate_with_refs(self, prompt: str, refs: list[Path],
                            out: Path) -> Path:
         import contextlib
-        import urllib.request
+        from ytstudio.providers.replicate_util import download_with_retry
         key, is_list = _REF_INPUTS.get(self.model, ("image_input", True))
         with contextlib.ExitStack() as stack:
             files = [stack.enter_context(open(p, "rb")) for p in refs]
@@ -114,7 +114,7 @@ class ReplicateRefImages:
                 inputs["output_format"] = "jpg"
             output = replicate_call(self.client, self.model, inputs)
         url = output[0] if isinstance(output, list) else output
-        urllib.request.urlretrieve(str(url), out)
+        download_with_retry(str(url), out)
         from ytstudio import pricing, usage
         usage.record("replicate",
                      f"imagen con personaje ({self.model.split('/')[-1]})",

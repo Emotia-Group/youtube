@@ -9,6 +9,29 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.29.3 — 2026-07-25
+- REINTENTO ANTE CORTES DE RED PASAJEROS (antes detenían la fase entera):
+  en tu segunda prueba, la fase de Imágenes falló por completo con
+  «[WinError 10054] Se ha forzado la interrupción de una conexión existente
+  por el host remoto» — un corte de conexión de Windows, casi siempre
+  transitorio (Wi-Fi/VPN inestable un instante). `replicate_call()` solo
+  reintentaba ante el límite de velocidad (429); cualquier otro error,
+  incluido este corte pasajero, se propagaba de inmediato y detenía TODA la
+  fase, exigiendo pulsar «Generar video» de nuevo a mano. Además, la
+  descarga del resultado ya generado (`urlretrieve`, usada por imágenes,
+  video IA, lipsync y música) no tenía ningún reintento — un corte justo ahí
+  tiraba trabajo ya pagado y completado. Ahora ambos puntos reintentan con
+  espera creciente (hasta 5 veces) ante cortes de red reconocidos
+  (`ConnectionError`/`TimeoutError`, WinError 10054/10053/10060, «connection
+  reset», «forcibly closed», etc.) antes de rendirse — y si el corte
+  persiste, el aviso final es claro y accionable en vez de un traceback. Los
+  errores REALES (token inválido, modelo no encontrado, sin saldo, contenido
+  sensible) se detectan y detienen la fase igual que antes, sin reintentar
+  algo que no se va a resolver solo. Verificado con un servidor HTTP local
+  real que corta la conexión a medio camino y con un cliente Replicate falso
+  que lanza las excepciones reales de red, ambos ejercitando el código de
+  reintento tal cual corre en producción.
+
 ## v0.29.2 — 2026-07-25
 - ARREGLADO EL ESTIRAMIENTO DE IMÁGENES EN ESCENAS CON KEN BURNS (caras y
   fotos deformadas horizontalmente): si subías la foto de referencia de un

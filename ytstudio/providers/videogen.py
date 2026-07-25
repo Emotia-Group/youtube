@@ -20,8 +20,8 @@ class ReplicateVideo:
     def generate(self, prompt: str, out: Path, image: Path | None = None,
                  seconds: float = 5.0) -> Path:
         import contextlib
-        import urllib.request
-        from ytstudio.providers.replicate_util import replicate_call
+        from ytstudio.providers.replicate_util import (replicate_call,
+                                                        download_with_retry)
         # Kling genera clips de 5 o 10 s. Se pide el que mejor cubre la escena:
         # el montaje ajusta el resto con cámara lenta sutil (nunca repitiendo
         # el clip en bucle).
@@ -33,7 +33,7 @@ class ReplicateVideo:
                 inputs["start_image"] = stack.enter_context(open(image, "rb"))
             output = replicate_call(self.client, self.model, inputs)
         url = output[0] if isinstance(output, list) else output
-        urllib.request.urlretrieve(str(url), out)
+        download_with_retry(str(url), out)
         from ytstudio import pricing, usage
         usage.record("replicate",
                      f"clip de video {duration}s ({self.model.split('/')[-1]})",
