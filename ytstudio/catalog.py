@@ -218,19 +218,22 @@ CATALOG: dict = {
                 "label": "Replicate — lipsync",
                 "env": "REPLICATE_API_TOKEN",
                 "models": [
-                    {"id": "zsxkib/sonic",
-                     "label": "Sonic (~$0.02-0.05/seg) — ✚ económico, ideal para ITERAR el flujo · ✖ busto parlante: gestos y cuerpo limitados"},
+                    {"id": "cjwbw/sadtalker",
+                     "label": "SadTalker (~$0.005-0.02/seg) — ✚ casi gratis y muy fiable, ideal para ITERAR · ✖ cabeza casi estática, calidad básica"},
                     {"id": "bytedance/omni-human",
                      "label": "OmniHuman (~$0.10-0.16/seg) — ✚ calidad CINE: gestos, cuerpo y emoción, sirve hasta con dibujos · ✖ el más caro y tarda minutos por clip"},
-                    {"id": "cjwbw/sadtalker",
-                     "label": "SadTalker (~$0.005-0.02/seg) — ✚ casi gratis · ✖ cabeza casi estática, calidad básica; solo pruebas"},
+                    {"id": "zsxkib/sonic",
+                     "label": "Sonic (~$0.02-0.05/seg) — ✚ buen punto medio de calidad · ✖ modelo de un autor independiente: puede cambiar de nombre o desaparecer en Replicate sin aviso (si falla con «no encontrado», prueba SadTalker u OmniHuman)"},
                 ],
                 "notes": "Sube la IMAGEN del personaje (categoría 🧑 Personaje) y tu "
                          "voz: el personaje narra en cámara con lipsync y el director "
                          "lo intercala con B-roll según el % de presencia que elijas. "
                          "OJO AL COSTO: se cobra por SEGUNDO de personaje en pantalla "
                          "(un video de 2 min al 30% ≈ 36 s de lipsync). Estrategia: "
-                         "itera con Sonic y genera la versión final con OmniHuman.",
+                         "itera con SadTalker y genera la versión final con OmniHuman. "
+                         "Si un modelo falla con «no encontrado», Replicate puede "
+                         "haberlo renombrado/retirado: prueba otro de la lista o "
+                         "busca el nombre exacto en replicate.com/collections/lipsync.",
             },
             {"name": "none", "label": "Desactivado", "env": None, "models": [],
              "notes": "Las escenas de personaje usan su imagen fija con Ken Burns."},

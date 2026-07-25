@@ -24,7 +24,7 @@ class ReplicateLipsync:
         import replicate
         self.client = replicate
         lcfg = cfg.get("providers", {}).get("lipsync", {}) or {}
-        self.model = lcfg.get("model", "zsxkib/sonic")
+        self.model = lcfg.get("model", "cjwbw/sadtalker")
 
     def generate(self, image: Path, audio: Path, out: Path,
                  seconds: float) -> Path:

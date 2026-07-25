@@ -9,6 +9,35 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.29.2 — 2026-07-25
+- ARREGLADO EL ESTIRAMIENTO DE IMÁGENES EN ESCENAS CON KEN BURNS (caras y
+  fotos deformadas horizontalmente): si subías la foto de referencia de un
+  personaje o un B-roll con una relación de aspecto DISTINTA a 16:9 (por
+  ejemplo cuadrada o vertical), el efecto Ken Burns las escalaba conservando
+  su aspecto ORIGINAL y luego las ajustaba al tamaño de salida — como el
+  recorte no coincidía en proporción, el ajuste final ESTIRABA la imagen de
+  forma no uniforme. El camino de video (B-roll en video) ya recortaba
+  primero para cubrir el encuadre de salida y luego animaba; al camino de
+  imagen fija (Ken Burns) le faltaba ese mismo recorte de cobertura. Ahora
+  toda imagen se recorta primero para llenar exactamente el encuadre de
+  salida (sin deformar) y DESPUÉS se aplica el zoom/paneo — confirmado con
+  una prueba geométrica real (círculo de referencia que debe seguir siendo
+  círculo, no elipse, tras el filtro) sobre fuente cuadrada, vertical y ya
+  16:9, en las 5 animaciones.
+- MODELO DE LIPSYNC POR DEFECTO MÁS FIABLE: el modelo económico por
+  defecto («zsxkib/sonic») dejó de encontrarse en Replicate («no
+  encontrado»/404) — es un modelo de un autor independiente que puede
+  cambiar de nombre o retirarse sin aviso. El nuevo económico por defecto es
+  «cjwbw/sadtalker» (evidencia sólida de que sigue activo). Sonic queda en
+  el catálogo como alternativa con aviso explícito de que puede fallar así,
+  y para qué modelo probar en ese caso. AVISO IMPORTANTE: no tengo acceso de
+  red desde este entorno para verificar en vivo la disponibilidad actual de
+  modelos en Replicate (el proxy de salida bloquea api.replicate.com por
+  política) — este cambio reduce el riesgo con la mejor evidencia
+  disponible, pero no es una garantía. Si «cjwbw/sadtalker» también fallara,
+  prueba «bytedance/omni-human» (confirmado, aunque más caro) o revisa
+  replicate.com/collections/lipsync para ver qué modelos siguen activos hoy.
+
 ## v0.29.1 — 2026-07-23
 - ARREGLADO EL FALLO EN LA FASE DE METADATOS («For 'array' type, 'minItems'
   values other than 0 or 1 are not supported»): en v0.27.0, al añadir las 3

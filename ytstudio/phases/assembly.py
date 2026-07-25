@@ -42,10 +42,19 @@ def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
         "static": ("1.001", cx, cy),
     }
     z, x, y = presets.get(animation, presets["zoom_in"])
+    # CROP DE COBERTURA a la relación de aspecto de salida ANTES de escalar:
+    # sin esto, una imagen que no sea 16:9 (una referencia de personaje en
+    # vertical, un B-roll subido en otro formato…) llega a zoompan con OTRO
+    # aspecto, y zoompan la ESTIRA de forma no uniforme al ajustarla a WxH
+    # (caras "anchas" — el defecto que se veía en el video). El camino de
+    # video (broll_video, más abajo en _render_scene) ya hacía este mismo
+    # recorte de cobertura; aquí faltaba. Tras el recorte, la imagen YA tiene
+    # el aspecto de salida, así que escalar a 2560 lo conserva sin más.
+    cover = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
     # Sobreescala a 2560 (no 3840): con zoom máximo 1.14 sobre salida 1920
     # bastan ~2200 px — las imágenes fuente son de 1536, así que 3840 solo
     # añadía cómputo sin ganar detalle. Render ~2x más rápido, misma calidad.
-    return (f"scale=2560:-2,setsar=1,"
+    return (f"{cover},scale=2560:-2,setsar=1,"
             f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={fps}")
 
 

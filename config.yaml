@@ -38,7 +38,7 @@ providers:
     max_scenes: 0
   lipsync:
     name: replicate           # personaje narrador (imagen + voz → lipsync);
-    model: zsxkib/sonic       # económico por defecto — cambia a
+    model: cjwbw/sadtalker    # económico y fiable por defecto — cambia a
                               # bytedance/omni-human para calidad cine
   music:
     name: mock
