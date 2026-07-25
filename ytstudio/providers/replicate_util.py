@@ -70,27 +70,95 @@ def _is_transient_network_error(e: Exception) -> bool:
     ))
 
 
-def _once(client, model: str, inputs: dict):
-    version_id = _resolve_version(client, model)
-    if version_id:
-        # Polling: no sufre el read-timeout de una sola petición larga.
-        pred = client.predictions.create(version=version_id, input=inputs)
-        pred.wait()
+def _rewind_inputs(inputs: dict) -> None:
+    """Rebobina los archivos abiertos de los inputs antes de (re)enviarlos.
+    Al reintentar una llamada, los handles ya fueron leídos hasta el final por
+    el intento anterior: sin esto, el reintento sube archivos VACÍOS y el
+    modelo falla del lado del servidor con errores crípticos (p. ej. Kling:
+    «'NoneType' object has no attribute 'read'»)."""
+    def _seek0(v):
+        if hasattr(v, "seek"):
+            try:
+                v.seek(0)
+            except Exception:
+                pass
+    for v in inputs.values():
+        if isinstance(v, (list, tuple)):
+            for x in v:
+                _seek0(x)
+        else:
+            _seek0(v)
+
+
+class PersistentNetworkError(RuntimeError):
+    """Corte de red que YA agotó sus reintentos de reconexión: el bucle
+    exterior de replicate_call no debe re-crear la predicción (re-crearla
+    volvería a cobrar el modelo completo)."""
+
+
+def _wait_prediction(client, pred, net_retries: int = 5):
+    """Espera una predicción YA CREADA, reanudando el sondeo si la conexión se
+    corta a mitad de la espera. Clave: la generación sigue corriendo en el
+    servidor (y ya está cobrada) — re-consultar la MISMA predicción no cuesta
+    nada, mientras que re-crearla volvería a cobrar el modelo completo."""
+    import time
+    attempt = 0
+    while True:
+        try:
+            pred.wait()
+        except Exception as e:
+            if not _is_transient_network_error(e):
+                raise
+            if attempt >= net_retries:
+                raise PersistentNetworkError(
+                    "La conexión con Replicate se cortó repetidamente mientras "
+                    "se esperaba el resultado y no se pudo reconectar "
+                    f"({net_retries} intentos). Detalle: {e}. Suele ser "
+                    "Wi-Fi/VPN/antivirus cortando conexiones largas — prueba "
+                    "otra red y vuelve a generar (lo ya completado se reanuda)."
+                ) from e
+            attempt += 1
+            delay = min(2 ** attempt, 30)
+            _notify(
+                f"⚠ Corte de red esperando el resultado: reconectando en "
+                f"{delay}s ({attempt}/{net_retries}) — la generación sigue "
+                "en el servidor, no se cobra de nuevo…")
+            time.sleep(delay)
+            try:
+                pred = client.predictions.get(pred.id)
+            except Exception:
+                pass  # el próximo pred.wait() reintenta la conexión
+            continue
         if pred.status != "succeeded":
             raise RuntimeError(
                 f"Replicate no completó la generación (estado: {pred.status})"
                 + (f": {pred.error}" if getattr(pred, "error", None) else ""))
         return pred.output
+
+
+def _once(client, model: str, inputs: dict, net_retries: int = 5):
+    version_id = _resolve_version(client, model)
+    if version_id:
+        # Polling: no sufre el read-timeout de una sola petición larga.
+        pred = client.predictions.create(version=version_id, input=inputs)
+        return _wait_prediction(client, pred, net_retries)
     return client.run(model, input=inputs)
 
 
 def replicate_call(client, model: str, inputs: dict, max_retries: int = 10,
                     net_retries: int = 5):
+    """net_retries: cuántos cortes de red pasajeros se reintentan. Los
+    proveedores CON degradación por escena (lipsync, clips de video) pasan un
+    valor bajo — si su red está caída de verdad, mejor caer rápido a la
+    imagen fija que retener la fase varios minutos por escena."""
     import time
     net_attempt = 0
     for attempt in range(max_retries + 1):
         try:
-            return _once(client, model, inputs)
+            _rewind_inputs(inputs)
+            return _once(client, model, inputs, net_retries)
+        except PersistentNetworkError:
+            raise  # ya se reintentó la reconexión; re-crear re-cobraría
         except Exception as e:
             msg = str(e)
             low = msg.lower()

@@ -37,7 +37,10 @@ class ReplicateLipsync:
             inputs = {img_key: stack.enter_context(open(image, "rb")),
                       aud_key: stack.enter_context(open(audio, "rb")),
                       **extras}
-            output = replicate_call(self.client, self.model, inputs)
+            # net_retries bajo: si falla, la escena degrada a imagen fija —
+            # mejor caer rápido que retener la fase minutos por escena.
+            output = replicate_call(self.client, self.model, inputs,
+                                    net_retries=2)
         url = output[0] if isinstance(output, list) else output
         download_with_retry(str(url), out)
         from ytstudio import pricing, usage

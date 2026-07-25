@@ -9,6 +9,47 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.30.0 — 2026-07-25
+- POR QUÉ TARDÓ TANTO Y POR QUÉ EL PERSONAJE SALIÓ COMO FOTO GIGANTE (debug
+  completo de tu corrida test-2-hetty): el lipsync volvió a caer con el corte
+  de red (WinError 10054) — la conexión de tu equipo hacia Replicate se corta
+  sobre todo en las operaciones LARGAS (el 25-07 falló el lipsync 3 de 3
+  veces y Kling e imágenes de forma intermitente; el 18/19-07 todo pasaba,
+  así que apunta a tu red/VPN/antivirus de ese día, no al programa). Al
+  fallar, el programa usó su reserva DISEÑADA: la escena del personaje pasa a
+  su foto fija — por eso viste tu imagen de referencia en pantalla; no es que
+  el director la eligiera como B-roll.
+- ARREGLADO EL RE-COBRO Y LA ESPERA ETERNA EN LOS REINTENTOS: cuando el
+  corte llegaba a MITAD de la espera del resultado, el reintento RE-CREABA
+  la predicción — o sea, volvía a pagar el modelo completo y a esperar sus
+  minutos (así se fueron ~12 min de lipsync). Ahora la reconexión RETOMA la
+  misma predicción (la generación sigue en el servidor y no se cobra de
+  nuevo), y si la red no vuelve, el error final lo dice claro. Además el
+  lipsync y los clips de video, que tienen reserva por escena, caen rápido
+  (3 intentos) en vez de retener la fase; las imágenes —que sí detienen la
+  fase— insisten más (6). Revisa tu consumo en replicate.com/account: los
+  reintentos de omni-human de esa corrida pudieron cobrarse varias veces.
+- ARREGLADO un bug de la v0.29.3: al reintentar una llamada con ARCHIVOS
+  (foto del personaje, audio, fotograma inicial de Kling), el reintento los
+  subía VACÍOS (ya se habían leído en el intento anterior) — de ahí el error
+  críptico «'NoneType' object has no attribute 'read'» de tus 2 clips Kling.
+  Ahora los archivos se rebobinan antes de cada intento.
+- AVISOS DE REINTENTO VISIBLES: los mensajes «reintentando en Xs…» de la
+  generación en paralelo se quedaban en la consola y no llegaban al registro
+  de la interfaz — la fase parecía colgada sin explicación. Ahora se ven.
+- 🖼 ENCUADRE INTELIGENTE DEL PERSONAJE (lo que pediste): si el lipsync cae a
+  la foto fija y tu foto tiene una relación de aspecto muy distinta a la del
+  video (retrato o cuadrada sobre 16:9), el director ya no recorta a ciegas
+  (te cortaba la cara): 1º intenta REGENERARLA con el modelo de identidad
+  usando tu foto como referencia, ya en el formato del video; si no puede
+  (sin clave, modelo caído, red), la compone ENTERA sobre su propio fondo
+  ampliado y desenfocado (estándar televisivo) — la cara completa siempre
+  visible. Esto aplica también a cualquier imagen fija con aspecto muy
+  distinto (p. ej. B-roll tuyo en vertical); con desajustes leves (4:3) se
+  mantiene el recorte cinematográfico de siempre. Verificado con render real:
+  un sujeto en el tercio superior de un retrato 9:16 —que antes quedaba fuera
+  de cuadro— ahora aparece entero, sin deformar y con fondo desenfocado.
+
 ## v0.29.3 — 2026-07-25
 - REINTENTO ANTE CORTES DE RED PASAJEROS (antes detenían la fase entera):
   en tu segunda prueba, la fase de Imágenes falló por completo con

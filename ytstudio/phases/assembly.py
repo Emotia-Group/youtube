@@ -28,7 +28,8 @@ _LANG3 = {l["code"]: l["lang3"] for l in _LANGS}
 _LANG3.update({"it": "ita", "ja": "jpn", "ko": "kor"})
 
 
-def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
+def _kenburns(animation: str, frames: int, w: int, h: int, fps: int,
+              cover: bool = True) -> str:
     """Filtro zoompan para el movimiento de cámara sobre una imagen fija.
     Se sobreescala la imagen antes para evitar el jitter típico de zoompan."""
     cx, cy = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
@@ -50,12 +51,53 @@ def _kenburns(animation: str, frames: int, w: int, h: int, fps: int) -> str:
     # video (broll_video, más abajo en _render_scene) ya hacía este mismo
     # recorte de cobertura; aquí faltaba. Tras el recorte, la imagen YA tiene
     # el aspecto de salida, así que escalar a 2560 lo conserva sin más.
-    cover = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    # (cover=False cuando la entrada YA viene compuesta exactamente a WxH,
+    # p. ej. la composición sobre fondo desenfocado de _still_filter.)
+    pre = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+           f"crop={w}:{h}," if cover else "")
     # Sobreescala a 2560 (no 3840): con zoom máximo 1.14 sobre salida 1920
     # bastan ~2200 px — las imágenes fuente son de 1536, así que 3840 solo
     # añadía cómputo sin ganar detalle. Render ~2x más rápido, misma calidad.
-    return (f"{cover},scale=2560:-2,setsar=1,"
+    return (f"{pre}scale=2560:-2,setsar=1,"
             f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={fps}")
+
+
+# Umbral de desajuste de aspecto para pasar de recorte de cobertura a
+# composición con fondo desenfocado: 4:3 sobre 16:9 da 1.33 (se recorta bien);
+# 1:1 da 1.78 y 9:16 da 3.16 (recortar cortaría el sujeto).
+_BLURPAD_MISMATCH = 1.45
+
+
+def _probe_image_size(path) -> tuple[int, int] | None:
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            return im.width, im.height
+    except Exception:
+        return None
+
+
+def _still_filter(img_path, animation: str, frames: int, w: int, h: int,
+                  fps: int) -> str:
+    """Cadena de filtros de una escena de imagen fija. Con un aspecto parecido
+    al de salida: recorte de cobertura + Ken Burns (llena el cuadro, estilo
+    cine). Con un aspecto MUY distinto (retrato o cuadrada sobre 16:9, o
+    apaisada sobre un Short vertical), el recorte cortaría el sujeto — una
+    cara en retrato pierde los ojos —: se compone la imagen ENTERA sobre su
+    propio fondo ampliado y desenfocado (estándar televisivo) y el Ken Burns
+    anima la composición completa."""
+    size = _probe_image_size(img_path)
+    if size and size[1]:
+        out_ar, src_ar = w / h, size[0] / size[1]
+        if max(out_ar / src_ar, src_ar / out_ar) >= _BLURPAD_MISMATCH:
+            kb = _kenburns(animation, frames, w, h, fps, cover=False)
+            return (
+                f"split=2[kbg][kfg];"
+                f"[kbg]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},boxblur=32:2[kbb];"
+                f"[kfg]scale={w}:{h}:force_original_aspect_ratio=decrease[kff];"
+                f"[kbb][kff]overlay=(W-w)/2:(H-h)/2,{kb}")
+    return _kenburns(animation, frames, w, h, fps)
 
 
 # ---------------------------------------------------------------------------
@@ -399,8 +441,9 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
                 f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h},fps={fps},setsar=1[v0]")
     else:
-        inputs = ["-i", str(project.path("broll", scene["broll_image"]))]
-        filters.append(f"[0:v]{_kenburns(scene['animation'], frames, w, h, fps)}[v0]")
+        img_path = project.path("broll", scene["broll_image"])
+        inputs = ["-i", str(img_path)]
+        filters.append(f"[0:v]{_still_filter(img_path, scene['animation'], frames, w, h, fps)}[v0]")
 
     label = "v0"
     for i, dt in enumerate(_overlay_filters(scene, dur, cfg, out.parent), start=1):

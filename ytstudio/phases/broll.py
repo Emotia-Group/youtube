@@ -16,6 +16,19 @@ def _user_broll_assets(project) -> list[dict]:
             if a["category"] == "broll" and a["kind"] in ("image", "video")]
 
 
+def _bind_worker_logging(sink) -> None:
+    """Los generadores corren en hilos TRABAJADORES, que no heredan el canal
+    de avisos (thread-local) del hilo de la fase: cada worker lo re-vincula
+    aquí para que sus mensajes (reintentos de red, esperas de Replicate…)
+    lleguen al log de la UI en vez de perderse en stdout."""
+    if sink is None:
+        return
+    from ytstudio import progress
+    from ytstudio.providers import replicate_util
+    progress.set_sink(sink)
+    replicate_util.set_progress(sink)
+
+
 def _is_content_error(e: Exception) -> bool:
     """¿El fallo es un rechazo de CONTENIDO del generador (no infraestructura)?
     Esos degradan solo la escena; auth/red/rate detienen la fase."""
@@ -370,6 +383,60 @@ def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
                f"B-roll no encajaba ({ids}).")
 
 
+_REFRAME_MISMATCH = 1.45  # 1:1 sobre 16:9 da 1.78 (reencuadrar); 4:3 da 1.33 (ok)
+
+
+def _aspect_mismatch(img_path: Path, cfg: dict) -> float:
+    """Cuánto difiere el aspecto de la imagen del de salida (1.0 = idéntico,
+    siempre >= 1). Por encima de _REFRAME_MISMATCH el recorte de cobertura
+    cortaría el sujeto (un retrato sobre 16:9 pierde los ojos)."""
+    from PIL import Image
+    v = cfg.get("video", {})
+    out_ar = int(v.get("width", 1920)) / int(v.get("height", 1080))
+    with Image.open(img_path) as im:
+        src_ar = im.width / im.height
+    return max(out_ar / src_ar, src_ar / out_ar)
+
+
+def _reframe_character_still(img: Path, prompt: str, broll_dir: Path,
+                             cfg: dict) -> Path | None:
+    """La foto del personaje con un aspecto muy distinto al del video no cabe
+    en el encuadre: el director la REGENERA con el modelo de identidad (la
+    foto como referencia) ya en el formato del video, para que el personaje
+    se vea completo. Devuelve el reencuadre, o None si no se pudo (sin token,
+    modelo caído…) — en ese caso el montaje compone la foto ENTERA sobre su
+    propio fondo desenfocado, así que la cara nunca queda cortada."""
+    from ytstudio.progress import notify
+    try:
+        if _aspect_mismatch(img, cfg) < _REFRAME_MISMATCH:
+            return None  # el recorte de cobertura encuadra bien tal cual
+    except Exception:
+        return None
+    dest = broll_dir / "personaje_wide.jpg"
+    if dest.exists():  # reanudable
+        return dest
+    from ytstudio.providers.images import get_ref_images
+    ref_images = get_ref_images(cfg)
+    if ref_images is None:
+        return None
+    v = cfg.get("video", {})
+    vertical = int(v.get("height", 1080)) > int(v.get("width", 1920))
+    shape = "vertical" if vertical else "wide horizontal"
+    full_prompt = (
+        f"{prompt}. Reframe as a {shape} medium shot of this exact person: "
+        "head and shoulders fully visible, centered, looking at the camera, "
+        "same clothing and appearance, natural coherent background")
+    try:
+        notify("🧑 La foto del personaje no coincide con el formato del video: "
+               "el director la reencuadra con el modelo de identidad…")
+        ref_images.generate_with_refs(full_prompt, [img], dest)
+        return dest if dest.exists() else None
+    except Exception as e:
+        notify(f"⚠ No se pudo reencuadrar la foto del personaje con IA ({e}) "
+               "— se compondrá la foto entera sobre fondo desenfocado.")
+        return None
+
+
 def _character_image(project, cfg: dict | None = None):
     """Imagen del personaje NARRADOR (del elenco): su primera foto subida o,
     si no tiene, su referencia autogenerada. None si no hay narrador."""
@@ -422,8 +489,16 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
         dest = broll_dir / f"personaje{img.suffix.lower() or '.jpg'}"
         if not dest.exists():
             _sh.copyfile(img, dest)
+        # Foto con aspecto muy distinto al video → el director intenta
+        # reencuadrarla con IA (identidad); si no, el montaje la compone
+        # entera sobre fondo desenfocado — la cara nunca se corta.
+        prompt = next((s.get("broll_prompt") for s in targets
+                       if s.get("broll_prompt")),
+                      "portrait of the narrator speaking to the camera")
+        wide = _reframe_character_still(dest, prompt, broll_dir, cfg)
+        use = wide or dest
         for s in targets:
-            s["broll_image"] = dest.name
+            s["broll_image"] = use.name
             s["broll_type"] = "image"
             s.pop("broll_video", None)
             s["broll_source"] = "lipsync"
@@ -453,8 +528,12 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
                f"({ls.model.split('/')[-1]}, {workers} en paralelo — tarda "
                "minutos por clip)…")
 
+    from ytstudio.progress import get_sink
+    sink = get_sink()
+
     def _gen(s: dict) -> None:
         usage_mod.bind(usage_items)
+        _bind_worker_logging(sink)
         clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
         if clip.exists():  # reanudable
             return
@@ -676,8 +755,12 @@ def run(project, cfg) -> None:
                     out.append(p)
         return out[:6]
 
+    from ytstudio.progress import get_sink
+    sink = get_sink()
+
     def _gen_image(scene: dict) -> None:
         usage_mod.bind(usage_items)
+        _bind_worker_logging(sink)
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
         if img.exists():  # reanudable
             return
@@ -739,6 +822,7 @@ def run(project, cfg) -> None:
     if video_scenes and videogen is not None:
         def _gen_clip(scene: dict) -> None:
             usage_mod.bind(usage_items)
+            _bind_worker_logging(sink)
             clip = broll_dir / f"scene_{scene['id']:03d}.mp4"
             if not clip.exists():
                 # imagen como fotograma inicial → coherencia visual del clip

@@ -31,7 +31,10 @@ class ReplicateVideo:
                             "duration": duration}
             if image is not None:
                 inputs["start_image"] = stack.enter_context(open(image, "rb"))
-            output = replicate_call(self.client, self.model, inputs)
+            # net_retries bajo: si falla, la escena degrada a imagen animada —
+            # mejor caer rápido que retener la fase minutos por clip.
+            output = replicate_call(self.client, self.model, inputs,
+                                    net_retries=2)
         url = output[0] if isinstance(output, list) else output
         download_with_retry(str(url), out)
         from ytstudio import pricing, usage
