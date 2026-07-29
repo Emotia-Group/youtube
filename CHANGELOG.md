@@ -9,6 +9,37 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.31.0 — 2026-07-29
+- 🎨 PASE DE DIRECCIÓN DE ARTE GLOBAL (lo que pediste: coherencia a nivel de
+  TODO el guion, no solo por escena): tras diseñar el storyboard, un segundo
+  pase lee el video COMPLETO y crea la «biblia visual» de la producción —
+  época y lugar, paleta, luz, lenguaje de cámara, textura/acabado y 2-4
+  motivos visuales recurrentes que unen el video. Con esa biblia REESCRIBE
+  cada prompt de B-roll con nivel de detalle profesional (sujeto y acción +
+  encuadre + luz y atmósfera + textura) y coherencia total entre escenas:
+  los personajes, lugares y objetos que se repiten se describen IGUAL en
+  todas sus apariciones. La biblia queda visible al inicio del storyboard.
+- 🎛 RÓTULOS, TRANSICIONES, SFX, CORTES Y MÚSICA COMO SISTEMA: el mismo pase
+  revisa el conjunto — un solo clímax musical con arco gradual, rótulos con
+  estilo unificado y sin datos repetidos, fundidos solo en fronteras de
+  sección o momentos dramáticos, efectos de sonido sin fatiga y variedad de
+  ritmo — y ajusta los campos de cada escena en consecuencia.
+- 🎥 AUDITORÍA DE MOVIMIENTO EN VIDEO IA (tu segundo tema): los modelos de
+  video fallan con movimientos complejos (personas caminando, manos, caras
+  hablando, multitudes, acción rápida). El pase clasifica el riesgo de cada
+  escena (baja/media/alta, visible en el storyboard) y en las escenas de
+  VIDEO con riesgo alto reescribe el prompt para que el movimiento lo pongan
+  la CÁMARA (dolly lento, paneo, parallax) y la ATMÓSFERA (polvo, humo,
+  lluvia, telas al viento, cambios de luz) con los sujetos casi estáticos en
+  pose potente — cinematográfico y sin artefactos. De tus dos opciones
+  (auditar los clips generados con visión IA vs. reforzar los prompts) se
+  implementó la segunda: previene el defecto ANTES de pagar el clip; la
+  auditoría visual posterior puede añadirse encima si hiciera falta.
+- El pase es UNA llamada extra al modelo por generación (se reporta en el
+  gasto como «direction»). Si falla, el video no se detiene: se conservan
+  las decisiones escena a escena del primer pase y queda un aviso. En modo
+  preview (sin clave) se omite.
+
 ## v0.30.0 — 2026-07-25
 - POR QUÉ TARDÓ TANTO Y POR QUÉ EL PERSONAJE SALIÓ COMO FOTO GIGANTE (debug
   completo de tu corrida test-2-hetty): el lipsync volvió a caer con el corte

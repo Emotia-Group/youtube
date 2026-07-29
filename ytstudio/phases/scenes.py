@@ -121,6 +121,183 @@ TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 
 WORDS_PER_SECOND = 2.5  # ritmo medio de narración (≈150 palabras/min)
 
+# ---------------------------------------------------------------------------
+# Pase de DIRECCIÓN DE ARTE: revisión de TODO el storyboard como conjunto.
+# El primer pase diseña escena a escena; este segundo pase lee el video
+# completo y unifica: biblia visual global (época, paleta, luz, lenguaje de
+# cámara, textura, motivos recurrentes), prompts reescritos con detalle
+# profesional y coherencia entre escenas, auditoría de riesgo de movimiento
+# de las escenas de video IA, y revisión global de rótulos / transiciones /
+# sfx / arco musical (que funcionen como sistema, no como decisiones sueltas).
+# ---------------------------------------------------------------------------
+
+DIRECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "bible": {
+            "type": "object",
+            "properties": {
+                "era_setting": {"type": "string"},
+                "palette": {"type": "string"},
+                "lighting": {"type": "string"},
+                "camera_language": {"type": "string"},
+                "texture_grade": {"type": "string"},
+                "motifs": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["era_setting", "palette", "lighting",
+                         "camera_language", "texture_grade", "motifs"],
+            "additionalProperties": False,
+        },
+        "scenes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "broll_prompt": {"type": "string"},
+                    "motion_risk": {"type": "string",
+                                    "enum": ["baja", "media", "alta"]},
+                    **_CREATIVE_PROPS,
+                },
+                "required": ["id", "broll_prompt", "motion_risk",
+                             *_CREATIVE_PROPS],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["bible", "scenes"],
+    "additionalProperties": False,
+}
+
+
+def _board_lines(scenes: list[dict]) -> str:
+    """Storyboard compacto para el pase de dirección: narración + decisiones
+    actuales de cada escena, para que el director de arte revise el CONJUNTO."""
+    lines = []
+    for s in scenes:
+        extras = []
+        if s.get("overlay_type") and s.get("overlay_type") != "ninguno":
+            extras.append(f"rótulo {s['overlay_type']}: "
+                          f"{s.get('overlay_text', '')}")
+        if s.get("transition"):
+            extras.append(f"entra {s['transition']}")
+        if s.get("sfx") and s.get("sfx") != "ninguno":
+            extras.append(f"sfx {s['sfx']}")
+        if isinstance(s.get("music_intensity"), (int, float)):
+            extras.append(f"música {float(s['music_intensity']):.2f}")
+        if s.get("pace"):
+            extras.append(f"ritmo {s['pace']}")
+        kind = "VIDEO IA (con movimiento)" if s.get("broll_type") == "video" \
+            else "imagen"
+        lines.append(
+            f"[{s['id']}] ({s.get('section', '')} · {kind}"
+            + (f" · {', '.join(extras)}" if extras else "") + ")\n"
+            f"    narración: {s.get('narration', '')}\n"
+            f"    prompt actual: {s.get('broll_prompt', '')}")
+    return "\n".join(lines)
+
+
+def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
+                        lang: str) -> None:
+    """Segundo pase con el storyboard COMPLETO. Nunca rompe la fase: si el
+    modelo falla, se conservan las decisiones del primer pase con un aviso."""
+    if getattr(llm, "is_mock", False) or not scenes:
+        return
+    from ytstudio.progress import notify
+    prefix = concept["visual_style"]["prompt_prefix"]
+    cast_names, cast_rules = _cast_rules(project)
+    notify("🎨 Pase de dirección de arte: revisando el video COMPLETO "
+           "(coherencia visual, detalle de prompts, movimiento, rótulos y "
+           "sonido como conjunto)…")
+    system = (
+        f"Eres el DIRECTOR DE ARTE y director de fotografía senior de un "
+        f"estudio de documentales en {lang}. Recibes un storyboard ya montado "
+        "y haces el PASE FINAL de coherencia de TODO el video como conjunto — "
+        "como una biblia de arte de producción real: un solo mundo visual, "
+        "prompts con nivel de detalle profesional y una banda sonora y "
+        "rotulación que funcionan como sistema.")
+    prompt = (
+        "Haz el pase de dirección de arte de este video completo:\n\n"
+        "1) BIBLIA VISUAL (bible) — lee TODO el storyboard y define el mundo "
+        "visual ÚNICO del video: época y lugar (era_setting), paleta de color "
+        "(palette), luz (lighting), lenguaje de cámara (camera_language: "
+        "encuadres, ópticas, alturas de cámara), textura y acabado "
+        "(texture_grade: grano, contraste, grading) y 2-4 MOTIVOS visuales "
+        "recurrentes (motifs) que unan el video (un objeto, un elemento del "
+        "paisaje, un gesto de luz que reaparece en momentos clave).\n\n"
+        "2) PROMPTS (broll_prompt de CADA escena, EN INGLÉS, empezando "
+        f"SIEMPRE con el prefijo de estilo \"{prefix}\") — reescríbelos "
+        "aplicando la biblia:\n"
+        "- COHERENCIA TOTAL entre escenas: misma época, paleta, luz y acabado "
+        "en todas; los personajes, lugares y objetos que se repiten se "
+        "describen IGUAL en cada aparición (mismo vestuario, mismos rasgos, "
+        "misma arquitectura); usa los motivos recurrentes donde sumen.\n"
+        "- DETALLE PROFESIONAL: sujeto y acción concretos + composición y "
+        "encuadre (wide/medium/close-up, ángulo) + luz y atmósfera + textura. "
+        "2-4 frases por prompt; nada genérico.\n"
+        "- Lo que se VE corresponde exactamente a lo que se DICE en esa "
+        "escena.\n"
+        "- Sin texto ni letras dentro de la imagen; sin personas famosas "
+        "reales.\n\n"
+        "3) AUDITORÍA DE MOVIMIENTO (motion_risk) — los modelos de video IA "
+        "fallan con movimientos complejos; clasifica cada escena:\n"
+        "- 'alta': personas caminando o gesticulando, manos manipulando "
+        "objetos, caras hablando, multitudes interactuando, acción rápida, "
+        "texto que deba leerse.\n"
+        "- 'media': movimiento moderado de sujetos. · 'baja': sujetos casi "
+        "estáticos (en escenas de imagen usa 'baja').\n"
+        "En las escenas de VIDEO IA con riesgo 'alta', REESCRIBE el prompt "
+        "para que el movimiento lo pongan la CÁMARA (dolly lento, paneo, "
+        "parallax) y la ATMÓSFERA (polvo, humo, brasas, lluvia, telas al "
+        "viento, cambios de luz) con los sujetos casi estáticos en una pose "
+        "potente — cinematográfico y sin artefactos.\n\n"
+        "4) REVISIÓN GLOBAL de rótulos, transiciones, sfx, ritmo y música "
+        "COMO CONJUNTO (devuelve los campos ajustados en cada escena):\n"
+        + CREATIVE_RULES +
+        "- Verifica el conjunto: UN clímax musical y arco gradual; rótulos "
+        "como sistema coherente (mismo estilo de kicker, sin repetir datos); "
+        "fundidos solo en fronteras de sección o momentos dramáticos; sfx "
+        "sin fatiga; variedad de ritmo.\n"
+        + cast_rules +
+        f"\nDevuelve TODAS las escenas (mismos ids, mismo orden).\n\n"
+        f"STORYBOARD ACTUAL ({len(scenes)} escenas):\n{_board_lines(scenes)}")
+    try:
+        result = llm.complete_json(system, prompt, schema=DIRECTION_SCHEMA,
+                                   max_tokens=64000, purpose="direction")
+        by_id = {int(d.get("id", -1)): d for d in (result.get("scenes") or [])}
+        bible = result.get("bible") or {}
+    except Exception as e:
+        project.add_warning(
+            f"El pase de dirección de arte no se pudo aplicar ({e}): se "
+            "conservan las decisiones escena a escena del primer pase.")
+        return
+    project.set("art_direction", bible)
+    risky_video: list[int] = []
+    applied = 0
+    for s in scenes:
+        d = by_id.get(int(s["id"]))
+        if not d:
+            continue  # escena no devuelta → conserva el primer pase
+        new_prompt = (d.get("broll_prompt") or "").strip()
+        if new_prompt:
+            s["broll_prompt"] = new_prompt
+            applied += 1
+        if d.get("motion_risk") in ("baja", "media", "alta"):
+            s["motion_risk"] = d["motion_risk"]
+            if s["motion_risk"] == "alta" and s.get("broll_type") == "video":
+                risky_video.append(s["id"])
+        for key in _CREATIVE_PROPS:
+            if key in d:
+                s[key] = d[key]
+    notify(f"🎨 Dirección de arte aplicada: {applied}/{len(scenes)} prompts "
+           "unificados con la biblia visual del video.")
+    if risky_video:
+        notify("🎥 Auditoría de movimiento: "
+               f"{len(risky_video)} escena(s) de video con riesgo alto "
+               f"({', '.join(map(str, risky_video))}) — sus prompts se "
+               "reescribieron hacia movimiento de cámara y atmósfera (sujetos "
+               "casi estáticos) para evitar artefactos del modelo.")
+
 
 def _schema_with_cast(base_schema: dict, cast_names: list[str]) -> dict:
     """Copia del schema de escenas con el campo 'characters' (enum del
@@ -473,6 +650,7 @@ def run(project, cfg) -> None:
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
                          project=project)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
+        _art_direction_pass(llm, project, scenes, concept, lang)
         _normalize_creative(scenes)
         _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
@@ -534,6 +712,7 @@ def run(project, cfg) -> None:
         s["id"] = i  # ids consecutivos garantizados
     _normalize_cast(scenes, cast_names)
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
+    _art_direction_pass(llm, project, scenes, concept, lang)
     _normalize_creative(scenes)
     _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)
@@ -597,8 +776,22 @@ def _write_outputs(project, scenes: list[dict]) -> None:
         json.dumps({"scenes": scenes}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     md = ["# Storyboard", ""]
+    ad = project.get("art_direction") or {}
+    if ad:
+        md += ["## Dirección de arte (biblia visual del video)",
+               f"- **Época/lugar:** {ad.get('era_setting', '')}",
+               f"- **Paleta:** {ad.get('palette', '')}",
+               f"- **Luz:** {ad.get('lighting', '')}",
+               f"- **Cámara:** {ad.get('camera_language', '')}",
+               f"- **Textura/acabado:** {ad.get('texture_grade', '')}",
+               f"- **Motivos recurrentes:** "
+               f"{', '.join(ad.get('motifs') or [])}",
+               ""]
     for s in scenes:
-        md += [f"## Escena {s['id']} — {s['section']} ({s['animation']}, {s['broll_type']})",
+        kind = s["broll_type"]
+        if s.get("motion_risk"):
+            kind += f", movimiento: riesgo {s['motion_risk']}"
+        md += [f"## Escena {s['id']} — {s['section']} ({s['animation']}, {kind})",
                f"**Narración:** {s['narration']}",
                f"**B-roll:** {s['broll_prompt']}"]
         o = s.get("overlay")
