@@ -45,12 +45,19 @@ providers:
     model: meta/musicgen
     library_dir: assets/music
 budget:
-  max_usd: 8.0               # TOPE DE GASTO por generación (0 = sin tope).
-                             # Freno de mano: antes de cada llamada que cuesta
-                             # dinero se comprueba que no se pase de aquí — si
-                             # se pasa, la generación se DETIENE con un aviso
-                             # claro en vez de seguir vaciando el saldo. Lo ya
-                             # generado se reanuda sin volver a cobrarse.
+  # TOPE DE GASTO DINÁMICO: se calcula solo, a partir de la estimación de lo
+  # que FALTA por generar en este proyecto (y se recalcula antes de cada fase,
+  # así que tras «Escenas» ya usa el nº exacto de escenas). Protege una prueba
+  # corta con un tope pequeño y deja pasar un documental largo con el suyo,
+  # sin números fijos que estorben.
+  margin: 1.4                # tope = costo ALTO estimado x este margen. El
+                             # margen absorbe reintentos legítimos; un
+                             # desbocamiento real (10x) sí lo frena.
+  min_usd: 1.5               # piso: por debajo, el tope sería hipersensible
+  max_usd: 0                 # techo ABSOLUTO opcional (0 = sin techo manual).
+                             # Si lo pones, manda solo cuando sea MÁS
+                             # restrictivo que el automático — es un candado
+                             # extra, nunca un permiso para gastar más.
 reference:
   max_minutes: 12            # minutos a descargar/analizar del video de referencia
   video_height: 480          # resolución de análisis (baja = rápido y suficiente)

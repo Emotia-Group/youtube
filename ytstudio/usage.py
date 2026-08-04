@@ -58,11 +58,16 @@ _budget = {"cap": 0.0, "spent": 0.0}
 _budget_lock = threading.Lock()
 
 
-def set_cap(usd: float) -> None:
-    """Fija el tope de esta generación (0 o negativo = sin tope)."""
+def set_cap(usd: float, reset: bool = True) -> None:
+    """Fija el tope de esta generación (0 o negativo = sin tope).
+
+    reset=False al RECALCULAR el tope a mitad de corrida: el gasto ya
+    incurrido debe seguir contando (si no, cada recálculo regalaría un
+    presupuesto nuevo y el freno no serviría de nada)."""
     with _budget_lock:
         _budget["cap"] = float(usd or 0)
-        _budget["spent"] = 0.0
+        if reset:
+            _budget["spent"] = 0.0
 
 
 def add_spend(usd: float) -> None:

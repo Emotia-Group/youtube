@@ -96,7 +96,12 @@ def estimate(project, cfg: dict) -> dict:
 
     def add(fase, detalle, cost_lo, cost_hi, min_lo, min_hi,
             phases: dict[str, float] | None = None):
-        items.append({"fase": fase, "detalle": detalle,
+        # 'fase_key' = la fase del pipeline que de verdad ejecuta (y paga)
+        # esta partida: la de mayor peso. Permite saber qué parte del costo
+        # sigue PENDIENTE al reanudar, para calcular el tope de presupuesto
+        # sobre lo que falta en vez de sobre el video entero.
+        fase_key = max(phases, key=phases.get) if phases else ""
+        items.append({"fase": fase, "fase_key": fase_key, "detalle": detalle,
                       "costo": _fmt_range(cost_lo, cost_hi),
                       "minutos": [round(min_lo, 1), round(min_hi, 1)]})
         if phases:

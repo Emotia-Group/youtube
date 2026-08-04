@@ -9,6 +9,35 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.33.0 — 2026-08-04
+- 🛡 TOPE DE GASTO DINÁMICO (adiós al número fijo que estorbaba): un tope de
+  $8 no puede servir a la vez para una prueba de 3 escenas y para un
+  documental de 15 minutos — es enorme para la primera y demasiado pequeño
+  para el segundo, que legítimamente cuesta ~$40 y quedaba interrumpido sin
+  motivo. Ahora el tope se calcula solo, a partir de la estimación que el
+  programa ya hacía: **tope = costo ALTO estimado de lo que FALTA por
+  generar × un margen (1.4 por defecto)**, con un piso mínimo. Resultado con
+  tus propios casos: la prueba corta que te costó $11.85 queda con un tope de
+  **~$4.34** (el sangrado se habría cortado al PRIMER cobro fallido en vez de
+  al quinto), y el documental de 15 min con personaje al 30% queda con
+  **~$73** — muy por encima de su costo real, así que no te interrumpe nada.
+- El tope se RECALCULA antes de cada fase: al arrancar solo se conoce el
+  pronóstico de la configuración, pero después de «Escenas» ya se sabe el
+  número EXACTO de escenas, cuáles son video y cuántos segundos de personaje
+  hay — justo lo que se va a pagar en la fase siguiente. Y se calcula sobre
+  lo PENDIENTE, así que reanudar un proyecto a medias no infla el tope con lo
+  que ya está generado (y que no se vuelve a cobrar).
+- `budget.max_usd` pasa a ser un techo ABSOLUTO opcional (por defecto 0 = sin
+  techo manual). Si lo pones, manda solo cuando sea MÁS restrictivo que el
+  automático: es un candado extra, nunca un permiso para gastar más.
+- 📋 PUNTO DE CONTROL AL TERMINAR EL STORYBOARD: al completarse la fase de
+  «Escenas» el registro muestra un bloque destacado con el nº de escenas y
+  duración, dónde revisarlo (04_scenes/storyboard.md: biblia visual, prompt
+  de cada escena, riesgo de movimiento, reparto de personaje), el desglose
+  de lo que falta por PAGAR partida por partida y el tope activo. Es el
+  último momento en que corregir es gratis: de las 11 fases, 10 cuestan
+  centavos o son locales, y solo la de Imágenes concentra casi todo el gasto.
+
 ## v0.32.0 — 2026-08-04
 - 💰 CERO PÉRDIDA DE SALDO: LIBRO DE PREDICCIONES PAGADAS. Encontré la causa
   exacta de tus ~$14 perdidos. En Replicate el dinero se cobra cuando la

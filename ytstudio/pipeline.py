@@ -75,9 +75,22 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     from ytstudio import progress
     progress.set_sink(sink)
 
-    # FRENO DE MANO: tope de gasto de esta generación. Ninguna llamada que
-    # cueste dinero se lanza si pasaría del tope (0 = sin tope).
-    usage.set_cap(float((cfg.get("budget") or {}).get("max_usd", 0) or 0))
+    # FRENO DE MANO: tope de gasto DINÁMICO, calculado sobre lo que falta por
+    # generar (ver budget.py). Se recalcula antes de cada fase, porque la
+    # estimación se vuelve exacta en cuanto existen las escenas reales.
+    from ytstudio import budget as budget_mod
+
+    def refresh_cap(reset: bool = False) -> None:
+        try:
+            info = budget_mod.compute_cap(project, cfg)
+            usage.set_cap(info["cap"], reset=reset)
+            return info
+        except Exception:
+            return None
+
+    cap_info = refresh_cap(reset=True)
+    if cap_info:
+        sink(f"🛡 Presupuesto de esta corrida: {budget_mod.explain(cap_info)}.")
 
     # RESULTADOS YA PAGADOS Y NO ENTREGADOS: si una descarga falló en una
     # ejecución anterior, el dinero YA se gastó y el resultado sigue
@@ -112,6 +125,12 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
                     break
                 continue
 
+            # El tope se re-mide con el estado ACTUAL del proyecto: tras la
+            # fase de Escenas ya se sabe el número exacto de escenas, cuáles
+            # son video y cuántos segundos de personaje hay — justo lo que se
+            # va a pagar en la fase de B-roll, la única cara del pipeline.
+            refresh_cap()
+
             sink(f"▶ {name:<10} {desc}…")
             start = time.time()
             try:
@@ -131,6 +150,12 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
             emit("info", f"{desc}: completada", seconds=secs)
             log(f"✔ {name:<10} completada en {secs:.1f}s")
 
+            # PUNTO DE CONTROL del storyboard: el último momento en que
+            # corregir es GRATIS. Todo lo anterior cuesta centavos; la fase
+            # siguiente que gasta (B-roll) concentra casi el 100% del dinero.
+            if name == "scenes":
+                _storyboard_checkpoint(project, cfg, sink)
+
             if name == to_phase:
                 break
     finally:
@@ -141,6 +166,43 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
 
     cur["phase"] = None
     emit("info", f"Generación finalizada en {time.time() - run_start:.1f}s.")
+
+
+def _storyboard_checkpoint(project, cfg, sink) -> None:
+    """Resumen destacado al quedar listo el storyboard: qué se va a generar,
+    cuánto costará y dónde revisarlo ANTES de gastar. Es el punto natural
+    para corregir un prompt, el reparto de personaje o el % de presencia:
+    aquí una corrección cuesta $0; después de generar, cuesta otra generación.
+    """
+    try:
+        from ytstudio import budget as budget_mod
+        from ytstudio.estimate import estimate
+        est = estimate(project, cfg)
+        info = budget_mod.compute_cap(project, cfg, est)
+        paid = [i for i in (est.get("items") or [])
+                if (i.get("costo") or [0, 0])[1] > 0
+                and project.phase_status(i.get("fase_key") or "") != "done"]
+        n = est.get("escenas") or project.get("scene_count") or 0
+        dur = est.get("duracion_min") or 0
+        sink("─" * 62)
+        sink(f"📋 PUNTO DE CONTROL — storyboard listo: {n} escenas · "
+             f"~{dur:.1f} min de video")
+        sink("   Revísalo en 04_scenes/storyboard.md (biblia visual, prompt de "
+             "cada escena, riesgo de movimiento y reparto de personaje).")
+        if paid:
+            sink(f"   💰 Falta por generar: ~${sum((i['costo'][0]) for i in paid):.2f}"
+                 f"-${sum((i['costo'][1]) for i in paid):.2f} · "
+                 f"{budget_mod.explain(info)}")
+            for i in paid:
+                sink(f"      · {i['fase']}: {i['detalle']} → "
+                     f"${i['costo'][0]:.2f}-${i['costo'][1]:.2f}")
+        else:
+            sink("   💰 No queda nada de pago por generar.")
+        sink("   ⚠ Corregir AQUÍ no cuesta nada; corregir después de generar "
+             "cuesta volver a generar.")
+        sink("─" * 62)
+    except Exception:
+        pass
 
 
 def _warn_unclaimed(project, emit) -> None:
