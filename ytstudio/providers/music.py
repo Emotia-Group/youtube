@@ -71,27 +71,24 @@ class ReplicateMusic:
         self.model = cfg["providers"]["music"].get("model", "meta/musicgen")
 
     def generate(self, mood: str, seconds: float, out: Path) -> Path:
-        from ytstudio.providers.replicate_util import (replicate_call,
-                                                        download_with_retry)
+        from ytstudio import pricing
+        from ytstudio.providers.replicate_util import run_and_download
         # MusicGen genera hasta ~30s; se generan y loopean
         raw = out.with_suffix(".raw.mp3")
-        output = replicate_call(self.client, self.model, {
+        charge = {"provider": "replicate", "label": "pista de música",
+                  "qty": 1, "unit": "pista", "usd": pricing.music_cost_mid()}
+        run_and_download(self.client, self.model, {
             "prompt": f"{mood} instrumental background music for a documentary video, "
                       "no vocals, seamless loop",
             "duration": 30, "output_format": "mp3",
             "model_version": "stereo-large",
-        })
-        url = output[0] if isinstance(output, list) else output
-        download_with_retry(str(url), raw)
+        }, raw, charge=charge)
         run_ffmpeg(["-stream_loop", "-1", "-i", str(raw), "-vn",
                     "-t", f"{seconds:.2f}",
                     "-c:a", "libmp3lame", "-q:a", "4", str(out)],
                    "loop música", timeout=300)
         raw.unlink(missing_ok=True)
-        from ytstudio import pricing, usage
-        usage.record("replicate", "pista de música", 1, "pista",
-                    pricing.music_cost_mid())
-        return out
+        return out  # el gasto ya quedó anotado al terminar la predicción
 
 
 class MockMusic:

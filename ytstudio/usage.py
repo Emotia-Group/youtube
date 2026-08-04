@@ -43,6 +43,62 @@ def record(provider: str, label: str, qty: float, unit: str, usd: float) -> None
                   "qty": round(qty, 3), "unit": unit, "usd": round(float(usd), 4)})
 
 
+# --- TOPE DE PRESUPUESTO --------------------------------------------------
+# Freno de mano: ninguna generación puede gastar más de lo autorizado. Se
+# comprueba ANTES de cada llamada que cuesta dinero, así un bucle de
+# reintentos o un modelo caro no puede vaciar el saldo sin avisar.
+# El tope es compartido por TODOS los hilos de la generación (los workers
+# gastan en paralelo), por eso vive en un contenedor global y no por-hilo.
+
+class BudgetExceeded(RuntimeError):
+    """El gasto autorizado para esta generación se agotó."""
+
+
+_budget = {"cap": 0.0, "spent": 0.0}
+_budget_lock = threading.Lock()
+
+
+def set_cap(usd: float) -> None:
+    """Fija el tope de esta generación (0 o negativo = sin tope)."""
+    with _budget_lock:
+        _budget["cap"] = float(usd or 0)
+        _budget["spent"] = 0.0
+
+
+def add_spend(usd: float) -> None:
+    """Suma gasto REAL confirmado (dinero ya comprometido con el proveedor)."""
+    with _budget_lock:
+        _budget["spent"] += float(usd or 0)
+
+
+def spent() -> float:
+    with _budget_lock:
+        return round(_budget["spent"], 4)
+
+
+def cap() -> float:
+    with _budget_lock:
+        return _budget["cap"]
+
+
+def check_budget(next_usd: float, what: str = "esta generación") -> None:
+    """Lanza BudgetExceeded si autorizar `next_usd` pasaría del tope."""
+    with _budget_lock:
+        limit = _budget["cap"]
+        if limit <= 0:
+            return
+        so_far = _budget["spent"]
+    if so_far + float(next_usd or 0) > limit:
+        raise BudgetExceeded(
+            f"TOPE DE PRESUPUESTO ALCANZADO: llevas ${so_far:.2f} gastados en "
+            f"esta generación y {what} costaría ~${float(next_usd or 0):.2f}, "
+            f"por encima del tope de ${limit:.2f}. Se detiene aquí para no "
+            "seguir gastando. Sube el tope en ⚙ Configuración → Presupuesto "
+            "(budget.max_usd) o reduce escenas/modelos caros, y pulsa "
+            "«Generar video» para reanudar: lo ya generado no se repite ni se "
+            "vuelve a cobrar.")
+
+
 def summarize(items: list) -> dict:
     """Agrupa una lista de registros de gasto por proveedor. Función pura —
     la usa tanto `summary()` (el hilo en curso) como el reporte acumulado del

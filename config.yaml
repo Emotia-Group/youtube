@@ -44,6 +44,13 @@ providers:
     name: mock
     model: meta/musicgen
     library_dir: assets/music
+budget:
+  max_usd: 8.0               # TOPE DE GASTO por generación (0 = sin tope).
+                             # Freno de mano: antes de cada llamada que cuesta
+                             # dinero se comprueba que no se pase de aquí — si
+                             # se pasa, la generación se DETIENE con un aviso
+                             # claro en vez de seguir vaciando el saldo. Lo ya
+                             # generado se reanuda sin volver a cobrarse.
 reference:
   max_minutes: 12            # minutos a descargar/analizar del video de referencia
   video_height: 480          # resolución de análisis (baja = rápido y suficiente)

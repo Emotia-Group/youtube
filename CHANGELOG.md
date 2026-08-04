@@ -9,6 +9,43 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.32.0 — 2026-08-04
+- 💰 CERO PÉRDIDA DE SALDO: LIBRO DE PREDICCIONES PAGADAS. Encontré la causa
+  exacta de tus ~$14 perdidos. En Replicate el dinero se cobra cuando la
+  generación TERMINA BIEN EN SU SERVIDOR, no cuando el archivo llega a tu
+  disco; entre esos dos momentos hay una descarga que puede fallar — y falló.
+  Tu panel lo confirma: 5 predicciones de omni-human **exitosas y cobradas a
+  $2.37 cada una ($11.85)** de las que no recibiste ni un archivo. El
+  programa descartaba el resultado sin guardar el id ni la URL, así que ese
+  dinero era **irrecuperable**, y como el gasto se anotaba DESPUÉS de
+  descargar, tampoco aparecía en el reporte: **invisible**. Ahora cada
+  generación queda anotada en un libro en disco en el instante en que el
+  dinero entra en riesgo (creada → terminada con su URL → descargada), y
+  antes de encargar NADA el programa mira ese libro:
+  · si ya pagaste un resultado y no se descargó, lo **re-descarga sin volver
+    a cobrar**;
+  · si una generación sigue corriendo en el servidor, **se reengancha** en
+    vez de duplicarla;
+  · si la conexión se cortó justo al lanzarla y el servidor sí la aceptó,
+    **adopta esa predicción huérfana** en vez de pagar otra igual.
+- 💸 EL GASTO YA NUNCA ES INVISIBLE: se registra en el momento en que la
+  predicción termina bien, aunque después falle la descarga. Al terminar
+  cada generación, si quedó algo pagado y no entregado, verás un aviso con
+  el importe y el detalle, y bastará pulsar «Generar video» **dentro de la
+  hora siguiente** para recuperarlo sin coste (pasado ese plazo Replicate
+  borra el resultado y ya no hay nada que rescatar).
+- 🛑 TOPE DE PRESUPUESTO POR GENERACIÓN (⚙ Configuración → budget.max_usd,
+  por defecto **$8**): antes de cada llamada que cuesta dinero se comprueba
+  que no se pase del tope; si se pasaría, la generación se DETIENE con un
+  aviso que dice cuánto llevas gastado, cuánto costaba el siguiente paso y
+  cuál es el límite — en vez de seguir vaciando el saldo. Lo ya generado se
+  reanuda después sin volver a cobrarse. Súbelo o ponlo en 0 (sin tope)
+  cuando quieras una tirada larga.
+- Nota sobre tu caso: los $11.85 de esas 5 predicciones ya no se pueden
+  recuperar (sus URLs caducaron hace días), pero SÍ puedes reclamarlos a
+  soporte de Replicate mostrando que se cobraron sin entrega. De aquí en
+  adelante, un fallo de red como el tuyo cuesta $0: se re-descarga lo pagado.
+
 ## v0.31.0 — 2026-07-29
 - 🎨 PASE DE DIRECCIÓN DE ARTE GLOBAL (lo que pediste: coherencia a nivel de
   TODO el guion, no solo por escena): tras diseñar el storyboard, un segundo

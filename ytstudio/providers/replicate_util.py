@@ -11,6 +11,8 @@ video Kling/Wan, música MusicGen).
 from __future__ import annotations
 
 import threading
+import time
+from pathlib import Path
 
 # Canal opcional para mostrar avisos (p.ej. esperas por límite de velocidad) en
 # el registro de progreso de la interfaz. Es por-hilo, así que ejecuciones
@@ -136,30 +138,160 @@ def _wait_prediction(client, pred, net_retries: int = 5):
         return pred.output
 
 
-def _once(client, model: str, inputs: dict, net_retries: int = 5):
+def _first_url(output):
+    """La URL del resultado (la salida puede venir como lista o suelta)."""
+    if isinstance(output, (list, tuple)):
+        return str(output[0]) if output else ""
+    return str(output or "")
+
+
+def _adopt_orphan(client, model: str, since: float, known_ids: set):
+    """Tras un corte de red en `predictions.create()` NO se sabe si la
+    predicción llegó a crearse en el servidor: si se creó, ya está corriendo y
+    se COBRARÁ, y crear otra sería pagar dos veces. Antes de reintentar se
+    buscan las predicciones recién creadas de este mismo modelo y se adopta la
+    huérfana en vez de duplicarla."""
+    try:
+        page = client.predictions.list()
+        items = getattr(page, "results", None) or list(page)
+    except Exception:
+        return None
+    for p in items:
+        pid = getattr(p, "id", None)
+        if not pid or pid in known_ids:
+            continue
+        if getattr(p, "status", "") in ("canceled", "failed"):
+            continue
+        created = getattr(p, "created_at", None)
+        ts = _parse_ts(created)
+        if ts is not None and ts < since - 5:
+            continue  # anterior a nuestro intento: no es nuestra
+        ver = str(getattr(p, "version", "") or "")
+        mdl = str(getattr(p, "model", "") or "")
+        if model.split(":")[0] in mdl or (ver and ver in model):
+            return p
+    return None
+
+
+def _parse_ts(value) -> float | None:
+    if not value:
+        return None
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def _once(client, model: str, inputs: dict, net_retries: int = 5,
+          reuse_key: str = "", charge: dict | None = None,
+          known_ids: set | None = None):
+    """Una ejecución completa: crear (o adoptar/reenganchar) la predicción,
+    esperarla y devolver su salida. Registra en el LIBRO cada paso en el que
+    el dinero entra en riesgo, para que nada pagado se pierda."""
+    from ytstudio import ledger, usage
+    known_ids = known_ids if known_ids is not None else set()
     version_id = _resolve_version(client, model)
-    if version_id:
-        # Polling: no sufre el read-timeout de una sola petición larga.
+    if not version_id:
+        # Sin versión resoluble no hay id de predicción que anotar; es el
+        # camino de respaldo (client.run) y no admite recuperación.
+        return client.run(model, input=inputs)
+
+    usd = float((charge or {}).get("usd") or 0)
+
+    # 1) ¿Hay algo YA PAGADO o en curso para esta misma escena? Reutilízalo.
+    if reuse_key:
+        prev = ledger.find_reusable(reuse_key)
+        if prev and prev.get("status") == "succeeded" and prev.get("url"):
+            _notify("💰 Recuperando un resultado que YA habías pagado (no se "
+                    "vuelve a cobrar)…")
+            return {"__pred_id__": prev["id"], "__reused__": True,
+                    "output": prev["url"]}
+        if prev and prev.get("status") == "created":
+            try:
+                running = client.predictions.get(prev["id"])
+                _notify("💰 Reenganchando una generación que sigue corriendo "
+                        "en el servidor (ya cobrada, no se duplica)…")
+                out = _wait_prediction(client, running, net_retries)
+                ledger.record_succeeded(prev["id"], _first_url(out))
+                return {"__pred_id__": prev["id"], "output": out}
+            except PersistentNetworkError:
+                raise
+            except Exception:
+                pass  # no se pudo reenganchar: se crea una nueva más abajo
+
+    # 2) Crear. A partir de aquí el dinero puede cobrarse: se anota SIEMPRE.
+    if usd:
+        usage.check_budget(usd, (charge or {}).get("label") or "esta llamada")
+    started = time.time()
+    try:
         pred = client.predictions.create(version=version_id, input=inputs)
-        return _wait_prediction(client, pred, net_retries)
-    return client.run(model, input=inputs)
+    except Exception as e:
+        if _is_transient_network_error(e):
+            orphan = _adopt_orphan(client, model, started, known_ids)
+            if orphan is not None:
+                _notify("💰 La conexión se cortó al lanzar la generación, pero "
+                        "el servidor SÍ la había aceptado: se adopta esa "
+                        "misma (no se paga dos veces)…")
+                pred = orphan
+            else:
+                raise
+        else:
+            raise
+    pid = getattr(pred, "id", "") or ""
+    if pid:
+        known_ids.add(pid)
+        ledger.record_created(pid, model, reuse_key, usd,
+                              (charge or {}).get("project") or "",
+                              (charge or {}).get("label") or "")
+
+    # 3) Esperar. Si termina bien, el cobro es un hecho: se registra el gasto
+    #    AQUÍ (no tras la descarga), para que jamás haya dinero invisible.
+    try:
+        out = _wait_prediction(client, pred, net_retries)
+    except Exception as e:
+        if pid and not isinstance(e, PersistentNetworkError):
+            ledger.record_failed(pid, str(e))
+        raise
+    if pid:
+        ledger.record_succeeded(pid, _first_url(out))
+    _charge_now(charge)
+    return {"__pred_id__": pid, "output": out}
 
 
-def replicate_call(client, model: str, inputs: dict, max_retries: int = 10,
-                    net_retries: int = 5):
-    """net_retries: cuántos cortes de red pasajeros se reintentan. Los
-    proveedores CON degradación por escena (lipsync, clips de video) pasan un
-    valor bajo — si su red está caída de verdad, mejor caer rápido a la
-    imagen fija que retener la fase varios minutos por escena."""
-    import time
+def _charge_now(charge: dict | None) -> None:
+    """Anota el gasto REAL en cuanto la predicción termina bien. Antes esto
+    ocurría después de descargar el archivo: si la descarga fallaba, el
+    dinero ya gastado NO aparecía en el reporte (así se perdieron $11.85 sin
+    dejar rastro)."""
+    if not charge:
+        return
+    from ytstudio import usage
+    usd = float(charge.get("usd") or 0)
+    usage.record(charge.get("provider", "replicate"), charge.get("label", ""),
+                 float(charge.get("qty") or 1), charge.get("unit", "u"), usd)
+    usage.add_spend(usd)
+
+
+def _call_raw(client, model: str, inputs: dict, max_retries: int = 10,
+              net_retries: int = 5, reuse_key: str = "",
+              charge: dict | None = None):
+    """Como replicate_call pero devuelve el sobre con el id de la predicción,
+    para que quien descargue pueda cerrar el círculo en el libro."""
     net_attempt = 0
+    known_ids: set = set()
     for attempt in range(max_retries + 1):
         try:
             _rewind_inputs(inputs)
-            return _once(client, model, inputs, net_retries)
+            return _once(client, model, inputs, net_retries, reuse_key,
+                         charge, known_ids)
         except PersistentNetworkError:
             raise  # ya se reintentó la reconexión; re-crear re-cobraría
         except Exception as e:
+            from ytstudio import usage
+            if isinstance(e, usage.BudgetExceeded):
+                raise  # el freno de mano no se reintenta
             msg = str(e)
             low = msg.lower()
             # Límite de velocidad (429): esperar el tiempo indicado y reintentar.
@@ -234,6 +366,54 @@ def _raise_clear(e, msg, low, model):
             "video» de nuevo para reanudar desde aquí."
         ) from e
     raise
+
+
+def replicate_call(client, model: str, inputs: dict, max_retries: int = 10,
+                    net_retries: int = 5, reuse_key: str = "",
+                    charge: dict | None = None):
+    """Ejecuta un modelo y devuelve su salida.
+
+    net_retries: cuántos cortes de red pasajeros se reintentan. Los
+    proveedores CON degradación por escena (lipsync, clips de video) pasan un
+    valor bajo — si su red está caída de verdad, mejor caer rápido a la
+    imagen fija que retener la fase varios minutos por escena."""
+    env = _call_raw(client, model, inputs, max_retries, net_retries,
+                    reuse_key, charge)
+    return env["output"] if isinstance(env, dict) and "output" in env else env
+
+
+def run_and_download(client, model: str, inputs: dict, out,
+                     charge: dict | None = None, net_retries: int = 5,
+                     max_retries: int = 10):
+    """EL camino seguro para cualquier generación que cuesta dinero: crear (o
+    recuperar) la predicción, esperarla, descargar el archivo y CERRAR EL
+    CÍRCULO en el libro.
+
+    La clave de reutilización es el propio archivo de destino (`out`), que es
+    estable entre ejecuciones: la escena 1 de este proyecto siempre apunta al
+    mismo archivo. Así, si una descarga falla, el siguiente intento re-usa la
+    predicción YA PAGADA en vez de encargar —y pagar— otra igual."""
+    out = Path(out)
+    reuse_key = f"{model}::{out}"
+    env = _call_raw(client, model, inputs, max_retries, net_retries,
+                    reuse_key, charge)
+    pid = env.get("__pred_id__", "") if isinstance(env, dict) else ""
+    output = env["output"] if isinstance(env, dict) and "output" in env else env
+    url = _first_url(output)
+    try:
+        download_with_retry(url, out)
+    except Exception as e:
+        if pid:
+            _notify(
+                "⚠ La generación TERMINÓ BIEN (y por tanto ya se cobró) pero "
+                "la descarga falló. Queda anotada en el libro de predicciones: "
+                "vuelve a pulsar «Generar video» dentro de la próxima hora y se "
+                "re-descargará SIN volver a cobrar.")
+        raise
+    if pid:
+        from ytstudio import ledger
+        ledger.record_downloaded(pid, out)
+    return out
 
 
 def download_with_retry(url: str, out, max_retries: int = 5) -> None:

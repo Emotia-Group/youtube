@@ -75,6 +75,25 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     from ytstudio import progress
     progress.set_sink(sink)
 
+    # FRENO DE MANO: tope de gasto de esta generación. Ninguna llamada que
+    # cueste dinero se lanza si pasaría del tope (0 = sin tope).
+    usage.set_cap(float((cfg.get("budget") or {}).get("max_usd", 0) or 0))
+
+    # RESULTADOS YA PAGADOS Y NO ENTREGADOS: si una descarga falló en una
+    # ejecución anterior, el dinero YA se gastó y el resultado sigue
+    # disponible un rato. Se avisa para que se recupere (al regenerar esa
+    # escena se re-descarga sin volver a cobrar).
+    try:
+        from ytstudio import ledger
+        pend = ledger.pending_paid(max_age_seconds=ledger.URL_TTL_SECONDS)
+        if pend:
+            sink(f"💰 Hay {len(pend)} resultado(s) ya PAGADOS "
+                 f"(~${ledger.pending_paid_usd(pend):.2f}) que no llegaron a "
+                 "descargarse. Se reutilizarán automáticamente en vez de "
+                 "volver a encargarlos.")
+    except Exception:
+        pass
+
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 
@@ -118,9 +137,34 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
         # El gasto YA incurrido se guarda SIEMPRE, incluso si una fase falló a
         # mitad de camino — ese dinero/tiempo se gastó de verdad.
         _persist_usage(project, round(time.time() - run_start, 1))
+        _warn_unclaimed(project, emit)
 
     cur["phase"] = None
     emit("info", f"Generación finalizada en {time.time() - run_start:.1f}s.")
+
+
+def _warn_unclaimed(project, emit) -> None:
+    """Al terminar, deja constancia CLARA de cualquier resultado que se pagó
+    y no se recibió. Antes esto era invisible: se cobraban clips que nunca
+    llegaban y ni el registro ni el reporte de gasto lo mencionaban."""
+    try:
+        from ytstudio import ledger
+        pend = ledger.pending_paid(max_age_seconds=ledger.URL_TTL_SECONDS)
+        if not pend:
+            return
+        total = ledger.pending_paid_usd(pend)
+        msg = (f"⚠ SALDO EN RIESGO: {len(pend)} generación(es) terminaron bien "
+               f"en Replicate (ya cobradas, ~${total:.2f}) pero su archivo no "
+               "llegó a descargarse. Pulsa «Generar video» de nuevo DENTRO DE "
+               "LA PRÓXIMA HORA y se re-descargarán sin volver a cobrar "
+               "(después de ese plazo Replicate borra el resultado). "
+               "Detalle: " + ", ".join(
+                   f"{p.get('label') or p.get('model', '')} [{p.get('id', '')[:12]}]"
+                   for p in pend[:5]))
+        project.add_warning(msg)
+        emit("warn", msg)
+    except Exception:
+        pass
 
 
 def _persist_usage(project, elapsed_seconds: float) -> None:

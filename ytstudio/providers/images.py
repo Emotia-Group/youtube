@@ -39,12 +39,17 @@ class OpenAIImages:
 
     def generate(self, prompt: str, out: Path) -> Path:
         import base64
+        from ytstudio import pricing, usage
+        usd = pricing.img_cost_mid("openai")
+        usage.check_budget(usd, "una imagen de OpenAI")
         result = self.client.images.generate(
             model="gpt-image-1", prompt=prompt, size=self.size, n=1,
         )
+        # El cobro ocurre al responder la API: se anota AQUÍ, antes de tocar
+        # el disco, para que ningún fallo posterior deje gasto invisible.
+        usage.record("openai", "imagen", 1, "img", usd)
+        usage.add_spend(usd)
         out.write_bytes(base64.b64decode(result.data[0].b64_json))
-        from ytstudio import pricing, usage
-        usage.record("openai", "imagen", 1, "img", pricing.img_cost_mid("openai"))
         return out
 
 
@@ -64,16 +69,16 @@ class ReplicateImages:
                        else "16:9")
 
     def generate(self, prompt: str, out: Path) -> Path:
-        from ytstudio.providers.replicate_util import download_with_retry
-        output = replicate_call(self.client, self.model, {
+        from ytstudio import pricing
+        from ytstudio.providers.replicate_util import run_and_download
+        charge = {"provider": "replicate",
+                  "label": f"imagen ({self.model.split('/')[-1]})",
+                  "qty": 1, "unit": "img",
+                  "usd": pricing.img_cost_mid("replicate", self.model)}
+        run_and_download(self.client, self.model, {
             "prompt": prompt, "aspect_ratio": self.aspect,
             "output_format": "jpg", "safety_tolerance": self.safety,
-        })
-        url = output[0] if isinstance(output, list) else output
-        download_with_retry(str(url), out)
-        from ytstudio import pricing, usage
-        usage.record("replicate", f"imagen ({self.model.split('/')[-1]})", 1,
-                     "img", pricing.img_cost_mid("replicate", self.model))
+        }, out, charge=charge)
         return out
 
 
@@ -103,8 +108,14 @@ class ReplicateRefImages:
     def generate_with_refs(self, prompt: str, refs: list[Path],
                            out: Path) -> Path:
         import contextlib
-        from ytstudio.providers.replicate_util import download_with_retry
+        from ytstudio import pricing
+        from ytstudio.providers.replicate_util import run_and_download
         key, is_list = _REF_INPUTS.get(self.model, ("image_input", True))
+        charge = {"provider": "replicate",
+                  "label": f"imagen con personaje "
+                           f"({self.model.split('/')[-1]})",
+                  "qty": 1, "unit": "img",
+                  "usd": pricing.img_cost_mid("replicate", self.model)}
         with contextlib.ExitStack() as stack:
             files = [stack.enter_context(open(p, "rb")) for p in refs]
             inputs: dict = {"prompt": prompt,
@@ -112,13 +123,8 @@ class ReplicateRefImages:
                             "aspect_ratio": self.aspect}
             if "nano-banana" in self.model:
                 inputs["output_format"] = "jpg"
-            output = replicate_call(self.client, self.model, inputs)
-        url = output[0] if isinstance(output, list) else output
-        download_with_retry(str(url), out)
-        from ytstudio import pricing, usage
-        usage.record("replicate",
-                     f"imagen con personaje ({self.model.split('/')[-1]})",
-                     1, "img", pricing.img_cost_mid("replicate", self.model))
+            run_and_download(self.client, self.model, inputs, out,
+                             charge=charge)
         return out
 
 

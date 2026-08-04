@@ -29,23 +29,24 @@ class ReplicateLipsync:
     def generate(self, image: Path, audio: Path, out: Path,
                  seconds: float) -> Path:
         import contextlib
-        from ytstudio.providers.replicate_util import (replicate_call,
-                                                        download_with_retry)
+        from ytstudio import pricing
+        from ytstudio.providers.replicate_util import run_and_download
         img_key, aud_key, extras = _MODEL_INPUTS.get(
             self.model, ("image", "audio", {}))
+        # El gasto se declara ANTES: run_and_download lo anota en cuanto la
+        # predicción termina bien (aunque luego falle la descarga) y lo cuenta
+        # contra el tope de presupuesto ANTES de encargarla.
+        charge = {"provider": "replicate",
+                  "label": f"lipsync {seconds:.0f}s "
+                           f"({self.model.split('/')[-1]})",
+                  "qty": round(seconds, 1), "unit": "s",
+                  "usd": pricing.lipsync_cost_mid(seconds, self.model)}
         with contextlib.ExitStack() as stack:
             inputs = {img_key: stack.enter_context(open(image, "rb")),
                       aud_key: stack.enter_context(open(audio, "rb")),
                       **extras}
             # net_retries bajo: si falla, la escena degrada a imagen fija —
             # mejor caer rápido que retener la fase minutos por escena.
-            output = replicate_call(self.client, self.model, inputs,
-                                    net_retries=2)
-        url = output[0] if isinstance(output, list) else output
-        download_with_retry(str(url), out)
-        from ytstudio import pricing, usage
-        usage.record("replicate",
-                     f"lipsync {seconds:.0f}s ({self.model.split('/')[-1]})",
-                     round(seconds, 1), "s",
-                     pricing.lipsync_cost_mid(seconds, self.model))
+            run_and_download(self.client, self.model, inputs, out,
+                             charge=charge, net_retries=2)
         return out
