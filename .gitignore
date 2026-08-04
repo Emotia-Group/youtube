@@ -10,3 +10,4 @@ assets/music/*
 client_secrets.json
 token.json
 .venv/
+predicciones.jsonl

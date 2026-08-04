@@ -128,6 +128,9 @@ def find_reusable(key: str) -> dict | None:
         de caducidad → se re-descarga gratis;
       · 'created' (sigue corriendo en el servidor) → se re-engancha.
     """
+    if not key:
+        return None  # sin clave estable no hay nada que reutilizar con
+                     # seguridad (dos llamadas distintas no deben cruzarse)
     best = None
     for p in state().values():
         if p.get("key") != key:
