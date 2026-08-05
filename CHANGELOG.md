@@ -9,6 +9,30 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.35.0 — 2026-08-05
+- ✨ MOTOR DE TEXTO Y HOOKS VISUALES para formatos cortos (lo que elegiste
+  construir primero — todo ffmpeg local, costo $0 por uso):
+  · GANCHO VISUAL DE APERTURA: la escena 1 de todo Short/Reel/TikTok/Ad abre
+    con el gancho en TEXTO GRANDE estilo TikTok — bloque centrado de líneas
+    cortas, entrada inmediata con golpe de escala (nada de fundidos lentos:
+    el espectador decide en 2 segundos), la palabra clave en el color de
+    acento, y salida rápida cuando la narración avanza. El director lo
+    redacta (≤8 palabras con gancho real); si no, un respaldo automático
+    condensa el arranque de la narración — un corto JAMÁS abre sin texto.
+  · RUPTURAS DE PATRÓN en los cortes: golpe de zoom que asienta (1.10x →
+    1.0 en 0.25 s) en cortes secos alternados y destello blanco en los
+    golpes dramáticos (sfx boom) — el lenguaje de edición nativo de TikTok/
+    Reels, dosificado para no cansar (nunca en la escena 1 ni en fundidos).
+    Solo en formatos cortos: los documentales 16:9 no cambian en nada.
+  · RÓTULOS MÁS FRECUENTES en cortos (hasta 1 de cada 2 escenas): mucha
+    gente ve sin sonido; el texto sostiene la historia.
+- 🟦 FORMATOS META ADS: nuevos formatos de proyecto «cuadrado 1:1 (feed)» y
+  «retrato 4:5 (feed IG)» además del 9:16 — con subtítulos quemados y ritmo
+  corto. Y un arreglo de fondo: el generador de imágenes ahora recibe la
+  relación de aspecto REAL del proyecto (antes un proyecto 1:1 pedía
+  imágenes 16:9 y todo salía del recorte); el video IA pide la más cercana
+  que su modelo soporte (Kling no genera 4:5 → pide 1:1 y el montaje ajusta).
+
 ## v0.34.0 — 2026-08-05
 - 🪝 BIBLIOTECA DE 970 GANCHOS VIRALES (primer paso del giro a redes
   sociales): tu documento «1000 HOOKS VIRALES» quedó convertido en una

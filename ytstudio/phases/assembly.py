@@ -174,16 +174,22 @@ def _overlay_layout(otype: str, w: int, h: int) -> dict:
         "conclusion": {"align": "center", "x": 0, "y": int(h * 0.28),
                        "size": int(h * 0.058), "serif": True, "upper": False,
                        "drift": "y", "slow": True},
+        # hook: gancho de apertura estilo TikTok/Reels — se renderiza aparte
+        # (_hook_filters), esta entrada solo evita el fallback a 'dato'.
+        "hook": {"align": "center", "x": 0, "y": int(h * 0.26),
+                 "size": int(h * 0.055), "serif": False, "upper": False,
+                 "drift": "y", "slow": False},
     }
     return layouts.get(otype, layouts["dato"])
 
 
 def _drawtext(font: str, textfile: Path, size: int, color: str,
-              x_expr: str, y_expr: str, alpha: str, extra: str = "") -> str:
+              x_expr: str, y_expr: str, alpha: str, extra: str = "",
+              borderw: int = 2, bordercolor: str = "black@0.35") -> str:
     return (f"drawtext=fontfile='{filter_path(font)}':"
             f"textfile='{filter_path(textfile)}':expansion=none:"
             f"fontsize={size}:fontcolor={color}:"
-            f"borderw=2:bordercolor=black@0.35:"
+            f"borderw={borderw}:bordercolor={bordercolor}:"
             f"shadowcolor=black@0.6:shadowx=0:shadowy=2:"
             f"x='{x_expr}':y='{y_expr}':alpha='{alpha}'{extra}")
 
@@ -210,6 +216,9 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     # La conclusión se compone como declaración tipográfica a gran tamaño
     if overlay["type"] == "conclusion":
         return _statement_filters(scene, overlay, dur, cfg, out_dir, accent)
+    # El gancho de apertura (formatos cortos) tiene su propio lenguaje
+    if overlay["type"] == "hook":
+        return _hook_filters(scene, overlay, dur, cfg, out_dir, accent)
 
     main_font = find_font(bold=True, serif=True) if lay["serif"] else sans
 
@@ -284,6 +293,52 @@ def _wrap_lines(text: str, max_chars: int = 13) -> list[str]:
     if cur:
         lines.append(cur)
     return lines
+
+
+def _hook_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
+                  out_dir: Path, accent: str) -> list[str]:
+    """GANCHO VISUAL DE APERTURA (formatos cortos): el texto grande de los
+    primeros segundos, estilo TikTok/Reels — centrado, en bloque de líneas
+    cortas, entrada INMEDIATA (el espectador decide en <2 s si se queda: aquí
+    no hay fundidos lentos), un golpe de escala al aparecer y salida rápida
+    cuando la narración avanza. La línea con la palabra clave va en el color
+    de acento."""
+    w, h = cfg["video"]["width"], cfg["video"]["height"]
+    bold = find_font(bold=True)
+    if not bold:
+        return []
+    text = overlay["text"].strip()
+    lines = _wrap_lines(text, max_chars=14)
+    emphasis = _norm_txt(overlay.get("emphasis") or "")
+
+    longest = max(len(ln) for ln in lines)
+    size = min(int(h * 0.062), int(w * 0.86 / (longest * 0.60)),
+               int(h * 0.34 / (len(lines) * 1.16)))
+    lh = int(size * 1.16)
+    block_h = len(lines) * lh
+    # Bloque en el tercio superior: no pisa la cara del sujeto (centro) ni
+    # los subtítulos quemados (abajo).
+    y0 = max(int(h * 0.10), int(h * 0.30 - block_h / 2))
+
+    # Tiempos: entra YA (0.12 s), se sostiene ~2/3 del gancho y sale rápido.
+    t0, fi = 0.05, 0.12
+    t1 = min(max(2.2, dur * 0.66), dur - 0.35)
+    fo = 0.25
+    filters: list[str] = []
+    for i, line in enumerate(lines):
+        lfile = out_dir / f"hook_{scene['id']:03d}_{i}.txt"
+        lfile.write_text(line, encoding="utf-8")
+        ti = t0 + i * 0.07  # cascada casi simultánea (golpe, no desfile)
+        alpha = (f"if(lt(t,{ti:.2f}),0,if(lt(t,{ti + fi:.2f}),"
+                 f"(t-{ti:.2f})/{fi:.2f},if(lt(t,{t1:.2f}),1,"
+                 f"max(0,1-(t-{t1:.2f})/{fo:.2f}))))")
+        # golpe de escala: la línea cae 14px y clava en su sitio al entrar
+        y_expr = (f"{y0 + i * lh}-14*max(0,1-(t-{ti:.2f})/0.22)")
+        color = accent if (emphasis and emphasis in _norm_txt(line)) else "white"
+        filters.append(_drawtext(bold, lfile, size, color,
+                                 "(w-text_w)/2", y_expr, alpha,
+                                 borderw=4, bordercolor="black@0.85"))
+    return filters
 
 
 def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
@@ -407,6 +462,41 @@ def _plan_transitions(scenes: list[dict], cfg: dict,
     return plans
 
 
+def _auto_interrupt(scene: dict, cfg: dict) -> str:
+    """RUPTURA DE PATRÓN en la entrada de la escena (solo formatos cortos):
+    micro-efecto que resetea la atención en cada corte, como en la edición
+    nativa de TikTok/Reels. Determinista a partir de las señales que el
+    director ya puso — sin costo ni llamadas extra:
+      · 'flash' cuando la escena entra con un golpe (sfx boom),
+      · 'zoom' (golpe de zoom que asienta) en cortes secos alternados,
+      · '' (nada) en la escena 1 (el gancho manda), en los fundidos (el
+        fundido YA es la transición) y en las escenas intermedias restantes
+        (un efecto en cada corte cansa: el patrón se rompe, no se sustituye).
+    """
+    from ytstudio.catalog import is_short_form
+    if not is_short_form(cfg):
+        return ""
+    if scene.get("id", 1) == 1 or scene.get("transition") == "fundido":
+        return ""
+    if scene.get("sfx") == "boom":
+        return "flash"
+    return "zoom" if scene.get("id", 0) % 2 == 0 else ""
+
+
+def _interrupt_filter(kind: str, fps: int, w: int, h: int) -> str:
+    """Filtro del micro-efecto de entrada. 'zoom': arranca 1.10x y asienta a
+    1.0 en ~0.25 s (golpe de zoom clásico). 'flash': destello blanco de
+    ~0.09 s. Ambos son ffmpeg puro: costo cero."""
+    if kind == "zoom":
+        k = max(2, round(0.25 * fps))
+        z = f"if(lte(on,{k}),1.10-0.10*on/{k},1.001)"
+        return (f"zoompan=z='{z}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+                f"d=1:s={w}x{h}:fps={fps}")
+    if kind == "flash":
+        return "fade=t=in:st=0:d=0.09:color=white"
+    return ""
+
+
 def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     """Renderiza la escena SOLO VIDEO (sin pista de audio). El audio del video
     completo es UNA pista continua (voz + música + SFX) que se mezcla al final
@@ -446,6 +536,12 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
         filters.append(f"[0:v]{_still_filter(img_path, scene['animation'], frames, w, h, fps)}[v0]")
 
     label = "v0"
+    # Ruptura de patrón en la entrada (formatos cortos): ANTES de los rótulos,
+    # para que el golpe de zoom no mueva el texto.
+    intr = _interrupt_filter(_auto_interrupt(scene, cfg), fps, w, h)
+    if intr:
+        filters.append(f"[{label}]{intr}[vi]")
+        label = "vi"
     for i, dt in enumerate(_overlay_filters(scene, dur, cfg, out.parent), start=1):
         filters.append(f"[{label}]{dt}[t{i}]")
         label = f"t{i}"

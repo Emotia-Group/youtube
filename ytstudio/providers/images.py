@@ -63,10 +63,9 @@ class ReplicateImages:
         # defecto marca como NSFW mucho contenido histórico/bélico legítimo
         # (batallas, documentales); 6 evita esos falsos positivos.
         self.safety = int(icfg.get("safety_tolerance", 6))
-        # Aspecto según el formato del proyecto (16:9 largo · 9:16 Short/Reel)
-        v = cfg.get("video", {})
-        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
-                       else "16:9")
+        # Aspecto según el formato del proyecto (16:9, 9:16, 1:1, 4:5…)
+        from ytstudio.catalog import aspect_for
+        self.aspect = aspect_for(cfg)
 
     def generate(self, prompt: str, out: Path) -> Path:
         from ytstudio import pricing
@@ -101,9 +100,8 @@ class ReplicateRefImages:
         self.client = replicate
         icfg = cfg.get("providers", {}).get("images", {}) or {}
         self.model = icfg.get("ref_model", "google/nano-banana")
-        v = cfg.get("video", {})
-        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
-                       else "16:9")
+        from ytstudio.catalog import aspect_for
+        self.aspect = aspect_for(cfg)
 
     def generate_with_refs(self, prompt: str, refs: list[Path],
                            out: Path) -> Path:

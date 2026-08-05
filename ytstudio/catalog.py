@@ -341,12 +341,60 @@ FORMATS: dict = {
             "providers": {"images": {"size": "1024x1536"}},
         },
     },
+    "ad_square": {
+        "label": "🟦 Meta Ads — cuadrado 1:1 (feed) ≤60 s",
+        "target_minutes": 0.7,
+        "overrides": {
+            "video": {"width": 1080, "height": 1080, "scene_seconds": 3,
+                      "target_minutes": 0.7, "burn_subtitles": True},
+            "subtitles": {"font_size": 64, "max_chars_per_line": 24,
+                          "max_lines": 2},
+            "providers": {"images": {"size": "1024x1024"}},
+        },
+    },
+    "ad_45": {
+        "label": "🟦 Meta Ads / Feed IG — retrato 4:5 ≤60 s",
+        "target_minutes": 0.7,
+        "overrides": {
+            "video": {"width": 1080, "height": 1350, "scene_seconds": 3,
+                      "target_minutes": 0.7, "burn_subtitles": True},
+            "subtitles": {"font_size": 70, "max_chars_per_line": 22,
+                          "max_lines": 2},
+            "providers": {"images": {"size": "1024x1536"}},
+        },
+    },
 }
 
 
 def is_vertical(cfg: dict) -> bool:
     v = cfg.get("video", {})
     return int(v.get("height", 1080)) > int(v.get("width", 1920))
+
+
+def is_short_form(cfg: dict) -> bool:
+    """¿Es un formato de redes sociales de consumo rápido? Cubre vertical
+    (9:16), cuadrado (1:1) y retrato de feed (4:5) — todos comparten el
+    lenguaje: gancho visual de apertura, texto grande, ritmo alto, rupturas
+    de patrón. El 16:9 largo NO lo es."""
+    v = cfg.get("video", {})
+    w, h = int(v.get("width", 1920)), int(v.get("height", 1080))
+    return h >= w or (max(w, h) / max(1, min(w, h))) < 1.6
+
+
+def aspect_for(cfg: dict, allowed: tuple[str, ...] | None = None) -> str:
+    """Relación de aspecto para pedirle al generador (imágenes/video IA),
+    según el formato del proyecto. Antes solo existían 16:9 y 9:16: un
+    proyecto cuadrado (Meta Ads 1:1) pedía imágenes 16:9 y todo salía
+    recortado. `allowed` restringe a lo que soporta el modelo (ej. Kling
+    no genera 4:5) y se elige lo más cercano."""
+    v = cfg.get("video", {})
+    w, h = int(v.get("width", 1920)), int(v.get("height", 1080))
+    ratio = w / max(1, h)
+    table = [("9:16", 9 / 16), ("4:5", 4 / 5), ("1:1", 1.0),
+             ("4:3", 4 / 3), ("16:9", 16 / 9)]
+    if allowed:
+        table = [t for t in table if t[0] in allowed] or table
+    return min(table, key=lambda t: abs(t[1] - ratio))[0]
 
 
 # ---------------------------------------------------------------------------

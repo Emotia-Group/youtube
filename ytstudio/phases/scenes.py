@@ -17,7 +17,7 @@ from ytstudio.providers import get_llm
 _CREATIVE_PROPS = {
     "overlay_type": {"type": "string",
                      "enum": ["ninguno", "personaje", "lugar", "fecha",
-                              "dato", "lista", "conclusion"]},
+                              "dato", "lista", "conclusion", "hook"]},
     "overlay_text": {"type": "string"},
     "overlay_kicker": {"type": "string"},
     "overlay_emphasis": {"type": "string"},
@@ -198,7 +198,7 @@ def _board_lines(scenes: list[dict]) -> str:
 
 
 def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
-                        lang: str) -> None:
+                        lang: str, short_form: bool = False) -> None:
     """Segundo pase con el storyboard COMPLETO. Nunca rompe la fase: si el
     modelo falla, se conservan las decisiones del primer pase con un aviso."""
     if getattr(llm, "is_mock", False) or not scenes:
@@ -253,7 +253,8 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "potente — cinematográfico y sin artefactos.\n\n"
         "4) REVISIÓN GLOBAL de rótulos, transiciones, sfx, ritmo y música "
         "COMO CONJUNTO (devuelve los campos ajustados en cada escena):\n"
-        + CREATIVE_RULES +
+        + CREATIVE_RULES
+        + (SHORT_FORM_RULES if short_form else "") +
         "- Verifica el conjunto: UN clímax musical y arco gradual; rótulos "
         "como sistema coherente (mismo estilo de kicker, sin repetir datos); "
         "fundidos solo en fronteras de sección o momentos dramáticos; sfx "
@@ -404,18 +405,35 @@ def _default_intensity(i: int, n: int) -> float:
     return keys[-1][1]
 
 
-_OVERLAY_TYPES = {"personaje", "lugar", "fecha", "dato", "lista", "conclusion"}
+_OVERLAY_TYPES = {"personaje", "lugar", "fecha", "dato", "lista", "conclusion",
+                  "hook"}
+
+# Reglas adicionales para formatos de REDES SOCIALES (vertical/cuadrado/4:5):
+# lenguaje visual propio — gancho en texto grande al abrir, rótulos más
+# frecuentes, ritmo alto. Se añaden a las CREATIVE_RULES, no las sustituyen.
+SHORT_FORM_RULES = """\
+FORMATO CORTO DE REDES (este video): reglas ADICIONALES.
+- La ESCENA 1 lleva SIEMPRE overlay_type='hook': el gancho del guion
+  condensado en overlay_text (máx. 8 palabras, con gancho de verdad — una
+  promesa, un dato chocante o una pregunta). overlay_emphasis = LA palabra
+  más fuerte. Es el texto grande de apertura estilo TikTok/Reels.
+- Rótulos MÁS frecuentes que en un video largo: hasta 1 de cada 2 escenas
+  puede llevar overlay (dato/lista/conclusion) — el espectador ve el video
+  sin sonido muchas veces; el texto sostiene la historia.
+- Ritmo: transiciones 'corte' casi siempre; pace 'ligado' dominante.
+"""
 
 
-def _normalize_creative(scenes: list[dict]) -> None:
+def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
     """Valida y compacta los campos creativos: los flat overlay_* del esquema
     se convierten en un objeto `overlay` (o None), y los valores numéricos se
     acotan. `on_screen_text` se mantiene sincronizado para la interfaz y los
-    proyectos antiguos."""
+    proyectos antiguos. En formatos cortos garantiza el gancho visual de la
+    escena 1 aunque el modelo no lo haya puesto (respaldo determinista)."""
     n = len(scenes)
     for i, s in enumerate(scenes):
         o_type = s.pop("overlay_type", None) or "ninguno"
-        max_len = 70 if o_type == "conclusion" else 48
+        max_len = 70 if o_type in ("conclusion", "hook") else 48
         o_text = (s.pop("overlay_text", "") or "").strip()[:max_len]
         o_kicker = (s.pop("overlay_kicker", "") or "").strip()[:36]
         o_emph = (s.pop("overlay_emphasis", "") or "").strip()[:24]
@@ -443,6 +461,20 @@ def _normalize_creative(scenes: list[dict]) -> None:
 
         s["transition"] = s.get("transition") if s.get("transition") in \
             ("corte", "fundido") else None
+
+    # Formato corto: la escena 1 SIEMPRE abre con gancho visual. Si el modelo
+    # no lo puso (o corre el modo preview), se condensa el arranque de la
+    # narración — nunca un corto sin texto de apertura.
+    if short_form and scenes:
+        first = scenes[0]
+        if not first.get("overlay") or first["overlay"].get("type") != "hook":
+            words = (first.get("narration") or "").split()
+            text = " ".join(words[:8]).rstrip(".,;:") + ("…" if len(words) > 8
+                                                         else "")
+            if text.strip("…"):
+                first["overlay"] = {"type": "hook", "text": text[:70],
+                                    "kicker": "", "emphasis": ""}
+                first["on_screen_text"] = first["overlay"]["text"]
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -563,7 +595,7 @@ def _scene_from_group(group: list[dict], idx: int) -> dict:
 
 
 def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
-                     project=None) -> None:
+                     project=None, short_form: bool = False) -> None:
     """Rellena broll_prompt / on_screen_text / section de escenas ya fijadas por
     el audio, para que el B-roll sea coherente con lo que se dice en cada tramo.
     Modifica `scenes` en el sitio."""
@@ -612,6 +644,7 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
         + "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
         "- section: título temático corto del tramo (para los capítulos).\n\n"
         + CREATIVE_RULES
+        + (SHORT_FORM_RULES if short_form else "")
         + cast_rules
         + f"\nNARRACIÓN POR ESCENA:\n{narr}")
     result = llm.complete_json(system, prompt, schema=schema,
@@ -643,15 +676,19 @@ def run(project, cfg) -> None:
 
     target = scene_seconds(cfg, project)
 
+    from ytstudio.catalog import is_short_form
+    short_form = is_short_form(cfg)
+
     # MODO NARRACIÓN PROPIA: escenas alineadas al audio real del usuario.
     narration = project.get("narration")
     if narration and narration.get("segments"):
         scenes = _group_narration(narration["segments"], target)
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
-                         project=project)
+                         project=project, short_form=short_form)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
-        _art_direction_pass(llm, project, scenes, concept, lang)
-        _normalize_creative(scenes)
+        _art_direction_pass(llm, project, scenes, concept, lang,
+                            short_form=short_form)
+        _normalize_creative(scenes, short_form=short_form)
         _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
         return
@@ -663,7 +700,7 @@ def run(project, cfg) -> None:
             script_md, concept["visual_style"]["prompt_prefix"], target)
         if scenes:
             _assign_video_scenes(scenes, cfg)
-            _normalize_creative(scenes)
+            _normalize_creative(scenes, short_form=short_form)
             _assign_shots(project, scenes, cfg)
             _write_outputs(project, scenes)
             return
@@ -697,6 +734,7 @@ def run(project, cfg) -> None:
         "- 'animation': varía entre zoom_in, zoom_out, pan_left, pan_right "
         "(evita repetir la misma dos veces seguidas).\n\n"
         + CREATIVE_RULES
+        + (SHORT_FORM_RULES if short_form else "")
         + f"\nGUION:\n<<<\n{script_md}\n>>>"
     )
 
@@ -712,8 +750,9 @@ def run(project, cfg) -> None:
         s["id"] = i  # ids consecutivos garantizados
     _normalize_cast(scenes, cast_names)
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
-    _art_direction_pass(llm, project, scenes, concept, lang)
-    _normalize_creative(scenes)
+    _art_direction_pass(llm, project, scenes, concept, lang,
+                        short_form=short_form)
+    _normalize_creative(scenes, short_form=short_form)
     _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)
 

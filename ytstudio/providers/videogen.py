@@ -12,10 +12,10 @@ class ReplicateVideo:
         self.client = replicate
         self.model = cfg["providers"]["videogen"].get(
             "model", "kwaivgi/kling-v1.6-standard")
-        # Aspecto según el formato del proyecto (16:9 largo · 9:16 vertical)
-        v = cfg.get("video", {})
-        self.aspect = ("9:16" if int(v.get("height", 1080)) > int(v.get("width", 1920))
-                       else "16:9")
+        # Aspecto según el formato (Kling solo genera 16:9/9:16/1:1:
+        # para 4:5 se pide 1:1 y el montaje lo recorta con cobertura)
+        from ytstudio.catalog import aspect_for
+        self.aspect = aspect_for(cfg, allowed=("16:9", "9:16", "1:1"))
 
     def generate(self, prompt: str, out: Path, image: Path | None = None,
                  seconds: float = 5.0) -> Path:
