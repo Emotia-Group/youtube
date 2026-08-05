@@ -414,6 +414,17 @@ def api_project_detail(slug: str) -> dict:
     detail["manual_broll"] = project.get("manual_broll") or {}
     detail["broll_auto_replace"] = bool(project.get("broll_auto_replace"))
     detail["broll_review"] = project.get("broll_review") is not False  # default on
+    # Formato/plantilla y ASPECTO real del proyecto: la UI muestra el preview
+    # (storyboard, editor y video) en la proporción verdadera — un Reel se ve
+    # como teléfono 9:16, un Ad como cuadrado, no todo como 16:9.
+    detail["format"] = project.get("format") or "long"
+    detail["short_template"] = project.get("short_template")
+    try:
+        pv = load_config(project.dir).get("video", {})
+        detail["video_aspect"] = {"w": int(pv.get("width", 1920)),
+                                  "h": int(pv.get("height", 1080))}
+    except Exception:
+        detail["video_aspect"] = {"w": 1920, "h": 1080}
     return detail
 
 

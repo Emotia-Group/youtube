@@ -9,6 +9,24 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.39.0 — 2026-08-05
+- 🖥 REDISEÑO DE LA EXPERIENCIA para redes sociales (etapa final del plan):
+  · «¿PARA DÓNDE ES ESTE VIDEO?» es ahora la PRIMERA decisión al crear:
+    tarjetas con ícono por plataforma (YouTube largo, Short, Reel, TikTok,
+    Ads 1:1 y 4:5) en vez de un desplegable escondido.
+  · PREVIEW CON EL ASPECTO REAL en todas partes: las miniaturas del
+    Storyboard y el Editor se muestran en la proporción verdadera del
+    proyecto (un Reel se ve vertical, un Ad cuadrado — ya no todo como
+    16:9), y el VIDEO FINAL vertical se reproduce en un marco de teléfono
+    centrado. El aspecto sale del config real del proyecto, servido por la
+    API (proyectos antiguos siguen mostrándose 16:9 sin tocar nada).
+  · El encabezado del proyecto muestra la PLATAFORMA y la PLANTILLA
+    elegidas como insignias — de un vistazo sabes qué estás produciendo.
+  · PIPELINE COMPACTO para cortos: las fases casi instantáneas (análisis,
+    concepto, música, subtítulos, publicación) se atenúan en chips mini y
+    el foco visual queda en Guion → Escenas → Voz → Imágenes → Montaje —
+    las que de verdad pesan en un corto (se re-iluminan si corren o fallan).
+
 ## v0.38.0 — 2026-08-05
 - 🎬 PLANTILLAS DE FORMATO COMPLETO para cortos (la cuarta etapa del plan):
   al crear un Short/Reel/TikTok/Ad eliges la receta del video en UN clic y

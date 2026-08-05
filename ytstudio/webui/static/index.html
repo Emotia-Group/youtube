@@ -116,6 +116,16 @@
   .preset b{display:block;margin-bottom:3px}
   .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
 
+  /* selector de plataforma (tarjetas) y previews con aspecto real */
+  .fmtgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:6px 0 10px}
+  .fmtcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 10px;cursor:pointer;text-align:center;transition:border-color .15s}
+  .fmtcard:hover{border-color:var(--accent)}
+  .fmtcard.active{border-color:var(--accent);outline:1px solid var(--accent)}
+  .fmtcard .ic{font-size:26px;display:block;margin-bottom:4px}
+  .fmtcard .nm{font-size:12.5px;font-weight:600;display:block}
+  .fmtcard .as{font-size:11px;color:var(--muted)}
+  .phase.mini{padding:3px 8px;font-size:11px;opacity:.55}
+  .vframe{display:block;margin:0 auto;background:#000;border-radius:16px;border:1px solid var(--line)}
   #toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:12px 18px;border-radius:10px;display:none;z-index:50}
   video{width:100%;max-height:520px;border-radius:10px;background:#000}
   textarea#scripted{min-height:420px;font:14px/1.7 ui-monospace,monospace}
@@ -257,11 +267,21 @@ async function showNew(){
   <div class="card">
     <label class="f"><span>1 · Nombre del proyecto</span>
       <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
-    <label class="f"><span>Formato del video</span>
-      <select id="np-format" style="width:auto" onchange="toggleTplSel()">
-        ${Object.entries(CAT.formats||{}).map(([k,f])=>`<option value="${k}">${esc(f.label)}</option>`).join('')}
-      </select></label>
-    <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos verticales (Short/Reel/TikTok) generan 9:16 con guion corto de gancho, escenas rápidas y subtítulos grandes quemados — listos para subir.</p>
+    <label class="f"><span>1 · ¿Para dónde es este video?</span></label>
+    <div class="fmtgrid">
+      ${Object.entries(CAT.formats||{}).map(([k,f])=>{
+        const parts=f.label.split(' — ');
+        const ic=f.label.trim().split(' ')[0];
+        const nm=parts[0].replace(ic,'').trim();
+        return `<div class="fmtcard ${k==='long'?'active':''}" data-fmt="${k}" onclick="pickFormat('${k}')">
+          <span class="ic">${ic}</span><span class="nm">${esc(nm)}</span>
+          <span class="as">${esc(parts[1]||'')}</span></div>`;
+      }).join('')}
+    </div>
+    <select id="np-format" style="display:none">
+      ${Object.entries(CAT.formats||{}).map(([k,f])=>`<option value="${k}">${esc(f.label)}</option>`).join('')}
+    </select>
+    <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos cortos (Short/Reel/TikTok/Ads) generan con guion de gancho, escenas rápidas, texto grande de apertura, rupturas de patrón y subtítulos quemados — listos para subir.</p>
     <div id="np-tpl-wrap" style="display:none">
       <label class="f"><span>🎬 Plantilla del corto (estructura + visuales + sonido en un clic)</span>
         <select id="np-template" style="width:auto">
@@ -378,16 +398,20 @@ async function openProject(slug){
 }
 function phaseLabel(name){return (CAT.phases.find(p=>p.name===name)||{}).label||name}
 function phaseChipsHtml(p,curPhase){
+  const light=new Set(['ingest','concept','music','subtitles','publish']);
+  const isShort=(window._proj&&window._proj.format||'long')!=='long';
   return CAT.phases.map(ph=>{
     let st=p.phases[ph.name];
     const isCur=curPhase===ph.name;
     const cls=isCur?'running':(st==='done'?'done':st==='failed'?'failed':'');
     const icon=isCur?'⏳':({done:'✔',failed:'✖'}[st]||'·');
-    return `<div class="phase ${cls}" title="${esc(ph.desc)}">${icon} ${esc(ph.label)}</div>`;
+    const mini=isShort&&light.has(ph.name)&&cls!=='running'&&cls!=='failed'?' mini':'';
+    return `<div class="phase ${cls}${mini}" title="${esc(ph.desc)}">${icon} ${esc(ph.label)}</div>`;
   }).join('');
 }
 async function renderProject(activeTab){
   const p=await api('/api/projects/'+current);
+  window._proj=p;
   const running=p.running;
   const mock=!CAT.keys.ANTHROPIC_API_KEY;
   const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
@@ -395,7 +419,7 @@ async function renderProject(activeTab){
   const tab=activeTab||window._tab||'Guion';window._tab=tab;
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between">
-    <h1>🎬 ${esc(p.display_name||current)}</h1>
+    <h1>🎬 ${esc(p.display_name||current)} ${fmtBadges(p)}</h1>
     <div class="row">
       <select id="run-to" style="width:auto" title="Hasta dónde generar">
         <option value="">Generar el video completo</option>
@@ -430,6 +454,26 @@ async function renderProject(activeTab){
   loadEstimate(current);
 }
 function switchTab(t){window._tab=t;renderProject(t)}
+function pickFormat(k){
+  const sel=$('#np-format');if(sel)sel.value=k;
+  document.querySelectorAll('.fmtcard').forEach(c=>c.classList.toggle('active',c.dataset.fmt===k));
+  toggleTplSel();
+}
+function aspectOf(p){
+  const a=p.video_aspect||{w:1920,h:1080};
+  return {w:a.w,h:a.h,vert:a.h>a.w,short:(p.format||'long')!=='long'};
+}
+function thumbStyle(p,base){
+  const a=aspectOf(p);
+  const wpx=a.vert?120:(a.w===a.h?170:base||240);
+  return `width:${wpx}px;height:auto;aspect-ratio:${a.w}/${a.h};object-fit:cover`;
+}
+function fmtBadges(p){
+  const f=CAT.formats?.[p.format];
+  const t=p.short_template&&p.short_template!=='libre'?CAT.short_templates?.[p.short_template]:null;
+  return (f&&p.format!=='long'?`<span class="badge" style="border-color:var(--accent);color:var(--accent)">${esc(f.label)}</span>`:'')
+       +(t?`<span class="badge">${esc(t.label)}</span>`:'');
+}
 function toggleTplSel(){
   const f=$('#np-format')?.value||'long';
   const wrap=$('#np-tpl-wrap');if(!wrap)return;
@@ -555,7 +599,7 @@ async function renderTab(tab,p){
       const thumb=s.broll_image?`/files/${current}/06_broll/${s.broll_image}?v=${p.done}`:'';
       return `
       <div class="scene">
-        ${thumb?`<img src="${thumb}" loading="lazy">`:'<div style="width:240px" class="muted">sin imagen aún</div>'}
+        ${thumb?`<img src="${thumb}" loading="lazy" style="${thumbStyle(p)}">`:`<div style="width:${aspectOf(p).vert?120:240}px" class="muted">sin imagen aún</div>`}
         <div style="flex:1">
           <div class="num">ESCENA ${s.id} — ${esc(s.section)}
             ${s.shot==='personaje'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">🧑 personaje</span>':''}
@@ -599,7 +643,7 @@ async function renderTab(tab,p){
         const ov=s.overlay||{};
         return `
         <div class="scene ed" data-id="${s.id}" style="align-items:flex-start">
-          ${thumb?`<img src="${thumb}" loading="lazy" style="width:170px">`:'<div style="width:170px" class="muted">sin imagen</div>'}
+          ${thumb?`<img src="${thumb}" loading="lazy" style="${thumbStyle(p,170)}">`:'<div style="width:120px" class="muted">sin imagen</div>'}
           <div style="flex:1">
             <div class="num">ESCENA ${s.id} — ${esc(s.section)} <span class="badge">${(s.duration||0).toFixed(1)}s</span></div>
             <p class="muted" style="margin:4px 0;font-size:12px">${esc((s.narration||'').slice(0,140))}${(s.narration||'').length>140?'…':''}</p>
@@ -627,7 +671,10 @@ async function renderTab(tab,p){
     if(!p.final_video){el.innerHTML='<div class="card muted">El video final aparecerá aquí al terminar la fase de montaje.</div>';return}
     const m=p.metadata_full||{};
     el.innerHTML=`<div class="card">
-      <video controls src="/files/${current}/${p.final_video}"></video>
+      ${(()=>{const a=aspectOf(p);
+        return a.vert||a.w===a.h||a.w<a.h
+          ?`<video controls class="vframe" src="/files/${current}/${p.final_video}" style="aspect-ratio:${a.w}/${a.h};max-height:72vh;width:auto;max-width:100%"></video>`
+          :`<video controls src="/files/${current}/${p.final_video}" style="width:100%"></video>`;})()}
       <div class="row" style="margin-top:14px;align-items:flex-start">
         <div style="flex:1;min-width:280px">${metaOptionsHtml(p,m)}</div>
       </div>
