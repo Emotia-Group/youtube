@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.40.0 — 2026-08-05
+- ✂ CORRECTOR DE TROPIEZOS EN TU NARRACIÓN (lo que pediste, con tu caso
+  real): hasta ahora tu grabación era verdad absoluta — si arrancabas mal y
+  volvías a empezar, ese falso arranque terminaba en el video Y en los
+  subtítulos. Ahora el programa detecta los errores EVIDENTES, **corta el
+  audio de verdad** (no solo el texto: si no, la voz seguiría diciéndolo),
+  reajusta todos los tiempos y te avisa de CADA corrección con lo que quitó
+  y por qué. Detecta:
+  · FALSOS ARRANQUES — tu caso exacto: «El registró veterinario» …2s…
+    «El registro veterinario oficial es la evidencia…» → se queda solo con
+    el reintento. Exige tres evidencias a la vez: que el reintento repita el
+    arranque, que haya una pausa real y que el intento quedara truncado.
+  · PALABRAS REPETIDAS sin intención («el el registro»).
+  · MULETILLAS AISLADAS entre pausas («eh», «o sea», «este»).
+  · CORRECCIONES QUE ANUNCIAS («voy de nuevo», «corrijo», «otra vez»,
+    «perdón»): se borra el aviso Y el intento anterior.
+  · Y una REVISIÓN CON IA opcional que caza los tropiezos reformulados con
+    otras palabras, que ninguna regla puede ver (unos centavos por video;
+    desactivable con audio.fix_narration_ai).
+- REGLA DE ORO: ante la duda NO se corta. Borrar contenido legítimo tuyo es
+  mucho peor que dejar pasar un tropiezo, así que cada detector exige varias
+  señales convergentes. Verificado con pruebas que confirman que NO se tocan:
+  anáforas retóricas («El registro dice esto… El registro dice aquello»),
+  muletillas dentro de una frase fluida («compré este libro»), enumeraciones,
+  pausas dramáticas y coincidencias casuales de palabras cortas.
+- Todo desactivable con `audio.fix_narration: false` si prefieres tu
+  grabación intacta. Si algo falla, la narración se usa tal cual la grabaste.
+
 ## v0.39.0 — 2026-08-05
 - 🖥 REDISEÑO DE LA EXPERIENCIA para redes sociales (etapa final del plan):
   · «¿PARA DÓNDE ES ESTE VIDEO?» es ahora la PRIMERA decisión al crear:

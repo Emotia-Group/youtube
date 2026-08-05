@@ -187,6 +187,45 @@ def _describe_broll(project, llm, assets, input_dir, lang: str) -> None:
     project.set("assets", assets)
 
 
+def _fix_narration(project, cfg, llm, clean, segments, input_dir):
+    """Quita los tropiezos evidentes de la grabación (ver narration_fix.py):
+    corta el audio, reajusta los tiempos y AVISA de cada corrección. Ante
+    cualquier fallo devuelve la narración intacta — corregir es una mejora,
+    nunca un riesgo para el material del creador."""
+    from ytstudio import narration_fix as nf
+    from ytstudio.catalog import lang_name
+    from ytstudio.progress import notify
+    try:
+        cuts = nf.detect_all(segments)
+        if cfg.get("audio", {}).get("fix_narration_ai", True):
+            cuts = nf.merge_cuts(
+                cuts + nf.review_with_llm(llm, segments,
+                                          lang_name(cfg), known=cuts))
+        if not cuts:
+            return clean, segments
+        fixed = input_dir / "narration_fixed.mp3"
+        if not nf.apply_to_audio(clean, fixed, cuts):
+            return clean, segments
+        new_segments = nf.apply_to_segments(segments, cuts)
+        if not new_segments:   # nunca dejar la narración vacía
+            return clean, segments
+        total = sum(c["end"] - c["start"] for c in cuts)
+        notify(f"✂ Narración: se corrigieron {len(cuts)} tropiezo(s) "
+               f"({total:.1f}s menos) — el audio y los subtítulos ya no los "
+               "incluyen.")
+        for c in cuts:
+            project.add_warning(
+                f"✂ Corregido en tu narración [{c['start']:.1f}s]: se quitó "
+                f"«{c['text']}» — {c['reason']}.")
+        project.set("narration_fixes", cuts)
+        return fixed, new_segments
+    except Exception as e:
+        project.add_warning(
+            f"No se pudo revisar tu narración en busca de tropiezos ({e}): "
+            "se usa tal cual la grabaste.")
+        return clean, segments
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
@@ -343,6 +382,13 @@ def run(project, cfg) -> None:
                 "No se detectó voz en tu grabación (revisa que el archivo "
                 "no esté vacío o silenciado) — el video se genera con guion "
                 "y voz sintética (IA) en su lugar.")
+        # CORRECCIÓN DE TROPIEZOS: falsos arranques, repeticiones, muletillas
+        # aisladas y correcciones que el propio narrador anuncia. Se corta el
+        # AUDIO además del texto (si no, la voz seguiría diciendo el error) y
+        # se avisa de cada corrección. Desactivable: audio.fix_narration.
+        if segments and cfg.get("audio", {}).get("fix_narration", True):
+            clean, segments = _fix_narration(project, cfg, llm, clean,
+                                             segments, input_dir)
         (input_dir / "narracion.txt").write_text(
             " ".join(s["text"] for s in segments), encoding="utf-8")
         project.set("narration", {"file": clean.name, "segments": segments})

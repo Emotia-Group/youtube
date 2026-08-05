@@ -109,6 +109,16 @@ audio:
                              # hundía la voz en las pausas dramáticas)
   final_limit: 0.9           # tope del limitador de picos final (0.9 ≈ -0.9 dB)
   # Modo "narración propia" (cuando subes tu voz grabada):
+  fix_narration: true        # CORRIGE los tropiezos evidentes de tu grabación:
+                             # falsos arranques («El registró… El registro
+                             # veterinario oficial es…»), palabras repetidas,
+                             # muletillas aisladas y correcciones que anuncias
+                             # («voy de nuevo», «corrijo»). Corta el AUDIO
+                             # además del texto y avisa de cada corrección.
+  fix_narration_ai: true     # además de las reglas, una revisión con IA que
+                             # caza los tropiezos reformulados (cuesta unos
+                             # centavos por video). Ponlo en false para
+                             # quedarte solo con la detección por reglas.
   trim_silence: true         # recorta el silencio SOLO al inicio y al final
                              # (deja 0.25s de aire). Los silencios internos se
                              # conservan SIEMPRE: recortarlos podía comerse
