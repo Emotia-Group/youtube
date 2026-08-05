@@ -43,7 +43,18 @@ def run(project, cfg) -> None:
         return
 
     from ytstudio.catalog import is_vertical
-    if is_vertical(cfg):
+    vertical = is_vertical(cfg)
+    hooks_block = ""
+    if vertical:
+        # Biblioteca de ganchos probados: al guionista se le entregan ~20
+        # plantillas afines al tema para que ABRA el video adaptando la mejor
+        # (v0.34.0). Sin biblioteca, el prompt queda como siempre.
+        from ytstudio import hooks as hooks_lib
+        topic = " ".join(str(x) for x in (
+            brief.get("topic", ""), brief.get("summary", ""),
+            concept.get("angle", "")))
+        hooks_block = hooks_lib.prompt_block(topic, seed=project.slug)
+    if vertical:
         system = (
             f"Eres guionista senior de videos VERTICALES CORTOS (Shorts/Reels/"
             f"TikTok) en {lang}. Escribes narración hablada de ~{int(minutes * 60)} "
@@ -70,6 +81,7 @@ def run(project, cfg) -> None:
             "estructura del concepto, y asegurar gancho y cierre.\n\n"
             f"GUION ORIGINAL:\n<<<\n{brief['raw_text']}\n>>>\n\n"
             f"Estructura de referencia: {concept['structure']}"
+            + hooks_block
         )
     else:
         prompt = (
@@ -83,6 +95,7 @@ def run(project, cfg) -> None:
             f"Audiencia: {concept['audience']}\n\n"
             f"Estructura obligatoria (una sección '## ' por cada elemento):\n"
             + "\n".join(f"- {s}" for s in concept["structure"])
+            + hooks_block
         )
 
     script_md = llm.complete(system, prompt, max_tokens=32000, purpose="script")

@@ -9,6 +9,19 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.34.0 — 2026-08-05
+- 🪝 BIBLIOTECA DE 970 GANCHOS VIRALES (primer paso del giro a redes
+  sociales): tu documento «1000 HOOKS VIRALES» quedó convertido en una
+  biblioteca estructurada del programa (assets/hooks/hooks_virales.json,
+  970 plantillas con su ejemplo, verificadas una a una en el parseo). Al
+  escribir el guion de un video VERTICAL (Short/Reel/TikTok), el guionista
+  ya no recibe la orden abstracta de «gancho demoledor»: recibe ~20
+  plantillas PROBADAS seleccionadas por afinidad con el tema (un video de
+  finanzas recibe ganchos de dinero) más variedad aleatoria reproducible
+  por proyecto, y abre el video adaptando la que mejor encaje. Los videos
+  largos (16:9) no cambian en nada; con narración propia grabada tampoco
+  (tu voz manda). Si la biblioteca faltara, el guion funciona como siempre.
+
 ## v0.33.0 — 2026-08-04
 - 🛡 TOPE DE GASTO DINÁMICO (adiós al número fijo que estorbaba): un tope de
   $8 no puede servir a la vez para una prueba de 3 escenas y para un
