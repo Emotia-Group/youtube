@@ -9,6 +9,33 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.36.0 — 2026-08-05
+- 🎭 VIDEOS DE REACCIÓN (nueva categoría de archivo «Tu video de reacción»):
+  grábate reaccionando al contenido y súbelo — el programa te compone SOBRE
+  el video todo el tiempo, con cada escena tomando exactamente SU tramo de
+  tu grabación (sincronizado con la línea de tiempo). Si te grabaste sobre
+  PANTALLA VERDE, se detecta sola (muestreo del fotograma) y se recorta con
+  chroma key + limpieza de reborde, compuesto en la franja inferior; si no
+  hay pantalla verde, apareces en una BURBUJA CIRCULAR estilo TikTok en la
+  esquina. Sin configurar nada.
+- 🫧 PERSONAJE EN BURBUJA (segunda fuente de reacción, como pediste): nueva
+  opción al crear el proyecto — en vez de ocupar la pantalla completa, el
+  personaje IA con lipsync aparece en una burbuja circular sobre el B-roll
+  de sus escenas (estilo reacción). La escena conserva su imagen de fondo;
+  si el lipsync falla, sale solo el B-roll con un aviso (nunca se rompe).
+- ◫ PANTALLA DIVIDIDA para comparaciones (antes/después, esto vs aquello):
+  el director puede marcar escenas de formato corto como «dividida» con un
+  SEGUNDO prompt — se generan las dos imágenes y el montaje las compone a la
+  vez (arriba/abajo en vertical, izquierda/derecha en horizontal) con
+  Ken Burns propio por mitad y línea divisoria. Máximo 1-2 por video, solo
+  cuando la narración de verdad compara. Visible en el storyboard.
+- Toda la composición es ffmpeg local (costo $0); lo único que paga es la
+  segunda imagen de las escenas divididas (una imagen IA más) y el lipsync
+  del personaje que ya pagabas. Verificado con renders reales medidos por
+  píxeles: el chroma elimina el verde y conserva a la persona, la burbuja
+  es circular, las mitades muestran cada una su imagen y el tramo de
+  reacción coincide con el tiempo real de cada escena.
+
 ## v0.35.0 — 2026-08-05
 - ✨ MOTOR DE TEXTO Y HOOKS VISUALES para formatos cortos (lo que elegiste
   construir primero — todo ffmpeg local, costo $0 por uso):

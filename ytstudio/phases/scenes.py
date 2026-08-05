@@ -26,6 +26,10 @@ _CREATIVE_PROPS = {
     "pace": {"type": "string", "enum": ["ligado", "normal", "amplio"]},
     "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
     "transition": {"type": "string", "enum": ["corte", "fundido"]},
+    # Composición de pantalla: 'dividida' = dos visuales a la vez (arriba/
+    # abajo en vertical, izquierda/derecha en horizontal) para comparaciones.
+    "layout": {"type": "string", "enum": ["completo", "dividida"]},
+    "broll_prompt_b": {"type": "string"},
 }
 
 SCENES_SCHEMA = {
@@ -107,6 +111,12 @@ EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
 - 'whoosh' al cambiar de sección/lugar/tiempo · 'riser' en la escena que
   desemboca en el clímax (crea anticipación) · 'boom' en una revelación
   impactante · 'ninguno' en el resto (máximo 1 de cada 4 escenas).
+
+PANTALLA DIVIDIDA (layout): 'completo' casi siempre. 'dividida' SOLO cuando la
+narración COMPARA dos cosas de verdad (antes/después, esto vs aquello, opción
+A vs B): entonces broll_prompt_b describe el SEGUNDO visual (mismo estilo) y
+el montaje muestra ambos a la vez. Si layout='completo', broll_prompt_b va
+vacío. Máximo 1-2 escenas divididas por video.
 
 TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 - 'corte': corte seco, sin transición (por defecto). Da ritmo y es lo más
@@ -461,6 +471,17 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
 
         s["transition"] = s.get("transition") if s.get("transition") in \
             ("corte", "fundido") else None
+
+        # Pantalla dividida: solo válida con su segundo prompt; en el 16:9
+        # largo se fuerza 'completo' (v1: el lenguaje de comparación en
+        # pantalla es de los formatos cortos).
+        pb = (s.get("broll_prompt_b") or "").strip()
+        if (s.get("layout") == "dividida" and pb and short_form
+                and s.get("broll_type") != "video"):
+            s["layout"], s["broll_prompt_b"] = "dividida", pb
+        else:
+            s["layout"] = "completo"
+            s.pop("broll_prompt_b", None)
 
     # Formato corto: la escena 1 SIEMPRE abre con gancho visual. Si el modelo
     # no lo puso (o corre el modo preview), se condensa el arranque de la
@@ -830,9 +851,13 @@ def _write_outputs(project, scenes: list[dict]) -> None:
         kind = s["broll_type"]
         if s.get("motion_risk"):
             kind += f", movimiento: riesgo {s['motion_risk']}"
+        if s.get("layout") == "dividida":
+            kind += ", PANTALLA DIVIDIDA"
         md += [f"## Escena {s['id']} — {s['section']} ({s['animation']}, {kind})",
                f"**Narración:** {s['narration']}",
                f"**B-roll:** {s['broll_prompt']}"]
+        if s.get("layout") == "dividida" and s.get("broll_prompt_b"):
+            md.append(f"**B-roll B (segunda mitad):** {s['broll_prompt_b']}")
         o = s.get("overlay")
         if o:
             kick = f" ({o['kicker']})" if o.get("kicker") else ""

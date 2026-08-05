@@ -286,7 +286,8 @@ def api_create_project(body: dict) -> dict:
             pres = min(60, max(0, int(body.get("character_presence") or 30)))
         except (TypeError, ValueError):
             pres = 30
-        project.set("character", {"presence": pres / 100})
+        project.set("character", {"presence": pres / 100,
+                                  "pip": bool(body.get("character_pip"))})
 
     # Overrides POR PROYECTO (preset de estilo + formato) en su config.yaml —
     # load_config(project.dir) los mezcla sobre la config global al generar.

@@ -497,6 +497,88 @@ def _interrupt_filter(kind: str, fps: int, w: int, h: int) -> str:
     return ""
 
 
+def _split_filter(animation: str, frames: int, w: int, h: int,
+                  fps: int) -> tuple[list[str], str]:
+    """PANTALLA DIVIDIDA (dos imágenes a la vez, para comparaciones antes/
+    después): arriba/abajo en formatos verticales, izquierda/derecha en
+    horizontales y cuadrados. Cada mitad lleva su recorte de cobertura y su
+    Ken Burns propio (mitades PARES para el submuestreo del códec), con una
+    línea divisoria. Devuelve (filtros, etiqueta_final); las entradas 0 y 1
+    son las dos imágenes."""
+    vertical = h > w
+    if vertical:
+        ha = (h // 2) // 2 * 2
+        hb = h - ha
+        dims = [(w, ha), (w, hb)]
+        stack, div = "vstack=inputs=2", f"drawbox=y={ha - 3}:h=6:t=fill"
+    else:
+        wa = (w // 2) // 2 * 2
+        wb = w - wa
+        dims = [(wa, h), (wb, h)]
+        stack, div = "hstack=inputs=2", f"drawbox=x={wa - 3}:w=6:t=fill"
+    filters = []
+    for i, (dw, dh) in enumerate(dims):
+        kb = _kenburns(animation if i == 0 else "zoom_out", frames, dw, dh, fps)
+        filters.append(f"[{i}:v]{kb}[mit{i}]")
+    filters.append(f"[mit0][mit1]{stack},{div}:c=black@0.85,setsar=1[vsplit]")
+    return filters, "vsplit"
+
+
+def _bubble_chain(idx: int, diameter: int) -> str:
+    """Burbuja CIRCULAR para la persona que reacciona (sin pantalla verde):
+    recorte cuadrado centrado, escala al diámetro y máscara circular por
+    canal alfa — el look de las burbujas de reacción de TikTok/CapCut."""
+    r = diameter // 2
+    return (f"[{idx}:v]crop='min(iw,ih)':'min(iw,ih)',"
+            f"scale={diameter}:{diameter},format=yuva444p,"
+            f"geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':"
+            f"a='if(lte((X-{r})*(X-{r})+(Y-{r})*(Y-{r}),{(r - 2) * (r - 2)}),"
+            f"255,0)'")
+
+
+def _chroma_chain(idx: int, target_h: int) -> str:
+    """Recorte de PANTALLA VERDE de la persona que reacciona: chroma key +
+    limpieza del reborde verde (despill), escalada a la franja inferior."""
+    return (f"[{idx}:v]scale=-2:{target_h},format=yuva444p,"
+            f"chromakey=0x00b140:0.28:0.06,despill=type=green")
+
+
+def _reaction_inputs(scene: dict, project, cfg) -> tuple[list[str], str, str]:
+    """(argumentos -i extra, cadena de filtro, posición del overlay) para la
+    capa de REACCIÓN de esta escena, o ([], '', '') si no hay. Dos fuentes:
+    · video de reacción del usuario (continuo: cada escena toma SU tramo,
+      sincronizado con la línea de tiempo vía -ss),
+    · clip de lipsync del personaje en modo burbuja (pip_video: ya viene
+      cortado al tramo exacto de la escena)."""
+    w, h = cfg["video"]["width"], cfg["video"]["height"]
+    if scene.get("pip_video"):
+        src = project.path("broll", scene["pip_video"])
+        d = int(min(w, h) * 0.34)
+        margin = int(min(w, h) * 0.04)
+        chain = _bubble_chain(1, d)  # el índice real lo fija _render_scene
+        pos = f"{margin}:H-h-{margin + int(h * 0.09)}"
+        return ["-i", str(src)], chain, pos
+    # Capa opcional: no exige nada nuevo del proyecto (objetos antiguos o
+    # parciales sin .get simplemente no llevan reacción).
+    reaction = (project.get("reaction") if hasattr(project, "get") else None) or {}
+    if reaction.get("file"):
+        src = project.path("input", reaction["file"])
+        if not src.exists():
+            return [], "", ""
+        offset = float(scene.get("_start") or 0.0)
+        args = ["-ss", f"{offset:.3f}", "-i", str(src)]
+        if reaction.get("chroma"):
+            chain = _chroma_chain(1, int(h * 0.44))
+            pos = "(W-w)/2:H-h"      # franja inferior, estilo pantalla verde
+        else:
+            d = int(min(w, h) * 0.30)
+            margin = int(min(w, h) * 0.04)
+            chain = _bubble_chain(1, d)
+            pos = f"{margin}:H-h-{margin + int(h * 0.09)}"
+        return args, chain, pos
+    return [], "", ""
+
+
 def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     """Renderiza la escena SOLO VIDEO (sin pista de audio). El audio del video
     completo es UNA pista continua (voz + música + SFX) que se mezcla al final
@@ -511,6 +593,7 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
 
     filters = []
 
+    img_b = scene.get("broll_image_b")
     if scene.get("broll_video"):
         vid = project.path("broll", scene["broll_video"])
         try:
@@ -530,12 +613,31 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
             filters.append(
                 f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h},fps={fps},setsar=1[v0]")
+        label = "v0"
+    elif (scene.get("layout") == "dividida" and img_b
+          and (project.path("broll", img_b)).exists()):
+        # PANTALLA DIVIDIDA: dos imágenes (entradas 0 y 1) compuestas a la vez
+        img_path = project.path("broll", scene["broll_image"])
+        inputs = ["-i", str(img_path), "-i", str(project.path("broll", img_b))]
+        sp, label = _split_filter(scene["animation"], frames, w, h, fps)
+        filters.extend(sp)
     else:
         img_path = project.path("broll", scene["broll_image"])
         inputs = ["-i", str(img_path)]
         filters.append(f"[0:v]{_still_filter(img_path, scene['animation'], frames, w, h, fps)}[v0]")
+        label = "v0"
 
-    label = "v0"
+    # Capa de REACCIÓN (video del usuario o burbuja del personaje): sobre el
+    # visual base, debajo de rupturas y rótulos.
+    r_args, r_chain, r_pos = _reaction_inputs(scene, project, cfg)
+    if r_args:
+        r_idx = len([a for a in inputs if a == "-i"])  # índice real de entrada
+        inputs += r_args
+        r_chain = r_chain.replace("[1:v]", f"[{r_idx}:v]", 1)
+        filters.append(f"{r_chain}[rx]")
+        filters.append(f"[{label}][rx]overlay={r_pos}:eof_action=pass[vr]")
+        label = "vr"
+
     # Ruptura de patrón en la entrada (formatos cortos): ANTES de los rótulos,
     # para que el golpe de zoom no mueva el texto.
     intr = _interrupt_filter(_auto_interrupt(scene, cfg), fps, w, h)
@@ -695,8 +797,14 @@ def _render_signature(scenes, plans, cfg, project) -> str:
             "dur": s.get("duration"), "overlay": s.get("overlay"),
             "ost": s.get("on_screen_text"), "at": s.get("overlay_at"),
             "off": s.get("vo_offset"), "fade": p,
-            "src": [stamp(s.get("broll_image")), stamp(s.get("broll_video"))],
+            "layout": s.get("layout"), "imgb": s.get("broll_image_b"),
+            "pip": s.get("pip_video"), "sfx": s.get("sfx"),
+            "trans": s.get("transition"),
+            "src": [stamp(s.get("broll_image")), stamp(s.get("broll_video")),
+                    stamp(s.get("broll_image_b")), stamp(s.get("pip_video"))],
         } for s, p in zip(scenes, plans)],
+        # La capa de reacción afecta TODAS las escenas (archivo y modo)
+        "reaction": project.get("reaction"),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -740,6 +848,13 @@ def run(project, cfg) -> None:
     #    ffmpeg independiente; 2-3 a la vez aprovechan los núcleos del CPU.
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from ytstudio.progress import notify
+
+    # Inicio de cada escena en la línea de tiempo: el video de REACCIÓN es
+    # continuo y cada escena toma exactamente SU tramo (sincronizado).
+    t_acc = 0.0
+    for s in scenes:
+        s["_start"] = round(t_acc, 3)
+        t_acc += float(s.get("duration") or 0)
 
     jobs = [(s, p) for s, p in zip(scenes, plans)
             if not (scenes_dir / f"scene_{s['id']:03d}.mp4").exists()]

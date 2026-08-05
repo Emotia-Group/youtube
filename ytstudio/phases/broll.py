@@ -16,6 +16,57 @@ def _user_broll_assets(project) -> list[dict]:
             if a["category"] == "broll" and a["kind"] in ("image", "video")]
 
 
+def _detect_green_screen(video: Path, work_dir: Path) -> bool:
+    """¿El video se grabó sobre PANTALLA VERDE? Se extrae un fotograma y se
+    muestrean los BORDES (donde en una grabación de reacción está el fondo,
+    no la persona): si una fracción clara es verde saturado, es chroma.
+    Determinista y local — el usuario no tiene que configurar nada."""
+    try:
+        from PIL import Image
+        frame = work_dir / "reaccion_probe.jpg"
+        run_ffmpeg(["-ss", "0.5", "-i", str(video), "-frames:v", "1",
+                    "-q:v", "3", str(frame)], "fotograma de reacción")
+        img = Image.open(frame).convert("RGB")
+        w, h = img.size
+        px = img.load()
+        band_w, band_h = max(2, w // 10), max(2, h // 10)
+        samples, green = 0, 0
+        for y in range(0, h, 4):
+            for x in range(0, w, 4):
+                if x > band_w and x < w - band_w and y > band_h:
+                    continue  # solo bordes laterales y superior
+                r, g, b = px[x, y]
+                samples += 1
+                if g > 90 and g > r * 1.35 and g > b * 1.35:
+                    green += 1
+        frame.unlink(missing_ok=True)
+        return samples > 0 and green / samples > 0.30
+    except Exception:
+        return False
+
+
+def _setup_reaction(project, broll_dir: Path) -> None:
+    """VIDEO DE REACCIÓN (categoría 🎭 Reacción): la persona que reacciona se
+    compone SOBRE el contenido durante todo el video — con chroma key si se
+    grabó en pantalla verde (detectado automáticamente) o en una burbuja
+    circular si no. Aquí solo se registra y clasifica; la composición con el
+    desfase exacto de cada escena la hace el montaje."""
+    from ytstudio.progress import notify
+    videos = [a for a in (project.get("assets") or [])
+              if a.get("category") == "reaccion" and a.get("kind") == "video"]
+    if not videos:
+        if project.get("reaction"):
+            project.set("reaction", None)  # se quitó el archivo → sin overlay
+        return
+    asset = videos[-1]  # el más reciente manda
+    src = project.path("input", asset["file"])
+    chroma = _detect_green_screen(src, broll_dir)
+    project.set("reaction", {"file": asset["file"], "chroma": chroma})
+    notify("🎭 Video de reacción detectado: se compone sobre el contenido "
+           + ("recortando la PANTALLA VERDE (chroma key)." if chroma else
+              "en una burbuja circular (no se detectó pantalla verde)."))
+
+
 def _bind_worker_logging(sink) -> None:
     """Los generadores corren en hilos TRABAJADORES, que no heredan el canal
     de avisos (thread-local) del hilo de la fase: cada worker lo re-vincula
@@ -557,8 +608,16 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
                        f"imagen fija del personaje. {e}")
     ok = [s for s in char_scenes if s not in failed
           and (broll_dir / f"lipsync_{s['id']:03d}.mp4").exists()]
+    # Modo BURBUJA (character.pip): el personaje NO ocupa la pantalla — se
+    # compone en una burbuja circular sobre el B-roll de su escena (estilo
+    # reacción). La escena conserva su flujo normal de imagen; el clip de
+    # lipsync viaja aparte como pip_video.
+    pip_mode = bool((project.get("character") or {}).get("pip"))
     for s in ok:
         clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
+        if pip_mode:
+            s["pip_video"] = clip.name
+            continue
         poster = broll_dir / f"lipsync_{s['id']:03d}.jpg"
         if not poster.exists():
             run_ffmpeg(["-i", str(clip), "-frames:v", "1", str(poster)],
@@ -568,12 +627,23 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
         s["broll_type"] = "video"
         s["broll_source"] = "lipsync"
     if failed:
-        _still_fallback(failed)
-        project.add_warning(
-            f"El lipsync falló en {len(failed)} escena(s) "
-            f"({', '.join(str(s['id']) for s in failed)}): usan la imagen "
-            "fija del personaje. «Rehacer desde Imágenes» reintenta solo esas.")
-    return {s["id"] for s in char_scenes}
+        if pip_mode:
+            # sin burbuja esa escena: queda su B-roll normal (nada que romper)
+            project.add_warning(
+                f"El lipsync falló en {len(failed)} escena(s) "
+                f"({', '.join(str(s['id']) for s in failed)}): salen sin la "
+                "burbuja del personaje (solo B-roll). «Rehacer desde "
+                "Imágenes» reintenta solo esas.")
+        else:
+            _still_fallback(failed)
+            project.add_warning(
+                f"El lipsync falló en {len(failed)} escena(s) "
+                f"({', '.join(str(s['id']) for s in failed)}): usan la imagen "
+                "fija del personaje. «Rehacer desde Imágenes» reintenta solo "
+                "esas.")
+    # En modo burbuja las escenas de personaje SIGUEN generando su B-roll de
+    # fondo (no se marcan como resueltas por el lipsync).
+    return set() if pip_mode else {s["id"] for s in char_scenes}
 
 
 def run(project, cfg) -> None:
@@ -588,6 +658,10 @@ def run(project, cfg) -> None:
     #    el director lo revisa con visión (encaja o no, con aviso).
     placed_manual = _place_manual_broll(project, scenes, broll_dir, cfg)
     _review_manual_broll(project, llm, scenes, placed_manual, broll_dir, cfg)
+
+    # 0a) Video de REACCIÓN (si lo subiste): se registra y clasifica (chroma
+    #     o burbuja) para que el montaje lo componga sobre el contenido.
+    _setup_reaction(project, broll_dir)
 
     # 0b) PERSONAJE narrador con lipsync: las escenas que el director marcó
     #     como 'personaje' (más tus ajustes del Editor) muestran al personaje
@@ -758,32 +832,30 @@ def run(project, cfg) -> None:
     from ytstudio.progress import get_sink
     sink = get_sink()
 
-    def _gen_image(scene: dict) -> None:
-        usage_mod.bind(usage_items)
-        _bind_worker_logging(sink)
-        img = broll_dir / f"scene_{scene['id']:03d}.jpg"
-        if img.exists():  # reanudable
-            return
+    def _gen_one(scene: dict, prompt: str, img: Path) -> None:
+        """Escalera de UNA imagen: identidad (si hay elenco) → normal →
+        prompt suavizado → fondo neutro. La usan la imagen principal y la
+        segunda mitad de las escenas con pantalla dividida."""
         # Escena con personajes del elenco → modelo de IDENTIDAD con sus
         # fotos de referencia (misma cara en todas sus escenas).
         refs = _scene_refs(scene)
         if refs and ref_images is not None:
             try:
-                ref_images.generate_with_refs(scene["broll_prompt"], refs, img)
+                ref_images.generate_with_refs(prompt, refs, img)
                 return
             except Exception as e:
                 if not _is_content_error(e):
                     raise
                 # rechazo de contenido → sigue el flujo normal suavizado
         try:
-            images.generate(scene["broll_prompt"], img)
+            images.generate(prompt, img)
             return
         except Exception as e:
             if not _is_content_error(e):
                 raise  # infraestructura → detiene la fase (reanudable)
         # Rechazo de contenido: reintento con prompt suavizado
         try:
-            images.generate(_soften_prompt(scene["broll_prompt"]), img)
+            images.generate(_soften_prompt(prompt), img)
             return
         except Exception as e:
             if not _is_content_error(e):
@@ -792,8 +864,26 @@ def run(project, cfg) -> None:
         _fallback_image(img, cfg, palette)
         nsfw_scenes.append(scene["id"])
 
+    def _gen_image(scene: dict) -> None:
+        usage_mod.bind(usage_items)
+        _bind_worker_logging(sink)
+        img = broll_dir / f"scene_{scene['id']:03d}.jpg"
+        if not img.exists():  # reanudable
+            _gen_one(scene, scene["broll_prompt"], img)
+        # Pantalla dividida: la SEGUNDA mitad tiene su propia imagen
+        if scene.get("layout") == "dividida" and scene.get("broll_prompt_b"):
+            img_b = broll_dir / f"scene_{scene['id']:03d}_b.jpg"
+            if not img_b.exists():
+                _gen_one(scene, scene["broll_prompt_b"], img_b)
+            scene["broll_image_b"] = img_b.name
+
+    def _split_pending(s: dict) -> bool:
+        return (s.get("layout") == "dividida" and s.get("broll_prompt_b")
+                and not (broll_dir / f"scene_{s['id']:03d}_b.jpg").exists())
+
     todo_imgs = [s for s in ai_scenes
-                 if not (broll_dir / f"scene_{s['id']:03d}.jpg").exists()]
+                 if not (broll_dir / f"scene_{s['id']:03d}.jpg").exists()
+                 or _split_pending(s)]
     if todo_imgs:
         notify(f"🖼 Generando {len(todo_imgs)} imágenes "
                f"({img_workers} en paralelo)…")
@@ -807,6 +897,9 @@ def run(project, cfg) -> None:
                        f"(escena {futures[future]['id']})")
     for s in ai_scenes:
         s["broll_image"] = f"scene_{s['id']:03d}.jpg"
+        if (s.get("layout") == "dividida"
+                and (broll_dir / f"scene_{s['id']:03d}_b.jpg").exists()):
+            s["broll_image_b"] = f"scene_{s['id']:03d}_b.jpg"
     if nsfw_scenes:
         project.add_warning(
             "El generador marcó como sensible el prompt de "

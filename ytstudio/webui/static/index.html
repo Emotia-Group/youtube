@@ -270,6 +270,9 @@ async function showNew(){
         <option value="60">~60% — el video es sobre todo el personaje</option>
       </select></label>
     <p class="muted" style="font-size:12px;margin:2px 0 8px">⚠ El lipsync se cobra por segundo de personaje en pantalla: más presencia = más costo (la estimación previa lo refleja). El director decide en QUÉ momentos aparece con criterio narrativo; luego puedes forzarlo escena a escena en el Editor.</p>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px">
+      <input type="checkbox" id="np-charpip" style="width:auto">
+      <span>🫧 Personaje en BURBUJA: en vez de ocupar la pantalla, el personaje aparece en una burbuja circular sobre el B-roll (estilo reacción de TikTok)</span></label>
     <label class="f"><span>2 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
       <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
     <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
@@ -308,6 +311,7 @@ const UPLOAD_CATS=[
   ['broll','🎬 Tu B-roll (imágenes y videos)','Tus propias imágenes/videos: se usan directamente en el montaje del video','image/*,video/*'],
   ['referencia','🎨 Referencia de estilo','Imagen, video o documento (PDF, docx…) cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*,.pdf,.docx,.doc,.pptx,.txt,.md'],
   ['personaje','🧑 Personaje narrador','La imagen del personaje que narrará EN CÁMARA con lipsync sobre tu voz (foto frontal clara). El director lo intercala con B-roll según el % de presencia que elijas','image/*'],
+  ['reaccion','🎭 Tu video de reacción','Grábate reaccionando al contenido (con o sin pantalla verde: se detecta sola). Te compondremos sobre el video TODO el tiempo: recortado por chroma si hay fondo verde, o en burbuja circular si no','video/*'],
 ];
 function uploadCatsHtml(){
   return `<div class="upcats">${UPLOAD_CATS.map(([k,label,hint,accept])=>`
@@ -353,7 +357,7 @@ async function createProject(){
     const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
       {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k,
        format:$('#np-format')?.value||'long',
-       character_presence:parseInt($('#np-charpres')?.value||'30'),
+       character_presence:parseInt($('#np-charpres')?.value||'30'),character_pip:!!$('#np-charpip')?.checked,
        channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
@@ -618,7 +622,7 @@ async function renderTab(tab,p){
     </div>`;
   }
   else if(tab==='Archivos'){
-    const catLabel={guion:'📄 Guion',voz:'🎙 Voz',broll:'🎬 B-roll propio',referencia:'🎨 Referencia',personaje:'🧑 Personaje'};
+    const catLabel={guion:'📄 Guion',voz:'🎙 Voz',broll:'🎬 B-roll propio',referencia:'🎨 Referencia',personaje:'🧑 Personaje',reaccion:'🎭 Reacción'};
     const cast=(p.characters_roster||[]).map(c=>`
       <div class="scene" style="align-items:center">
         ${(c.files||[]).slice(0,3).map(f=>`<img src="/files/${current}/01_input/${f}" style="width:64px;height:64px;object-fit:cover;border-radius:6px">`).join('')}
