@@ -579,6 +579,59 @@ def _reaction_inputs(scene: dict, project, cfg) -> tuple[list[str], str, str]:
     return [], "", ""
 
 
+def _sticker_setup(scene: dict, dur: float, cfg: dict,
+                   out_dir: Path) -> tuple[list[str], str, str, list[str]]:
+    """Prepara el STICKER de la escena (imitación visual nativa, renderizada
+    con PIL). Devuelve (args de entrada extra, cadena del sticker con [1:v]
+    de marcador, posición del overlay, filtros posteriores — el número vivo
+    del countdown). El sticker entra deslizándose con fundido tras el gancho,
+    se sostiene y se despide antes del corte."""
+    st = scene.get("sticker") or {}
+    if not st.get("type"):
+        return [], "", "", []
+    from ytstudio.utils import stickers as stk
+    w, h = cfg["video"]["width"], cfg["video"]["height"]
+    fps = cfg["video"]["fps"]
+    card_w = int(min(w, h) * 0.56)
+    png = out_dir / f"sticker_{scene['id']:03d}.png"
+    post: list[str] = []
+    t0 = 0.7 if scene.get("id", 1) != 1 else 1.6   # tras el gancho en escena 1
+    t1 = max(t0 + 1.2, dur - 0.45)
+    geom = None
+    if st["type"] == "encuesta":
+        stk.render_poll(st.get("text", ""), st.get("a", ""), st.get("b", ""),
+                        card_w, png)
+    elif st["type"] == "pregunta":
+        stk.render_question(st.get("text", ""), card_w, png)
+    else:  # countdown
+        png, geom = png, None
+        _, geom = stk.render_countdown(st.get("text", ""), card_w, png)
+    # posición: centro-derecha, entre el gancho (arriba) y subtítulos (abajo)
+    x_final = w - card_w - int(w * 0.05)
+    y_final = int(h * 0.36)
+    slide = f"{x_final}+40*max(0,1-(t-{t0:.2f})/0.35)"
+    chain = (f"[1:v]format=rgba,"
+             f"fade=t=in:st={t0:.2f}:d=0.28:alpha=1,"
+             f"fade=t=out:st={t1:.2f}:d=0.3:alpha=1")
+    pos = f"x='{slide}':y={y_final}:enable='between(t,{t0:.2f},{t1 + 0.35:.2f})'"
+    args = ["-loop", "1", "-framerate", str(fps), "-t", f"{dur:.3f}",
+            "-i", str(png)]
+    if st["type"] == "countdown" and geom:
+        # número VIVO: cuenta segundos reales hacia el final del sticker
+        font = find_font(bold=True)
+        if font:
+            end = t1
+            num_x = x_final + card_w // 2
+            num_y = y_final + geom["num_y"] + (geom["num_h"] - geom["size"]) // 2
+            post.append(
+                f"drawtext=fontfile='{filter_path(font)}':"
+                f"text='%{{eif\\:max(1\\,ceil({end:.2f}-t))\\:d}}':"
+                f"fontsize={geom['size']}:fontcolor=white:"
+                f"x={num_x}-text_w/2:y={num_y}:"
+                f"enable='between(t,{t0:.2f},{t1 + 0.3:.2f})'")
+    return args, chain, pos, post
+
+
 def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     """Renderiza la escena SOLO VIDEO (sin pista de audio). El audio del video
     completo es UNA pista continua (voz + música + SFX) que se mezcla al final
@@ -647,6 +700,18 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     for i, dt in enumerate(_overlay_filters(scene, dur, cfg, out.parent), start=1):
         filters.append(f"[{label}]{dt}[t{i}]")
         label = f"t{i}"
+    # STICKER nativo animado (después de la ruptura: los stickers de la app
+    # no se zoomean con el contenido — así parece puesto por la plataforma)
+    s_args, s_chain, s_pos, s_post = _sticker_setup(scene, dur, cfg, out.parent)
+    if s_args:
+        s_idx = len([a for a in inputs if a == "-i"])
+        inputs += s_args
+        filters.append(s_chain.replace("[1:v]", f"[{s_idx}:v]", 1) + "[stk]")
+        filters.append(f"[{label}][stk]overlay={s_pos}[vsk]")
+        label = "vsk"
+        for j, pf in enumerate(s_post):
+            filters.append(f"[{label}]{pf}[vsn{j}]")
+            label = f"vsn{j}"
     # Transición variable por escena (fundido de entrada/salida independientes)
     segs = []
     if fade.get("fin"):
@@ -799,7 +864,7 @@ def _render_signature(scenes, plans, cfg, project) -> str:
             "off": s.get("vo_offset"), "fade": p,
             "layout": s.get("layout"), "imgb": s.get("broll_image_b"),
             "pip": s.get("pip_video"), "sfx": s.get("sfx"),
-            "trans": s.get("transition"),
+            "trans": s.get("transition"), "sticker": s.get("sticker"),
             "src": [stamp(s.get("broll_image")), stamp(s.get("broll_video")),
                     stamp(s.get("broll_image_b")), stamp(s.get("pip_video"))],
         } for s, p in zip(scenes, plans)],

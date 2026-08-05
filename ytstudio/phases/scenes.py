@@ -30,6 +30,13 @@ _CREATIVE_PROPS = {
     # abajo en vertical, izquierda/derecha en horizontal) para comparaciones.
     "layout": {"type": "string", "enum": ["completo", "dividida"]},
     "broll_prompt_b": {"type": "string"},
+    # Sticker de aspecto nativo (formatos cortos): imitación visual animada
+    # de los stickers de IG/TikTok — recurso de retención, no clicable.
+    "sticker_type": {"type": "string",
+                     "enum": ["ninguno", "encuesta", "pregunta", "countdown"]},
+    "sticker_text": {"type": "string"},
+    "sticker_a": {"type": "string"},
+    "sticker_b": {"type": "string"},
 }
 
 SCENES_SCHEMA = {
@@ -431,6 +438,15 @@ FORMATO CORTO DE REDES (este video): reglas ADICIONALES.
   puede llevar overlay (dato/lista/conclusion) — el espectador ve el video
   sin sonido muchas veces; el texto sostiene la historia.
 - Ritmo: transiciones 'corte' casi siempre; pace 'ligado' dominante.
+- STICKER (sticker_type, opcional): COMO MÁXIMO UNO en todo el video, solo
+  si el momento lo pide de verdad:
+  · 'encuesta' cuando la narración plantea una disyuntiva al espectador —
+    sticker_text = la pregunta corta, sticker_a/sticker_b = las 2 opciones
+    (1-3 palabras). · 'pregunta' cuando se le pide opinión abierta
+    (sticker_text = la pregunta; la respuesta va a comentarios).
+  · 'countdown' justo ANTES de una revelación (sticker_text = rótulo de
+    anticipación, ej. "EL RESULTADO EN…").
+  En el resto de escenas sticker_type='ninguno' y textos vacíos.
 """
 
 
@@ -482,6 +498,25 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
         else:
             s["layout"] = "completo"
             s.pop("broll_prompt_b", None)
+
+        # Sticker: imitación visual nativa, SOLO formatos cortos y con texto
+        st = s.pop("sticker_type", None)
+        st_text = (s.pop("sticker_text", "") or "").strip()[:80]
+        st_a = (s.pop("sticker_a", "") or "").strip()[:24]
+        st_b = (s.pop("sticker_b", "") or "").strip()[:24]
+        if short_form and st in ("encuesta", "pregunta", "countdown") and st_text:
+            s["sticker"] = {"type": st, "text": st_text, "a": st_a, "b": st_b}
+        else:
+            s["sticker"] = None
+
+    # Sticker: COMO MÁXIMO UNO por video (si el modelo puso varios, gana el
+    # primero — más de un sticker deja de parecer nativo y cansa).
+    seen_sticker = False
+    for s in scenes:
+        if s.get("sticker"):
+            if seen_sticker:
+                s["sticker"] = None
+            seen_sticker = True
 
     # Formato corto: la escena 1 SIEMPRE abre con gancho visual. Si el modelo
     # no lo puso (o corre el modo preview), se condensa el arranque de la
@@ -869,6 +904,9 @@ def _write_outputs(project, scenes: list[dict]) -> None:
             extras.append(f"respiro {s['pause_after']:.1f}s")
         if s.get("sfx"):
             extras.append(f"sfx {s['sfx']}")
+        if s.get("sticker"):
+            extras.append(f"sticker {s['sticker']['type']}: "
+                          f"«{s['sticker']['text']}»")
         md.append(f"*({', '.join(x for x in extras if x)})*")
         md.append("")
     project.path("scenes", "storyboard.md").write_text("\n".join(md), encoding="utf-8")

@@ -9,6 +9,23 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.37.0 — 2026-08-05
+- 📊 STICKERS DE ASPECTO NATIVO para formatos cortos (imitaciones visuales,
+  como acordamos — un MP4 no puede ser clicable; la interactividad real la
+  añade la app al publicar, y aquí la respuesta se dirige a comentarios):
+  · ENCUESTA: tarjeta blanca con la pregunta y dos opciones en pastilla con
+    los acentos de Instagram — cuando la narración plantea una disyuntiva.
+  · PREGUNTA: tarjeta con campo de respuesta y pista «Responde en
+    comentarios…» — cuando se pide opinión abierta.
+  · CUENTA REGRESIVA: tarjeta oscura con un número que CUENTA DE VERDAD
+    (segundos reales hacia la revelación) — para crear anticipación.
+  El director decide cuál y cuándo (máximo UNO por video: más de un sticker
+  deja de parecer nativo), entra deslizándose con fundido tras el gancho y
+  se despide antes del corte; no lo zoomean las rupturas de patrón (los
+  stickers de la app viven por encima del contenido). Visible en el
+  storyboard para revisarlo en el punto de control. Solo formatos cortos;
+  dibujado con PIL + ffmpeg en local: costo $0.
+
 ## v0.36.0 — 2026-08-05
 - 🎭 VIDEOS DE REACCIÓN (nueva categoría de archivo «Tu video de reacción»):
   grábate reaccionando al contenido y súbelo — el programa te compone SOBRE
