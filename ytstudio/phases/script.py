@@ -42,7 +42,7 @@ def run(project, cfg) -> None:
         project.set("script_words", len(script_md.split()))
         return
 
-    from ytstudio.catalog import is_vertical
+    from ytstudio.catalog import is_vertical, short_template
     vertical = is_vertical(cfg)
     hooks_block = ""
     if vertical:
@@ -54,6 +54,15 @@ def run(project, cfg) -> None:
             brief.get("topic", ""), brief.get("summary", ""),
             concept.get("angle", "")))
         hooks_block = hooks_lib.prompt_block(topic, seed=project.slug)
+    # Plantilla de formato elegida al crear el proyecto (Top 3, historia con
+    # giro, antes/después…): su estructura manda sobre la genérica. Si el
+    # creador trajo SU guion, la plantilla solo ordena, no reescribe.
+    tpl = short_template(project, cfg)
+    if tpl and tpl.get("script_rules"):
+        hooks_block += ("\n" + tpl["script_rules"]
+                        + ("\n(El creador trajo su guion: respeta su "
+                           "contenido y aplícale SOLO la estructura de la "
+                           "plantilla.)" if is_script else "") + "\n")
     if vertical:
         system = (
             f"Eres guionista senior de videos VERTICALES CORTOS (Shorts/Reels/"

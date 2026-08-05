@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES, STYLE_PRESETS,
+from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES, SHORT_TEMPLATES, STYLE_PRESETS,
                               key_status)
 from ytstudio.config import ROOT, load_config
 from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
@@ -301,6 +301,10 @@ def api_create_project(body: dict) -> dict:
             sub = overrides.setdefault(k, {})
             sub.update(v)
     project.set("format", fmt)
+    # Plantilla de formato (solo cortos): Top 3, historia con giro, etc.
+    tpl = body.get("short_template") or "libre"
+    if fmt != "long" and tpl in SHORT_TEMPLATES:
+        project.set("short_template", tpl)
     if overrides:
         (project.dir / "config.yaml").write_text(
             yaml.safe_dump(overrides, allow_unicode=True), encoding="utf-8")
@@ -816,7 +820,10 @@ def api_get_config() -> dict:
         "catalog": CATALOG,
         "style_presets": STYLE_PRESETS,
         "languages": LANGUAGES,
-        "formats": {k: {"label": v["label"]} for k, v in FORMATS.items()},
+        "formats": {k: {"label": v["label"], "short": k != "long"}
+                    for k, v in FORMATS.items()},
+        "short_templates": {k: {"label": v["label"], "hint": v["hint"]}
+                            for k, v in SHORT_TEMPLATES.items()},
         "keys": key_status(),
         "version": get_version(),
         "server_version": SERVER_VERSION,

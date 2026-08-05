@@ -258,10 +258,17 @@ async function showNew(){
     <label class="f"><span>1 · Nombre del proyecto</span>
       <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
     <label class="f"><span>Formato del video</span>
-      <select id="np-format" style="width:auto">
+      <select id="np-format" style="width:auto" onchange="toggleTplSel()">
         ${Object.entries(CAT.formats||{}).map(([k,f])=>`<option value="${k}">${esc(f.label)}</option>`).join('')}
       </select></label>
     <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos verticales (Short/Reel/TikTok) generan 9:16 con guion corto de gancho, escenas rápidas y subtítulos grandes quemados — listos para subir.</p>
+    <div id="np-tpl-wrap" style="display:none">
+      <label class="f"><span>🎬 Plantilla del corto (estructura + visuales + sonido en un clic)</span>
+        <select id="np-template" style="width:auto">
+          ${Object.entries(CAT.short_templates||{}).map(([k,t])=>`<option value="${k}" title="${esc(t.hint||'')}">${esc(t.label)}</option>`).join('')}
+        </select></label>
+      <p class="muted" id="np-tpl-hint" style="font-size:12px;margin:2px 0 8px"></p>
+    </div>
     <label class="f"><span>🧑 Presencia del personaje en pantalla (solo si subes su imagen en «Personaje narrador»)</span>
       <select id="np-charpres" style="width:auto">
         <option value="15">~15% — apariciones puntuales</option>
@@ -356,7 +363,7 @@ async function createProject(){
     }
     const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
       {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k,
-       format:$('#np-format')?.value||'long',
+       format:$('#np-format')?.value||'long',short_template:$('#np-template')?.value||'libre',
        character_presence:parseInt($('#np-charpres')?.value||'30'),character_pip:!!$('#np-charpip')?.checked,
        channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
@@ -423,6 +430,14 @@ async function renderProject(activeTab){
   loadEstimate(current);
 }
 function switchTab(t){window._tab=t;renderProject(t)}
+function toggleTplSel(){
+  const f=$('#np-format')?.value||'long';
+  const wrap=$('#np-tpl-wrap');if(!wrap)return;
+  const short=!!(CAT.formats?.[f]?.short);
+  wrap.style.display=short?'block':'none';
+  const sel=$('#np-template'),hint=$('#np-tpl-hint');
+  if(sel&&hint){const upd=()=>{hint.textContent=CAT.short_templates?.[sel.value]?.hint||''};sel.onchange=upd;upd();}
+}
 
 async function loadEstimate(slug){
   const el=$('#estimate');if(!el)return;

@@ -9,6 +9,27 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.38.0 — 2026-08-05
+- 🎬 PLANTILLAS DE FORMATO COMPLETO para cortos (la cuarta etapa del plan):
+  al crear un Short/Reel/TikTok/Ad eliges la receta del video en UN clic y
+  toda la cadena se alinea — estructura del guion, rótulos, stickers,
+  pantalla dividida, efectos de sonido y arco musical:
+  · 🏆 TOP 3 / RANKING: cuenta regresiva de ítems con el mejor al final,
+    rótulos «TOP 3→1», música que sube hasta el clímax, encuesta al cierre.
+  · 🎭 HISTORIA CON GIRO: in media res, giro al 70% con boom y pausa
+    dramática antes, remate de una línea.
+  · 🔁 ANTES/DESPUÉS: transformación con la comparación clave en PANTALLA
+    DIVIDIDA (mismo encuadre en ambas mitades para que el contraste cante).
+  · ❌✅ MITO VS REALIDAD: el mito como gancho, hechos que lo desmontan,
+    rótulos «MITO»/«REALIDAD».
+  · ⚡ TUTORIAL EN PASOS: resultado prometido + pasos imperativos con
+    rótulos «PASO 1…N» y cierre «guárdalo».
+  · 🤯 DATO IMPACTANTE: la cifra primero, contexto y remate.
+  · ✨ LIBRE (por defecto): el director decide, como hasta ahora.
+  La plantilla guía al guionista (junto con los 970 hooks), al storyboard y
+  al pase de dirección de arte. Si traes TU guion, la plantilla solo lo
+  ordena, no lo reescribe. Los videos largos 16:9 no cambian en nada.
+
 ## v0.37.0 — 2026-08-05
 - 📊 STICKERS DE ASPECTO NATIVO para formatos cortos (imitaciones visuales,
   como acordamos — un MP4 no puede ser clicable; la interactividad real la

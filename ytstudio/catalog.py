@@ -366,6 +366,121 @@ FORMATS: dict = {
 }
 
 
+# ---------------------------------------------------------------------------
+# PLANTILLAS DE FORMATO para cortos (elegibles al crear el proyecto):
+# empaquetan estructura de guion + tratamiento visual + rótulos + sticker +
+# arco musical en una receta de un clic. `script_rules` se inyecta en la fase
+# de guion; `scene_rules` en el storyboard y el pase de dirección de arte.
+# ---------------------------------------------------------------------------
+
+SHORT_TEMPLATES: dict = {
+    "libre": {
+        "label": "✨ Libre — el director decide la estructura",
+        "hint": "Sin plantilla: gancho + desarrollo + cierre según el tema.",
+        "script_rules": "", "scene_rules": "",
+    },
+    "top3": {
+        "label": "🏆 Top 3 / Ranking",
+        "hint": "Cuenta regresiva de 3 ítems, el mejor al final (clímax).",
+        "script_rules": (
+            "PLANTILLA TOP 3/RANKING: el gancho PROMETE el ranking («los 3 "
+            "X que Y»). Luego los ítems en CUENTA REGRESIVA (3 → 2 → 1: el "
+            "mejor SIEMPRE al final, es el clímax), 1-2 frases por ítem, "
+            "concretas y con un porqué. Cierre de una línea que reta a "
+            "comentar cuál elige el espectador."),
+        "scene_rules": (
+            "PLANTILLA TOP 3: cada ítem lleva overlay 'lista' (kicker «TOP "
+            "3»/«TOP 2»/«TOP 1» + el nombre del ítem). La música SUBE ítem a "
+            "ítem hasta el clímax en el TOP 1 (sfx riser antes, boom al "
+            "llegar). Transiciones corte, pace ligado. Sticker 'encuesta' o "
+            "'pregunta' en el cierre («¿cuál eliges?»)."),
+    },
+    "historia_giro": {
+        "label": "🎭 Historia con giro",
+        "hint": "Relato in media res con un giro inesperado al 70%.",
+        "script_rules": (
+            "PLANTILLA HISTORIA CON GIRO: arranca EN MEDIO de la acción (in "
+            "media res, sin presentaciones), desarrolla en 3 actos "
+            "comprimidos y suelta un GIRO inesperado hacia el 70% del guion. "
+            "Remate final de UNA línea que recontextualiza todo. Primera o "
+            "tercera persona, presente."),
+        "scene_rules": (
+            "PLANTILLA HISTORIA CON GIRO: pausa dramática (pause_after "
+            "0.8-1.2) en la escena ANTERIOR al giro; el giro entra con sfx "
+            "'boom' y transición 'corte'; tras el giro un 'fundido'. La "
+            "música BAJA antes del giro y hace clímax después. Sin stickers "
+            "salvo 'pregunta' final si pide opinión."),
+    },
+    "antes_despues": {
+        "label": "🔁 Antes / Después",
+        "hint": "Transformación con comparación en pantalla dividida.",
+        "script_rules": (
+            "PLANTILLA ANTES/DESPUÉS: estado inicial con el problema en "
+            "carne viva (gancho), el proceso o decisión en 2-3 frases, y el "
+            "DESPUÉS con el resultado medible. Compara explícitamente el "
+            "antes y el después en una frase espejo («antes X, hoy Y»)."),
+        "scene_rules": (
+            "PLANTILLA ANTES/DESPUÉS: la escena de la comparación clave usa "
+            "layout 'dividida' (broll_prompt = el ANTES, broll_prompt_b = el "
+            "DESPUÉS, mismo encuadre y estilo para que el contraste cante). "
+            "Overlays 'dato' para las cifras del cambio. Sticker 'encuesta' "
+            "al cierre («¿lo probarías?»). Música de menos a más."),
+    },
+    "mito_realidad": {
+        "label": "❌✅ Mito vs Realidad",
+        "hint": "Enuncia el mito como cierto y desmóntalo con hechos.",
+        "script_rules": (
+            "PLANTILLA MITO VS REALIDAD: el gancho enuncia el MITO como si "
+            "fuera verdad (que duela creerlo). Luego lo desmonta con 2-3 "
+            "hechos verificables, del más débil al más demoledor. Cierre: la "
+            "REALIDAD en una sola frase memorable."),
+        "scene_rules": (
+            "PLANTILLA MITO VS REALIDAD: overlay 'dato' con kicker «MITO» en "
+            "el gancho y kicker «REALIDAD» en el remate. El primer hecho que "
+            "desmonta entra con sfx 'boom'. Pace ligado; transiciones corte. "
+            "Sticker 'pregunta' opcional («¿te lo creías?»)."),
+    },
+    "pasos": {
+        "label": "⚡ Tutorial en pasos",
+        "hint": "Resultado prometido + 3-5 pasos imperativos accionables.",
+        "script_rules": (
+            "PLANTILLA TUTORIAL EN PASOS: el gancho promete el RESULTADO "
+            "(«así se logra X en Y»). Después 3-5 PASOS imperativos, uno por "
+            "escena, ultra concretos (verbo + acción + detalle accionable). "
+            "Cierre de una línea: «guárdalo para cuando lo necesites»."),
+        "scene_rules": (
+            "PLANTILLA TUTORIAL: cada paso lleva overlay 'lista' (kicker "
+            "«PASO 1»…«PASO N» + el verbo del paso). Ritmo constante: pace "
+            "ligado, cortes secos, música media sin clímax exagerado. "
+            "Sticker 'countdown' opcional antes del resultado final."),
+    },
+    "dato_impactante": {
+        "label": "🤯 Dato impactante",
+        "hint": "Una cifra que rompe la cabeza, contexto y por qué importa.",
+        "script_rules": (
+            "PLANTILLA DATO IMPACTANTE: la CIFRA o dato chocante es la "
+            "PRIMERA frase (sin preámbulo). Luego el contexto que lo hace "
+            "creíble, por qué le importa al espectador, y un remate que "
+            "conecta el dato con su vida."),
+        "scene_rules": (
+            "PLANTILLA DATO IMPACTANTE: overlay 'dato' GRANDE con la cifra "
+            "en la escena 1 (además del hook). Música con arco corto: golpe "
+            "inicial (sfx boom en la escena 2), desarrollo y cierre seco. "
+            "Sticker 'pregunta' al final («¿lo sabías?»)."),
+    },
+}
+
+
+def short_template(project, cfg: dict) -> dict | None:
+    """Plantilla de formato del proyecto, o None (formato largo, plantilla
+    'libre' o proyectos sin el campo)."""
+    if not is_short_form(cfg):
+        return None
+    tid = project.get("short_template") if hasattr(project, "get") else None
+    t = SHORT_TEMPLATES.get(tid or "")
+    return t if t and tid != "libre" else None
+
+
 def is_vertical(cfg: dict) -> bool:
     v = cfg.get("video", {})
     return int(v.get("height", 1080)) > int(v.get("width", 1920))

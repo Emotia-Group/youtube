@@ -215,7 +215,8 @@ def _board_lines(scenes: list[dict]) -> str:
 
 
 def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
-                        lang: str, short_form: bool = False) -> None:
+                        lang: str, short_form: bool = False,
+                        template_rules: str = "") -> None:
     """Segundo pase con el storyboard COMPLETO. Nunca rompe la fase: si el
     modelo falla, se conservan las decisiones del primer pase con un aviso."""
     if getattr(llm, "is_mock", False) or not scenes:
@@ -271,7 +272,8 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "4) REVISIÓN GLOBAL de rótulos, transiciones, sfx, ritmo y música "
         "COMO CONJUNTO (devuelve los campos ajustados en cada escena):\n"
         + CREATIVE_RULES
-        + (SHORT_FORM_RULES if short_form else "") +
+        + (SHORT_FORM_RULES if short_form else "")
+        + template_rules +
         "- Verifica el conjunto: UN clímax musical y arco gradual; rótulos "
         "como sistema coherente (mismo estilo de kicker, sin repetir datos); "
         "fundidos solo en fronteras de sección o momentos dramáticos; sfx "
@@ -651,7 +653,8 @@ def _scene_from_group(group: list[dict], idx: int) -> dict:
 
 
 def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
-                     project=None, short_form: bool = False) -> None:
+                     project=None, short_form: bool = False,
+                     template_rules: str = "") -> None:
     """Rellena broll_prompt / on_screen_text / section de escenas ya fijadas por
     el audio, para que el B-roll sea coherente con lo que se dice en cada tramo.
     Modifica `scenes` en el sitio."""
@@ -701,6 +704,7 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
         "- section: título temático corto del tramo (para los capítulos).\n\n"
         + CREATIVE_RULES
         + (SHORT_FORM_RULES if short_form else "")
+        + template_rules
         + cast_rules
         + f"\nNARRACIÓN POR ESCENA:\n{narr}")
     result = llm.complete_json(system, prompt, schema=schema,
@@ -732,18 +736,23 @@ def run(project, cfg) -> None:
 
     target = scene_seconds(cfg, project)
 
-    from ytstudio.catalog import is_short_form
+    from ytstudio.catalog import is_short_form, short_template
     short_form = is_short_form(cfg)
+    tpl = short_template(project, cfg)
+    tpl_rules = ("\n" + tpl["scene_rules"] + "\n") if tpl and \
+        tpl.get("scene_rules") else ""
 
     # MODO NARRACIÓN PROPIA: escenas alineadas al audio real del usuario.
     narration = project.get("narration")
     if narration and narration.get("segments"):
         scenes = _group_narration(narration["segments"], target)
         _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
-                         project=project, short_form=short_form)
+                         project=project, short_form=short_form,
+                         template_rules=tpl_rules)
         _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
         _art_direction_pass(llm, project, scenes, concept, lang,
-                            short_form=short_form)
+                            short_form=short_form,
+                            template_rules=tpl_rules)
         _normalize_creative(scenes, short_form=short_form)
         _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
@@ -791,6 +800,7 @@ def run(project, cfg) -> None:
         "(evita repetir la misma dos veces seguidas).\n\n"
         + CREATIVE_RULES
         + (SHORT_FORM_RULES if short_form else "")
+        + tpl_rules
         + f"\nGUION:\n<<<\n{script_md}\n>>>"
     )
 
@@ -807,7 +817,8 @@ def run(project, cfg) -> None:
     _normalize_cast(scenes, cast_names)
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
     _art_direction_pass(llm, project, scenes, concept, lang,
-                        short_form=short_form)
+                        short_form=short_form,
+                        template_rules=tpl_rules)
     _normalize_creative(scenes, short_form=short_form)
     _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)
