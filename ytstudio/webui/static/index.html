@@ -1153,9 +1153,25 @@ function styleForm(s){
       <option value="" ${!s?.transition?'selected':''}>auto (varían según la historia)</option>
       <option value="fade" ${s?.transition==='fade'?'selected':''}>fade (todas con fundido)</option>
       <option value="none" ${s?.transition==='none'?'selected':''}>none (todas corte seco)</option></select></label>
+    <label class="f" style="grid-column:1/-1"><span>🔤 Branding de los RÓTULOS en pantalla (vacío = look por defecto del programa)</span>
+      <div class="row" style="gap:6px;margin:2px 0 6px">${Object.entries(CAT.overlay_branding_presets||{}).map(([k,p])=>`<button type="button" class="btn sec small" onclick="applyBrandingPreset('${id}','${k}')">${esc(p.label)}</button>`).join('')}</div>
+    </label>
+    <label class="f"><span>Tipografía</span><select data-f="overlay_font_family">
+      <option value="" ${!s?.overlay_font_family?'selected':''}>Por defecto</option>
+      ${Object.entries(CAT.overlay_font_families||{}).map(([k,f])=>`<option value="${k}" ${s?.overlay_font_family===k?'selected':''} title="${esc(f.hint||'')}">${esc(f.label)}</option>`).join('')}
+    </select></label>
+    <label class="f"><span>Color de acento (hex, sin #)</span><input data-f="overlay_accent" value="${esc(s?.overlay_accent||'')}" placeholder="E8C46B" maxlength="6" style="text-transform:uppercase"></label>
+    <label class="f"><span>Color del texto (hex, sin #)</span><input data-f="overlay_text_color" value="${esc(s?.overlay_text_color||'')}" placeholder="FFFFFF" maxlength="6" style="text-transform:uppercase"></label>
     <label class="f" style="grid-column:1/-1"><span>Fórmula narrativa (gancho, estructura, reglas del canal — la IA la replica adaptada a cada tema)</span><textarea data-f="formula" rows="3">${v('formula')}</textarea></label>
     <div><button class="btn small" onclick="submitStyleForm('${id}')">${s?'💾 Guardar cambios':'＋ Crear estilo'}</button></div>
   </div>`;
+}
+function applyBrandingPreset(formId,key){
+  const p=(CAT.overlay_branding_presets||{})[key];if(!p)return;
+  const root=document.getElementById(formId);if(!root)return;
+  root.querySelector('[data-f=overlay_font_family]').value=p.overlay_font_family||'';
+  root.querySelector('[data-f=overlay_accent]').value=p.overlay_accent||'';
+  root.querySelector('[data-f=overlay_text_color]').value=p.overlay_text_color||'';
 }
 async function submitStyleForm(id){
   const root=document.getElementById(id);

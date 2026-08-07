@@ -194,6 +194,24 @@ def _drawtext(font: str, textfile: Path, size: int, color: str,
             f"x='{x_expr}':y='{y_expr}':alpha='{alpha}'{extra}")
 
 
+def _brand_font(cfg: dict, bold: bool = True,
+                serif_default: bool = False) -> str | None:
+    """Fuente de los RÓTULOS (no de los stickers, que imitan apps nativas y
+    no llevan branding): si el estilo del canal fija una familia (v0.41.0),
+    manda ella para TODO rótulo por igual; si no, se preserva el criterio
+    editorial de siempre (serif solo para 'personaje', sans en el resto)."""
+    family = cfg["video"].get("overlay_font_family")
+    if family:
+        return find_font(bold=bold, family=family)
+    return find_font(bold=bold, serif=serif_default)
+
+
+def _brand_text_color(cfg: dict) -> str:
+    """Color del cuerpo del rótulo (blanco por defecto, o el del branding
+    del canal/estilo si lo fija)."""
+    return "0x" + str(cfg["video"].get("overlay_text_color", "FFFFFF")).lstrip("#")
+
+
 def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[str]:
     """Filtros drawtext del rótulo de la escena (o [] si no lleva). El rótulo
     entra con fundido y una deriva sutil, se sostiene unos segundos y se va:
@@ -209,7 +227,7 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     accent = "0x" + str(cfg["video"].get("overlay_accent", "E8C46B")).lstrip("#")
     lay = _overlay_layout(overlay["type"], w, h)
 
-    sans = find_font(bold=True)
+    sans = _brand_font(cfg, bold=True)
     if not sans:
         return []  # sin fuentes localizables se omite el rótulo, no se falla
 
@@ -220,7 +238,7 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     if overlay["type"] == "hook":
         return _hook_filters(scene, overlay, dur, cfg, out_dir, accent)
 
-    main_font = find_font(bold=True, serif=True) if lay["serif"] else sans
+    main_font = _brand_font(cfg, bold=True, serif_default=lay["serif"])
 
     text = overlay["text"].strip()
     kicker = (overlay.get("kicker") or "").strip()
@@ -274,7 +292,8 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     tfile = out_dir / f"ostext_{scene['id']:03d}_main.txt"
     tfile.write_text(text[:120], encoding="utf-8")
     mx, my = pos(lay["x"], y_main, center)
-    filters.append(_drawtext(main_font, tfile, main_size, "white", mx, my, alpha))
+    filters.append(_drawtext(main_font, tfile, main_size, _brand_text_color(cfg),
+                             mx, my, alpha))
     return filters
 
 
@@ -304,9 +323,10 @@ def _hook_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
     cuando la narración avanza. La línea con la palabra clave va en el color
     de acento."""
     w, h = cfg["video"]["width"], cfg["video"]["height"]
-    bold = find_font(bold=True)
+    bold = _brand_font(cfg, bold=True)
     if not bold:
         return []
+    text_color = _brand_text_color(cfg)
     text = overlay["text"].strip()
     lines = _wrap_lines(text, max_chars=14)
     emphasis = _norm_txt(overlay.get("emphasis") or "")
@@ -334,7 +354,7 @@ def _hook_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
                  f"max(0,1-(t-{t1:.2f})/{fo:.2f}))))")
         # golpe de escala: la línea cae 14px y clava en su sitio al entrar
         y_expr = (f"{y0 + i * lh}-14*max(0,1-(t-{ti:.2f})/0.22)")
-        color = accent if (emphasis and emphasis in _norm_txt(line)) else "white"
+        color = accent if (emphasis and emphasis in _norm_txt(line)) else text_color
         filters.append(_drawtext(bold, lfile, size, color,
                                  "(w-text_w)/2", y_expr, alpha,
                                  borderw=4, bordercolor="black@0.85"))
@@ -347,10 +367,11 @@ def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
     mayúsculas a la izquierda, mezcla de pesos (la línea con la palabra clave
     va en negrita), entrada escalonada línea a línea y salida conjunta."""
     w, h = cfg["video"]["width"], cfg["video"]["height"]
-    regular = find_font(bold=False) or find_font(bold=True)
-    bold = find_font(bold=True)
+    regular = _brand_font(cfg, bold=False) or _brand_font(cfg, bold=True)
+    bold = _brand_font(cfg, bold=True)
     if not regular or not bold:
         return []
+    text_color = _brand_text_color(cfg)
 
     text = overlay["text"].strip().upper()
     lines = _wrap_lines(text)
@@ -402,7 +423,7 @@ def _statement_filters(scene: dict, overlay: dict, dur: float, cfg: dict,
         x_expr = f"{x0}-30*max(0,1-(t-{ti:.2f})/0.9)"
         is_bold = emphasis and emphasis in _norm_txt(line)
         filters.append(_drawtext(bold if is_bold else regular, lfile, size,
-                                 "white", x_expr, str(y0 + i * lh), alpha))
+                                 text_color, x_expr, str(y0 + i * lh), alpha))
     return filters
 
 
@@ -888,6 +909,18 @@ def run(project, cfg) -> None:
         style_transition = (load_style(project.get("style_id")) or {}).get(
             "transition")
     plans = _plan_transitions(scenes, cfg, style_transition)
+
+    # BRANDING DE RÓTULOS del canal/estilo (v0.41.0): familia tipográfica y
+    # colores. Se resuelve UNA vez aquí y se SUPERPONE (solo lo que el estilo
+    # fija de verdad) en una copia local de cfg — el resto del render
+    # (overlay/hook/statement) sigue leyendo cfg["video"] como siempre. Sin
+    # estilo, o con un estilo sin branding propio, cfg queda intacto: mismo
+    # comportamiento que antes de v0.41.0 (incluida tu propia personalización
+    # global de overlay_accent, que un estilo sin colores propios no pisa).
+    import copy as _copy
+    from ytstudio.library import branding_overrides_for_project
+    cfg = _copy.deepcopy(cfg)
+    cfg.setdefault("video", {}).update(branding_overrides_for_project(project))
 
     # Corrección del LAZO DE SINCRONÍA (medida por la fase de subtítulos
     # sobre la pista de voz real): los rótulos se corren lo mismo que los

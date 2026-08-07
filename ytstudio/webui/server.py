@@ -23,8 +23,9 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES, SHORT_TEMPLATES, STYLE_PRESETS,
-                              key_status)
+from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES,
+                              OVERLAY_BRANDING_PRESETS, OVERLAY_FONT_FAMILIES,
+                              SHORT_TEMPLATES, STYLE_PRESETS, key_status)
 from ytstudio.config import ROOT, load_config
 from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
 from ytstudio.project import (DIRS, PROJECTS_DIR, Project, read_json_tolerant,
@@ -835,6 +836,8 @@ def api_get_config() -> dict:
                     for k, v in FORMATS.items()},
         "short_templates": {k: {"label": v["label"], "hint": v["hint"]}
                             for k, v in SHORT_TEMPLATES.items()},
+        "overlay_font_families": OVERLAY_FONT_FAMILIES,
+        "overlay_branding_presets": OVERLAY_BRANDING_PRESETS,
         "keys": key_status(),
         "version": get_version(),
         "server_version": SERVER_VERSION,

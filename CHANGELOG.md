@@ -9,6 +9,35 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.41.0 — 2026-08-06
+- 🎯 FIDELIDAD FACTUAL EN LOS PROMPTS DE B-ROLL (tu caso real del
+  «Chupacabras»): detecté exactamente el problema en tus dos escenas —
+  scene_002 mostraba animales VIVOS cuando la narración decía «hallados sin
+  vida», y scene_003 tenía las heridas correctas pero en un cuerpo HUMANO
+  (la narración hablaba de animales) y en el PECHO (la narración decía
+  CUELLO). La instrucción anterior («que la imagen corresponda a lo que se
+  dice») era demasiado genérica. Ahora hay una regla explícita — FIDELIDAD
+  FACTUAL AL GUION — en las tres rutas que generan o reescriben tus
+  broll_prompt (guion nuevo, narración propia, y el pase de dirección de
+  arte que tiene la última palabra): el ESTADO (con/sin vida) debe quedar
+  explícito en inglés ("dead", "lifeless", "carcass"), la ESPECIE del sujeto
+  es obligatoria en cada mención de un cuerpo o herida cuando es un animal
+  (para que el generador no dibuje anatomía humana por defecto), y la
+  UBICACIÓN exacta que da la narración (cuello, pecho…) va tal cual, nunca
+  una zona genérica. Ante la duda, manda la fidelidad sobre lo "artístico".
+- 🎨 BRANDING DE RÓTULOS por canal/estilo (tu segundo pedido): cada estilo
+  guardado en 📺 Canales y estilos puede fijar ahora su propia tipografía y
+  colores de rótulo — 4 familias (Moderna/sans, Editorial/serif,
+  Impacto/display, Mono/datos) más color de acento y de texto libres, con 4
+  presets de un clic (Documental clásico, Impacto viral, Tech/datos,
+  Minimalista) para no tener que ajustar hex a mano. Se aplica a TODOS los
+  rótulos — dato, lista, conclusión y el gancho de apertura de los cortos.
+  Sin estilo, o con un estilo que no personalice esto, el video sale
+  IDÉNTICO a como salía antes (incluida tu propia personalización global de
+  color, que un estilo sin colores propios nunca pisa). Verificado con
+  render ffmpeg real: el color medido por píxeles cambia con el branding y
+  vuelve al de siempre sin él.
+
 ## v0.40.0 — 2026-08-05
 - ✂ CORRECTOR DE TROPIEZOS EN TU NARRACIÓN (lo que pediste, con tu caso
   real): hasta ahora tu grabación era verdad absoluta — si arrancabas mal y

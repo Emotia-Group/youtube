@@ -481,6 +481,50 @@ def short_template(project, cfg: dict) -> dict | None:
     return t if t and tid != "libre" else None
 
 
+# ---------------------------------------------------------------------------
+# BRANDING DE RÓTULOS por canal/estilo (v0.41.0): tipografía y color de los
+# rótulos en pantalla, configurables por estilo en vez de un único look
+# global. Sin estilo, o con un estilo que no fije estos campos, el resultado
+# es IDÉNTICO al de antes (sans + dorado E8C46B + texto blanco).
+# ---------------------------------------------------------------------------
+
+OVERLAY_FONT_FAMILIES: dict = {
+    "moderna": {"label": "Moderna (sans neutra)",
+               "hint": "Arial/Segoe/Liberation Sans — el look por defecto, "
+                       "limpio y versátil para cualquier tema."},
+    "editorial": {"label": "Editorial (serif)",
+                 "hint": "Georgia/Times — aire de prensa/documental "
+                         "histórico, elegante y con autoridad."},
+    "impacto": {"label": "Impacto (display)",
+               "hint": "Impact/Arial Black — títulos gruesos y directos, "
+                       "estilo noticiero o contenido viral."},
+    "mono": {"label": "Mono (datos)",
+            "hint": "Monoespaciada — look técnico/de datos, cifras y "
+                    "hechos con precisión de terminal."},
+}
+
+# Combos de un clic (familia + colores) — el creador puede partir de uno y
+# ajustar accent/texto a mano después.
+OVERLAY_BRANDING_PRESETS: dict = {
+    "documental_clasico": {"label": "🎞 Documental clásico",
+                           "overlay_font_family": "editorial",
+                           "overlay_accent": "E8C46B",
+                           "overlay_text_color": "FFFFFF"},
+    "impacto_viral": {"label": "⚡ Impacto viral",
+                      "overlay_font_family": "impacto",
+                      "overlay_accent": "FF3B30",
+                      "overlay_text_color": "FFFFFF"},
+    "tech_datos": {"label": "🖥 Tech / datos",
+                   "overlay_font_family": "mono",
+                   "overlay_accent": "39FF14",
+                   "overlay_text_color": "E6E6E6"},
+    "minimalista": {"label": "◻ Minimalista",
+                    "overlay_font_family": "moderna",
+                    "overlay_accent": "FFFFFF",
+                    "overlay_text_color": "FFFFFF"},
+}
+
+
 def is_vertical(cfg: dict) -> bool:
     v = cfg.get("video", {})
     return int(v.get("height", 1080)) > int(v.get("width", 1920))

@@ -57,6 +57,52 @@ _SERIF_CANDIDATES = {
     ],
 }
 
+# FAMILIAS DE RÓTULO para el branding por canal/estilo (v0.41.0): cada canal
+# puede elegir el "look" tipográfico de sus rótulos en vez de la única sans
+# por defecto. Cada familia es (negrita, regular); si ninguna candidata
+# existe en el sistema, se cae a la familia 'moderna' (comportamiento
+# idéntico al de antes de v0.41.0 para estilos sin branding configurado).
+_DISPLAY_CANDIDATES = {
+    "Windows": [
+        (r"C:\Windows\Fonts\impact.ttf", r"C:\Windows\Fonts\impact.ttf"),
+        (r"C:\Windows\Fonts\ariblk.ttf", r"C:\Windows\Fonts\ariblk.ttf"),
+    ],
+    "Darwin": [
+        ("/System/Library/Fonts/Supplemental/Impact.ttf",
+         "/System/Library/Fonts/Supplemental/Impact.ttf"),
+        ("/System/Library/Fonts/Supplemental/Arial Black.ttf",
+         "/System/Library/Fonts/Supplemental/Arial Black.ttf"),
+    ],
+    "Linux": [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ],
+}
+_MONO_CANDIDATES = {
+    "Windows": [
+        (r"C:\Windows\Fonts\consolab.ttf", r"C:\Windows\Fonts\consola.ttf"),
+        (r"C:\Windows\Fonts\couri.ttf", r"C:\Windows\Fonts\cour.ttf"),
+    ],
+    "Darwin": [
+        ("/System/Library/Fonts/Supplemental/Courier New Bold.ttf",
+         "/System/Library/Fonts/Supplemental/Courier New.ttf"),
+        ("/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Menlo.ttc"),
+    ],
+    "Linux": [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
+        ("/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"),
+    ],
+}
+
+FONT_FAMILIES = {
+    "moderna": _FONT_CANDIDATES,     # sans neutra — comportamiento por defecto
+    "editorial": None,               # serif — resuelto con _SERIF_CANDIDATES
+    "impacto": _DISPLAY_CANDIDATES,  # display/condensada — rótulos punchy
+    "mono": _MONO_CANDIDATES,        # monoespaciada — look "datos/técnico"
+}
+
 # Ubicaciones típicas de ffmpeg en Windows cuando no está en el PATH
 _WIN_FFMPEG_DIRS = [
     r"C:\ffmpeg\bin",
@@ -65,29 +111,42 @@ _WIN_FFMPEG_DIRS = [
 ]
 
 
-def find_font(bold: bool = True, serif: bool = False) -> str | None:
-    """Ruta de una fuente del sistema (negrita o regular; serif opcional para
-    rótulos cinematográficos), o None."""
-    if serif:
-        for path in _SERIF_CANDIDATES.get(platform.system(), []):
-            if Path(path).exists():
-                return path
-        for paths in _SERIF_CANDIDATES.values():
-            for path in paths:
-                if Path(path).exists():
-                    return path
-        # sin serif en el sistema → sans negrita
-    for bold_path, regular_path in _FONT_CANDIDATES.get(platform.system(), []):
+def _search_pairs(table: dict, bold: bool) -> str | None:
+    for bold_path, regular_path in table.get(platform.system(), []):
         path = bold_path if bold else regular_path
         if Path(path).exists():
             return path
-    # Último recurso: cualquier candidata de cualquier sistema
-    for pairs in _FONT_CANDIDATES.values():
+    for pairs in table.values():
         for bold_path, regular_path in pairs:
             path = bold_path if bold else regular_path
             if Path(path).exists():
                 return path
     return None
+
+
+def find_font(bold: bool = True, serif: bool = False,
+             family: str | None = None) -> str | None:
+    """Ruta de una fuente del sistema, o None.
+
+    `family` (v0.41.0, branding por canal/estilo): 'moderna' (sans, por
+    defecto) · 'editorial' (serif) · 'impacto' (display/condensada) ·
+    'mono' (monoespaciada). Si la familia pedida no tiene ninguna candidata
+    instalada en este sistema, cae a 'moderna' — nunca a None solo por
+    faltar una familia exótica. `serif=True` sigue funcionando igual que
+    antes (equivale a family='editorial') para no romper llamadas previas."""
+    fam = family or ("editorial" if serif else "moderna")
+    if fam == "editorial":
+        found = _search_pairs({k: [(p, p) for p in v]
+                               for k, v in _SERIF_CANDIDATES.items()}, True)
+        if found:
+            return found
+    elif fam in FONT_FAMILIES and FONT_FAMILIES[fam]:
+        found = _search_pairs(FONT_FAMILIES[fam], bold)
+        if found:
+            return found
+    # sin la familia pedida en este sistema → sans neutra (comportamiento
+    # de siempre), y como último recurso cualquier candidata de cualquiera.
+    return _search_pairs(_FONT_CANDIDATES, bold)
 
 
 def filter_path(p: Path | str) -> str:

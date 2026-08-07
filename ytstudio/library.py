@@ -28,7 +28,17 @@ STYLES_DIR = DATA_DIR / "styles"
 # Campos editables de un estilo (creación desde cero y edición)
 STYLE_FIELDS = ("name", "channel_id", "visual_description", "prompt_prefix",
                 "palette", "tone", "music_mood", "music_description",
-                "scene_seconds", "transition", "formula")
+                "scene_seconds", "transition", "formula",
+                # Branding de rótulos (v0.41.0) — opcionales: None/"" = usa
+                # el look por defecto del programa (sans, dorado, blanco).
+                "overlay_font_family", "overlay_accent", "overlay_text_color")
+
+_HEX_RE = re.compile(r"^[0-9a-fA-F]{6}$")
+
+
+def _clean_hex(value) -> str | None:
+    v = (str(value or "")).strip().lstrip("#").upper()
+    return v if _HEX_RE.match(v) else None
 
 
 def _new_id(prefix: str) -> str:
@@ -157,6 +167,10 @@ def create_style(fields: dict) -> dict:
             if fields.get("scene_seconds") else None,
         "transition": fields.get("transition") or None,
         "formula": (fields.get("formula") or "").strip(),
+        "overlay_font_family": (fields.get("overlay_font_family") or "").strip()
+            or None,
+        "overlay_accent": _clean_hex(fields.get("overlay_accent")),
+        "overlay_text_color": _clean_hex(fields.get("overlay_text_color")),
         "frames": [],
     }
     _write_style(style)
@@ -180,10 +194,59 @@ def update_style(style_id: str, fields: dict) -> dict:
                 style[key] = value.strip()
         elif key in ("channel_id", "transition"):
             style[key] = value or None
+        elif key in ("overlay_accent", "overlay_text_color"):
+            style[key] = _clean_hex(value)
+        elif key == "overlay_font_family":
+            style[key] = (value or "").strip() or None
         else:
             style[key] = (value or "").strip()
     _write_style(style)
     return style
+
+
+# Look por defecto cuando el estilo no fija branding (idéntico al de antes
+# de v0.41.0: sans neutra, acento dorado, texto blanco).
+DEFAULT_OVERLAY_ACCENT = "E8C46B"
+DEFAULT_OVERLAY_TEXT = "FFFFFF"
+DEFAULT_OVERLAY_FAMILY = "moderna"
+
+
+def style_branding(style: dict | None) -> dict:
+    """Branding de rótulos resuelto (familia + colores), con los valores por
+    defecto del programa donde el estilo no fije los suyos."""
+    style = style or {}
+    from ytstudio.catalog import OVERLAY_FONT_FAMILIES
+    fam = style.get("overlay_font_family")
+    if fam not in OVERLAY_FONT_FAMILIES:
+        fam = DEFAULT_OVERLAY_FAMILY
+    return {
+        "overlay_font_family": fam,
+        "overlay_accent": style.get("overlay_accent") or DEFAULT_OVERLAY_ACCENT,
+        "overlay_text_color": style.get("overlay_text_color")
+            or DEFAULT_OVERLAY_TEXT,
+    }
+
+
+def branding_overrides_for_project(project) -> dict:
+    """SOLO las claves de branding que el estilo del proyecto fija de verdad
+    (dict vacío si no hay estilo, o el estilo no personaliza nada). A
+    propósito NO rellena con los defaults del programa: eso permitiría que
+    un estilo sin branding propio SOBRESCRIBIERA silenciosamente un
+    overlay_accent que el creador ya hubiera personalizado en su
+    configuración global — el estilo debe superponerse, nunca inventar."""
+    style_id = project.get("style_id") if hasattr(project, "get") else None
+    style = load_style(style_id) if style_id else None
+    if not style:
+        return {}
+    from ytstudio.catalog import OVERLAY_FONT_FAMILIES
+    out: dict = {}
+    if style.get("overlay_font_family") in OVERLAY_FONT_FAMILIES:
+        out["overlay_font_family"] = style["overlay_font_family"]
+    if style.get("overlay_accent"):
+        out["overlay_accent"] = style["overlay_accent"]
+    if style.get("overlay_text_color"):
+        out["overlay_text_color"] = style["overlay_text_color"]
+    return out
 
 
 def save_style_from_project(project, name: str,
@@ -228,6 +291,8 @@ def save_style_from_project(project, name: str,
         "scene_seconds": scene_seconds,
         "transition": None,
         "formula": "\n".join(formula_parts)[:3000],
+        "overlay_font_family": None, "overlay_accent": None,
+        "overlay_text_color": None,
         "frames": [],
     }
     # Copiar unos fotogramas de referencia (recuerdo visual del estilo)

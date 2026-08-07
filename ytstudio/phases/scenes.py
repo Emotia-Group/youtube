@@ -125,6 +125,24 @@ A vs B): entonces broll_prompt_b describe el SEGUNDO visual (mismo estilo) y
 el montaje muestra ambos a la vez. Si layout='completo', broll_prompt_b va
 vacío. Máximo 1-2 escenas divididas por video.
 
+FIDELIDAD FACTUAL AL GUION (más importante que el estilo — un prompt correcto
+y sobrio es mejor que uno bonito que CONTRADICE lo narrado): antes de
+escribir cada broll_prompt, extrae los HECHOS CONCRETOS que la narración de
+ESA escena afirma y codifícalos de forma literal e inequívoca:
+- ESTADO: si la narración dice que algo/alguien está muerto, sin vida,
+  hallado sin vida, inerte, etc., el prompt debe decirlo EXPLÍCITAMENTE
+  ("dead", "lifeless body", "carcass", "motionless") — nunca un sujeto en
+  postura que pueda leerse como dormido o vivo en reposo.
+- IDENTIDAD DEL SUJETO: si la narración habla de un ANIMAL, nombra la
+  especie en CADA mención del cuerpo o una herida (ej. "dead goat", "cow
+  carcass") — nunca dejes "body"/"wound" ambiguo: sin especie explícita el
+  generador de imágenes tiende a dibujar anatomía HUMANA por defecto.
+- UBICACIÓN EXACTA: si la narración da una ubicación concreta de una marca,
+  herida o detalle (cuello, pecho, espalda…), esa ubicación exacta va en el
+  prompt tal cual — nunca una zona genérica del cuerpo.
+- Si dudas entre ser más literal o más "artístico", elige literal: la
+  fidelidad a lo narrado manda sobre la elegancia visual.
+
 TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 - 'corte': corte seco, sin transición (por defecto). Da ritmo y es lo más
   común en documentales; úsalo en la mayoría de escenas, sobre todo en
@@ -246,6 +264,11 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "2) PROMPTS (broll_prompt de CADA escena, EN INGLÉS, empezando "
         f"SIEMPRE con el prefijo de estilo \"{prefix}\") — reescríbelos "
         "aplicando la biblia:\n"
+        "- FIDELIDAD FACTUAL PRIMERO (ver regla FIDELIDAD FACTUAL AL GUION "
+        "más abajo): antes de embellecer, verifica que el prompt no "
+        "contradiga ningún hecho concreto de la narración de esa escena "
+        "(estado con/sin vida, especie del sujeto, ubicación exacta de "
+        "heridas/marcas). Es MÁS IMPORTANTE que la coherencia visual.\n"
         "- COHERENCIA TOTAL entre escenas: misma época, paleta, luz y acabado "
         "en todas; los personajes, lugares y objetos que se repiten se "
         "describen IGUAL en cada aparición (mismo vestuario, mismos rasgos, "
