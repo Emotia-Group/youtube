@@ -226,6 +226,121 @@ def _fix_narration(project, cfg, llm, clean, segments, input_dir):
         return clean, segments
 
 
+POLISH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "correcciones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "string"},
+                    "corregido": {"type": "string"},
+                    "seguridad": {"type": "string",
+                                  "enum": ["alta", "media", "baja"]},
+                },
+                "required": ["original", "corregido", "seguridad"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["correcciones"],
+    "additionalProperties": False,
+}
+
+
+def _apply_transcript_fix(segments: list[dict], original: str,
+                          corrected: str) -> int:
+    """Sustituye en los segmentos (texto y palabras cronometradas) cada
+    aparición del fragmento mal transcrito. Las palabras reemplazadas se
+    funden en UNA sola entrada que conserva el tiempo del tramo completo —
+    la sincronía de subtítulos no se mueve. Devuelve cuántas aplicó."""
+    import re
+    from ytstudio.narration_fix import norm
+    toks = [norm(t) for t in original.split()]
+    if not toks or not all(toks):
+        return 0
+    n = 0
+    for seg in segments:
+        words = seg.get("words") or []
+        i = 0
+        while i + len(toks) <= len(words):
+            if [norm(w["text"]) for w in words[i:i + len(toks)]] == toks:
+                tail = words[i + len(toks) - 1]["text"].rstrip()
+                punct = tail[-1] if tail[-1:] in ",.;:!?…" else ""
+                text = corrected + (punct if not corrected.rstrip()[-1:]
+                                    in ",.;:!?…" else "")
+                words[i:i + len(toks)] = [{
+                    "start": words[i]["start"],
+                    "end": words[i + len(toks) - 1]["end"], "text": text}]
+                n += 1
+            i += 1
+        if n:
+            seg["words"] = words
+            seg["text"] = re.sub(r"\s+([,.;:!?…])", r"\1",
+                                 " ".join(w["text"] for w in words)).strip()
+    return n
+
+
+def _polish_transcript(project, cfg, llm, segments, lang):
+    """Caza las MALAS TRANSCRIPCIONES evidentes de Whisper (el modelo escribe
+    lo fonéticamente más frecuente: «monos masivos» donde el narrador dijo
+    «monos macacos rhesus») y las corrige POR CONTEXTO en el texto y los
+    subtítulos. El audio jamás se toca; solo se corrige lo inequívoco
+    (seguridad alta) y se avisa de cada corrección. Nunca rompe la fase."""
+    from ytstudio.narration_fix import norm
+    from ytstudio.progress import notify
+    if not segments or getattr(llm, "is_mock", False):
+        return segments
+    text = " ".join(s["text"] for s in segments)
+    system = (
+        f"Eres corrector de transcripciones automáticas en {lang}. Whisper "
+        "transcribe lo fonéticamente más FRECUENTE, no lo que el contexto "
+        "exige: los tecnicismos, especies, nombres propios y lugares poco "
+        "comunes salen convertidos en palabras parecidas sin sentido. Tu "
+        "trabajo es detectar SOLO esos fragmentos. Eres extremadamente "
+        "conservador: jamás corriges estilo, gramática ni nada que pueda ser "
+        "lo que el narrador realmente dijo.")
+    prompt = (
+        "Encuentra los fragmentos que sean claramente una MALA TRANSCRIPCIÓN "
+        "(suenan parecido a lo que el contexto pide, pero lo escrito no tiene "
+        "sentido o contradice el resto de la narración). Para cada uno "
+        "devuelve:\n"
+        "- original: el fragmento EXACTO tal como aparece (2-6 palabras).\n"
+        "- corregido: lo que el narrador dijo con toda probabilidad.\n"
+        "- seguridad: 'alta' SOLO si el contexto lo hace inequívoco (otra "
+        "mención correcta del mismo término, un tecnicismo evidente…). Solo "
+        "los 'alta' se aplican.\n"
+        "Si no hay errores claros, devuelve la lista vacía.\n\n"
+        f"TRANSCRIPCIÓN:\n{text}")
+    try:
+        res = llm.complete_json(system, prompt, schema=POLISH_SCHEMA,
+                                max_tokens=4000, purpose="transcript_polish")
+    except Exception as e:
+        project.add_warning(f"No se pudo revisar la transcripción en busca "
+                            f"de términos mal oídos ({e}): se usa tal cual.")
+        return segments
+    applied = []
+    for c in (res.get("correcciones") or []):
+        if c.get("seguridad") != "alta":
+            continue
+        orig = (c.get("original") or "").strip()
+        new = (c.get("corregido") or "").strip()
+        if not orig or not new or norm(orig) == norm(new):
+            continue
+        if _apply_transcript_fix(segments, orig, new):
+            applied.append({"original": orig, "corregido": new})
+    for f in applied:
+        msg = (f"📝 Transcripción corregida por contexto: "
+               f"«{f['original']}» → «{f['corregido']}» (el texto y los "
+               "subtítulos usan la versión corregida; tu audio no se toca).")
+        notify(msg)
+        project.add_warning(msg)
+    if applied:
+        project.set("transcript_fixes", applied)
+    return segments
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     input_dir = project.path("input")
@@ -356,6 +471,11 @@ def run(project, cfg) -> None:
                                 trim_silence=trim, keep=keep,
                                 lufs=cfg.get("audio", {}).get("vo_lufs", -16))
         stt = stt or get_stt(cfg)
+        # Sesgo de vocabulario: si el creador aportó guion o texto, un
+        # extracto se pasa a Whisper como contexto — los nombres propios y
+        # tecnicismos del material se transcriben bien en vez de convertirse
+        # en la palabra frecuente más parecida.
+        vocab_hint = " ".join(p for p in script_parts if p)[:800]
         if getattr(stt, "is_mock", False):
             # Sin clave de transcripción real (OPENAI_API_KEY / proveedor STT
             # en ⚙ Configuración) el "mock" NO transcribe tu voz: rellena un
@@ -368,7 +488,16 @@ def run(project, cfg) -> None:
                 "subtítulos serán de MUESTRA, no lo que realmente dijiste. "
                 "Configura tu clave de OpenAI en ⚙ Configuración para "
                 "transcribir tu voz de verdad.")
-        segments = stt.transcribe_segments(clean)
+        # (retrocompatible: un STT sin el parámetro `hint` se llama sin él)
+        import inspect
+        kw = {}
+        try:
+            if vocab_hint and "hint" in inspect.signature(
+                    stt.transcribe_segments).parameters:
+                kw = {"hint": vocab_hint}
+        except (TypeError, ValueError):
+            pass
+        segments = stt.transcribe_segments(clean, **kw)
         # La sincronía fina de subtítulos/rótulos con la voz REAL se corrige
         # en LAZO CERRADO al generar los subtítulos (se mide sobre el
         # resultado y se corrige con esa medición) — corregir aquí los
@@ -389,6 +518,10 @@ def run(project, cfg) -> None:
         if segments and cfg.get("audio", {}).get("fix_narration", True):
             clean, segments = _fix_narration(project, cfg, llm, clean,
                                              segments, input_dir)
+        # PULIDO DE TRANSCRIPCIÓN: corrige por contexto los términos que
+        # Whisper oyó mal («macacos rhesus» → «masivos») en texto/subtítulos.
+        if segments and cfg.get("audio", {}).get("polish_transcript", True):
+            segments = _polish_transcript(project, cfg, llm, segments, lang)
         (input_dir / "narracion.txt").write_text(
             " ".join(s["text"] for s in segments), encoding="utf-8")
         project.set("narration", {"file": clean.name, "segments": segments})

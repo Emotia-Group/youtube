@@ -32,6 +32,12 @@ providers:
     size: 1536x1024          # gpt-image-1 horizontal (16:9); solo aplica a openai
     safety_tolerance: 6      # FLUX 1(estricto)-6(permisivo): evita falsos NSFW
                              # en contenido histórico/bélico (solo aplica a FLUX)
+    fact_check: true         # CONTROL DE CALIDAD FACTUAL con visión: el director
+                             # compara cada imagen generada con los hechos de su
+                             # narración (vivo/muerto, especie, cantidades,
+                             # ubicación de heridas) y regenera UNA vez las que
+                             # los contradicen. Cuesta unos centavos de visión
+                             # por video + el costo de las imágenes corregidas.
   videogen:
     name: none
     model: kwaivgi/kling-v1.6-standard
@@ -44,6 +50,10 @@ providers:
     name: mock
     model: meta/musicgen
     library_dir: assets/music
+    multi_track: true        # con biblioteca local y video largo (>3 min), la
+                             # banda sonora se arma por ACTOS: una pista por
+                             # tramo de intensidad, fundidas con crossfade —
+                             # en vez de una sola pista plana todo el video
 budget:
   # TOPE DE GASTO DINÁMICO: se calcula solo, a partir de la estimación de lo
   # que FALTA por generar en este proyecto (y se recalcula antes de cada fase,
@@ -119,6 +129,13 @@ audio:
                              # caza los tropiezos reformulados (cuesta unos
                              # centavos por video). Ponlo en false para
                              # quedarte solo con la detección por reglas.
+                             # La IA solo corta con seguridad ALTA, y nunca
+                             # conectores («es decir», «o sea») ni frases
+                             # retomadas lejos del original.
+  polish_transcript: true    # corrige POR CONTEXTO los términos que Whisper
+                             # oye mal («macacos rhesus» → «masivos») en el
+                             # texto y los subtítulos — el audio no se toca,
+                             # y avisa de cada corrección.
   trim_silence: true         # recorta el silencio SOLO al inicio y al final
                              # (deja 0.25s de aire). Los silencios internos se
                              # conservan SIEMPRE: recortarlos podía comerse

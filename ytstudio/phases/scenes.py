@@ -37,6 +37,9 @@ _CREATIVE_PROPS = {
     "sticker_text": {"type": "string"},
     "sticker_a": {"type": "string"},
     "sticker_b": {"type": "string"},
+    # Texto LEGIBLE dentro de la imagen (casi siempre vacío): cuando la escena
+    # lo define, esa imagen se genera con el modelo de mejor tipografía.
+    "image_text": {"type": "string"},
 }
 
 SCENES_SCHEMA = {
@@ -140,8 +143,28 @@ ESA escena afirma y codifícalos de forma literal e inequívoca:
 - UBICACIÓN EXACTA: si la narración da una ubicación concreta de una marca,
   herida o detalle (cuello, pecho, espalda…), esa ubicación exacta va en el
   prompt tal cual — nunca una zona genérica del cuerpo.
+- CANTIDAD Y GEOMETRÍA EXACTAS: si la narración da un número o una forma
+  («tres orificios en triángulo», «ocho ovejas»), el prompt lo dice en
+  inglés de forma REDUNDANTE y verificable («exactly three puncture wounds,
+  no more, arranged in a clean triangle»). Los generadores fallan contando:
+  sin el número repetido y la disposición descrita, dibujan otra cantidad.
+  Con grupos grandes (≥6 sujetos), además del número describe la escena de
+  conjunto para que el estado se lea igual en TODOS («all of them dead,
+  none standing»).
 - Si dudas entre ser más literal o más "artístico", elige literal: la
   fidelidad a lo narrado manda sobre la elegancia visual.
+
+TEXTO DENTRO DE LA IMAGEN (image_text): por defecto NINGUNO.
+- Casi siempre image_text va vacío y el broll_prompt dice explícitamente que
+  no haya texto legible; si aparecen periódicos, documentos o pantallas como
+  atrezo, se describen "out of focus, unreadable print" (los generadores
+  escriben letras inventadas y en inglés — texto ilegible que arruina el
+  plano).
+- SOLO cuando la narración depende de que se LEA un texto (un titular, una
+  palabra clave, un letrero), escribe en image_text el texto EXACTO que debe
+  verse (máx. 6 palabras) EN EL IDIOMA DE LA NARRACIÓN — jamás en inglés si
+  el video no es en inglés. Máximo 2-3 escenas por video: el programa genera
+  esas imágenes con el modelo de mejor tipografía disponible.
 
 TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 - 'corte': corte seco, sin transición (por defecto). Da ritmo y es lo más
@@ -278,7 +301,8 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "2-4 frases por prompt; nada genérico.\n"
         "- Lo que se VE corresponde exactamente a lo que se DICE en esa "
         "escena.\n"
-        "- Sin texto ni letras dentro de la imagen; sin personas famosas "
+        "- Sin texto ni letras dentro de la imagen (salvo el image_text "
+        "exacto de las escenas que lo definan); sin personas famosas "
         "reales.\n\n"
         "3) AUDITORÍA DE MOVIMIENTO (motion_risk) — los modelos de video IA "
         "fallan con movimientos complejos; clasifica cada escena:\n"
@@ -524,6 +548,11 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
             s["layout"] = "completo"
             s.pop("broll_prompt_b", None)
 
+        # Texto legible dentro de la imagen: solo si el director lo definió
+        it = (s.pop("image_text", "") or "").strip()[:60]
+        if it:
+            s["image_text"] = it
+
         # Sticker: imitación visual nativa, SOLO formatos cortos y con texto
         st = s.pop("sticker_type", None)
         st_text = (s.pop("sticker_text", "") or "").strip()[:80]
@@ -719,7 +748,8 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
         "cantidad), diseña el apoyo audiovisual de lo que se dice:\n"
         "- broll_prompt: prompt EN INGLÉS, detallado, que ilustre el contenido "
         f"de esa narración concreta, comenzando con el prefijo de estilo "
-        f"\"{prefix}\". Sin texto ni letras en la imagen, sin personas reales.\n"
+        f"\"{prefix}\". Sin texto ni letras en la imagen (salvo el image_text "
+        "exacto de las escenas que lo definan), sin personas reales.\n"
         + (f"- broll_type: 'video' solo en las {videogen_scenes} de mayor "
            "impacto, el resto 'image'.\n" if videogen_scenes else
            "- broll_type: siempre 'image'.\n")
@@ -817,7 +847,8 @@ def run(project, cfg) -> None:
         "- 'broll_prompt': prompt EN INGLÉS para generar la imagen/video IA de "
         f"fondo, coherente con lo que se dice en esa escena. Detallado y SIEMPRE "
         f"comenzando con el prefijo de estilo \"{concept['visual_style']['prompt_prefix']}\". "
-        "Sin texto ni letras dentro de la imagen, sin personas famosas reales.\n"
+        "Sin texto ni letras dentro de la imagen (salvo el image_text exacto "
+        "de las escenas que lo definan), sin personas famosas reales.\n"
         + broll_type_rule +
         "- 'animation': varía entre zoom_in, zoom_out, pan_left, pan_right "
         "(evita repetir la misma dos veces seguidas).\n\n"

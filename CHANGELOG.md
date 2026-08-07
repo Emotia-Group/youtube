@@ -9,6 +9,83 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.42.0 — 2026-08-07
+Debug general a partir de tu video «2-chupacabras» (59 escenas, ~15 min):
+siete frentes, cada uno con su causa raíz encontrada en el log y verificado
+con pruebas de código real.
+
+- ✂ EL «GAGEO» EN «EL TEJIDO» (tu reporte de voz, causa raíz encontrada en
+  el log): el corrector de v0.40.0 quitó «es decir,» de «…sección térmica;
+  es decir, el tejido fue sellado…» tratándolo como "muletilla aislada" — y
+  el empalme cayó justo sobre el arranque de «el», por eso suena a
+  tartamudeo. Tres arreglos de fondo:
+  · Los CONECTORES DISCURSIVOS («es decir», «o sea») salieron para siempre
+    de la lista de muletillas: enlazan ideas y llevan pausa natural
+    alrededor — nunca más se cortan por regla. Las palabras-relleno
+    («bueno», «este») tampoco se cortan ya cuando vienen tras puntuación
+    («Bueno, sigamos» abre frase legítimamente).
+  · GUARDAS DE EMPALME en TODOS los cortes: el corte ya no termina en el
+    inicio nominal de la palabra siguiente (Whisper trae ±100 ms de error y
+    se comía su ataque — el gageo), sino dentro de la pausa, dejando margen
+    de 100-350 ms antes de la palabra que se conserva.
+  · La revisión IA ahora solo corta con seguridad ALTA y con el tropiezo y
+    su reintento CONTIGUOS: el corte de [215.6s] («…monos masivos», una
+    recapitulación a ~70 s de la frase original) ya no habría pasado.
+- ✂ EL ERROR QUE SÍ SE QUEDÓ (tu reporte: «se repite la frase en la que el
+  narrador se equivocó»): el detector de falsos arranques exigía que el
+  intento quedara TRUNCADO — pero si Whisper le puso punto al intento («El
+  registró veterinario.»), la protección anti-anáfora lo dejaba pasar
+  entero. Detector nuevo de FRASE REINICIADA: si tras una pausa real
+  repites el arranque de la frase anterior (≥4 palabras y el reintento la
+  continúa, o la frase completa ≥3 palabras tras una pausa clara), se corta
+  el primer intento y se queda tu reintento. Las anáforas retóricas y los
+  ecos cortos de énfasis siguen protegidos (verificado en pruebas).
+- 📝 SUBTÍTULOS «monos masivos» (dijiste «monos macacos rhesus»): doble
+  arreglo. (1) Si aportas guion o texto, un extracto se pasa a Whisper como
+  sesgo de vocabulario (transcribe los términos raros de TU material en vez
+  del parecido frecuente). (2) PULIDO POR CONTEXTO tras transcribir: la IA
+  detecta las malas transcripciones evidentes (fonéticamente similares y
+  sin sentido en contexto) y corrige texto y subtítulos — solo con
+  seguridad alta, avisándote de cada corrección, sin tocar jamás tu audio.
+  Desactivable: audio.polish_transcript.
+- 🖼 ESCENAS «VACÍAS» (7 y 23, rechazadas por el filtro del generador): la
+  escalera de respaldo tiene dos peldaños nuevos antes del degradado. Si el
+  prompt suavizado también es rechazado, se genera un PLANO ATMOSFÉRICO
+  REAL del mismo mundo visual (sin los sujetos conflictivos — cuesta una
+  imagen más, pero la escena queda con una imagen de verdad); y si hasta
+  eso falla, se usa la escena VECINA desenfocada y oscurecida (sin costo)
+  en vez del degradado plano que se veía «vacío». Avisos diferenciados
+  para que sepas exactamente qué quedó en cada escena.
+- 🔤 TEXTO ILEGIBLE Y EN INGLÉS EN LAS IMÁGENES (scene_010) — tu propuesta
+  de ELECCIÓN DINÁMICA DE MODELO, implementada: el director marca por
+  escena (image_text) cuándo un texto DEBE leerse (un titular, un letrero;
+  máx. 2-3 por video) y ESAS imágenes se rutean a gpt-image-1 (la mejor
+  tipografía) si tienes clave de OpenAI, con el texto EXACTO y EN EL IDIOMA
+  DEL GUION — nunca más letras inventadas en inglés. Sin clave de OpenAI se
+  usa el modelo estándar con énfasis tipográfico y se te avisa. En el resto
+  de escenas la regla es la contraria y ahora explícita: prensa/documentos
+  de atrezo se describen "out of focus, unreadable print".
+- 👁 FIDELIDAD FACTUAL CON VISIÓN (ovejas vivas en 012/021, «3 orificios en
+  triángulo en el cuello» convertidos en 4 en cuadrado en la 003): las
+  reglas de prompt de v0.41.0 no bastan — el GENERADOR falla contando y con
+  anatomías. Ahora hay CONTROL DE CALIDAD con visión: el director compara
+  cada imagen generada con los hechos de su narración (estado, especie,
+  cantidad, disposición, ubicación de heridas) y REGENERA UNA VEZ las que
+  los contradicen, con el prompt corregido de forma redundante («exactly
+  three, no more…»). Cost-aware: un solo reintento, firma de caché
+  actualizada (reanudar no re-cobra), desactivable
+  (providers.images.fact_check), y si tras regenerar sigue mal te lo dice
+  honesto para que lo revises en el Storyboard. Además, regla nueva de
+  CANTIDAD Y GEOMETRÍA EXACTAS en los prompts (el número repetido y la
+  disposición descrita).
+- 🎼 MÚSICA PLANA con 24 pistas en la biblioteca: el video entero usaba UNA
+  pista en loop. Ahora, con biblioteca local y video de más de 3 minutos,
+  la banda sonora se arma por ACTOS siguiendo el arco de intensidad que ya
+  dibuja el director (calma/desarrollo/clímax): el supervisor musical elige
+  una pista POR ACTO (con variedad, A-B-A permitido) y se funden con
+  crossfade de 3 s. Verificado con ffmpeg real y análisis espectral: el
+  clímax suena con otra pista. Desactivable: providers.music.multi_track.
+
 ## v0.41.0 — 2026-08-06
 - 🎯 FIDELIDAD FACTUAL EN LOS PROMPTS DE B-ROLL (tu caso real del
   «Chupacabras»): detecté exactamente el problema en tus dos escenas —

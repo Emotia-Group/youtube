@@ -113,10 +113,42 @@ def _soften_prompt(prompt: str) -> str:
             "illustration, no gore, no nudity, artistic and respectful. " + out)
 
 
-def _fallback_image(out: Path, cfg: dict, palette: list[str]) -> Path:
-    """Fondo cinematográfico neutro (degradado oscuro con viñeta y grano sutil),
-    sin texto — para una escena cuya imagen fue rechazada. Se ve como un plano
+def _neighbor_blur(out: Path, broll_dir: Path, sid: int, cfg: dict) -> bool:
+    """Respaldo SIN COSTO para una escena rechazada: la imagen de la escena
+    vecina más cercana, muy desenfocada y oscurecida — mantiene la atmósfera
+    y la paleta del video en vez de un degradado que se ve «vacío»."""
+    try:
+        from PIL import Image, ImageEnhance, ImageFilter
+        w, h = cfg["video"]["width"], cfg["video"]["height"]
+        for d in (1, -1, 2, -2, 3, -3, 4, -4):
+            p = broll_dir / f"scene_{sid + d:03d}.jpg"
+            if not p.exists():
+                continue
+            img = Image.open(p).convert("RGB")
+            scale = max(w / img.width, h / img.height)
+            img = img.resize((round(img.width * scale),
+                              round(img.height * scale)))
+            x, y = (img.width - w) // 2, (img.height - h) // 2
+            img = img.crop((x, y, x + w, y + h))
+            img = img.filter(ImageFilter.GaussianBlur(radius=max(10, w // 55)))
+            img = ImageEnhance.Brightness(img).enhance(0.5)
+            img.save(out, quality=88)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _fallback_image(out: Path, cfg: dict, palette: list[str],
+                    broll_dir: Path | None = None,
+                    scene_id: int | None = None) -> Path:
+    """Fondo cinematográfico para una escena cuya imagen fue rechazada: la
+    escena vecina desenfocada (misma atmósfera) o, si no hay ninguna, un
+    degradado oscuro con la paleta del video. Se ve como un plano
     atmosférico, no como un error."""
+    if broll_dir is not None and scene_id is not None:
+        if _neighbor_blur(out, broll_dir, scene_id, cfg):
+            return out
     w, h = cfg["video"]["width"], cfg["video"]["height"]
 
     def _rgb(hexa, default):
@@ -432,6 +464,158 @@ def _review_manual_broll(project, llm, scenes: list[dict], placed: set[int],
         ids = ", ".join(str(sid) for sid, _ in replaced)
         notify(f"🔄 El director generará con IA {len(replaced)} escena(s) cuyo "
                f"B-roll no encajaba ({ids}).")
+
+
+_QA_SCHEMA = {
+    "type": "object",
+    "properties": {"reviews": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "scene": {"type": "integer"},
+            "fiel": {"type": "boolean"},
+            "problema": {"type": "string"},
+            "prompt_corregido": {"type": "string"},
+        },
+        "required": ["scene", "fiel", "problema", "prompt_corregido"],
+        "additionalProperties": False}}},
+    "required": ["reviews"], "additionalProperties": False}
+
+
+def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
+                project) -> dict[int, dict]:
+    """Pasa las imágenes por visión en tandas y devuelve {id: veredicto}."""
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)
+    verdicts: dict[int, dict] = {}
+    system = (
+        f"Eres el director de fotografía que hace CONTROL DE CALIDAD de un "
+        f"documental en {lang}. Comparas cada imagen generada con los HECHOS "
+        "CONCRETOS que afirma la narración de su escena. Solo te importan "
+        "las CONTRADICCIONES de hechos: estado (vivo/muerto), especie y "
+        "anatomía del sujeto, número exacto y disposición de elementos, "
+        "ubicación exacta de heridas o marcas, el objeto clave narrado. Una "
+        "ilustración parcial o atmosférica NO es infiel; una que CONTRADICE "
+        "lo narrado, SÍ.")
+    for start in range(0, len(targets), 6):
+        chunk = targets[start:start + 6]
+        images, manifest = [], []
+        for s in chunk:
+            p = broll_dir / f"scene_{s['id']:03d}.jpg"
+            if not p.exists():
+                continue
+            images.append(p)
+            manifest.append(f"- escena {s['id']}: narración «"
+                            f"{(s.get('narration') or '')[:280]}»")
+        if not images:
+            continue
+        prompt = (
+            "Las imágenes adjuntas corresponden, EN ORDEN, a estas "
+            "escenas:\n" + "\n".join(manifest) +
+            "\n\nPara cada escena (por su número):\n"
+            "- fiel=false SOLO si la imagen CONTRADICE un hecho concreto de "
+            "su narración (animales vivos donde se narran muertos, anatomía "
+            "humana donde el sujeto es un animal, otra cantidad o "
+            "disposición que la narrada, una herida en otra parte del "
+            "cuerpo). Ante la duda, fiel=true.\n"
+            "- problema: una frase concreta con el hecho contradicho (vacía "
+            "si fiel).\n"
+            "- prompt_corregido: SOLO si fiel=false — el prompt completo EN "
+            "INGLÉS para regenerar la imagen, manteniendo el estilo del "
+            "original pero codificando los hechos de forma REDUNDANTE e "
+            "inequívoca (número exacto repetido, especie en cada mención, "
+            "estado sin vida explícito, ubicación exacta). Vacío si fiel.")
+        try:
+            result = llm.complete_json(system, prompt, schema=_QA_SCHEMA,
+                                       images=images, purpose="broll_qa")
+        except Exception as e:
+            project.add_warning(f"El control de calidad factual con visión "
+                                f"no se pudo completar ({e}) — las imágenes "
+                                "quedan como salieron.")
+            return verdicts
+        for r in result.get("reviews", []):
+            verdicts[int(r.get("scene", -1))] = r
+    return verdicts
+
+
+def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
+                    broll_dir: Path, gen_one, skip: set[int]) -> None:
+    """El director REVISA con visión cada imagen generada contra los hechos
+    de su narración y regenera UNA VEZ las que los contradicen (el fallo
+    reportado por el usuario: ovejas vivas narradas muertas, 4 orificios en
+    cuadrado donde el guion dice 3 en triángulo, anatomía equivocada).
+    Cost-aware: desactivable (providers.images.fact_check), una sola
+    regeneración por escena, y avisa honesto de lo que no pudo arreglar."""
+    from ytstudio.progress import notify
+    if not cfg.get("providers", {}).get("images", {}).get("fact_check", True):
+        return
+    if getattr(llm, "is_mock", False):
+        return
+    targets = [s for s in ai_scenes
+               if s["id"] not in skip
+               and (broll_dir / f"scene_{s['id']:03d}.jpg").exists()]
+    if not targets:
+        return
+    notify(f"👁 Control de calidad factual: el director compara "
+           f"{len(targets)} imagen(es) con los hechos de su narración…")
+    verdicts = _qa_batches(llm, cfg, targets, broll_dir, project)
+    bad = []
+    for s in targets:
+        v = verdicts.get(s["id"])
+        if not v or v.get("fiel", True):
+            continue
+        fixed = (v.get("prompt_corregido") or "").strip()
+        if not fixed:
+            continue
+        bad.append((s, v.get("problema", ""), fixed))
+    if not bad:
+        notify("👁 Control factual: todas las imágenes respetan lo narrado.")
+        return
+    notify(f"🔁 {len(bad)} imagen(es) contradicen su narración "
+           f"({', '.join(str(s['id']) for s, _, _ in bad)}): se regeneran "
+           "con el prompt corregido (un solo reintento).")
+    redone: list[dict] = []
+    for s, problema, fixed in bad:
+        img = broll_dir / f"scene_{s['id']:03d}.jpg"
+        try:
+            img.unlink(missing_ok=True)
+            gen_one(s, fixed, img)
+            s["broll_prompt"] = fixed
+            redone.append(s)
+            project.add_warning(
+                f"🖼 Escena {s['id']}: la imagen contradecía la narración "
+                f"({problema}) — se regeneró con el prompt corregido.")
+        except Exception as e:
+            project.add_warning(
+                f"🖼 Escena {s['id']}: la imagen contradice la narración "
+                f"({problema}) y no se pudo regenerar ({e}). Revísala en el "
+                "Storyboard o sube tu propio B-roll.")
+    # La firma de caché usa el prompt: se actualiza para que al reanudar NO
+    # se vuelva a regenerar (y cobrar) el material corregido.
+    if redone:
+        import hashlib
+        import json as _json
+        sig_path = broll_dir / "prompts.json"
+        try:
+            sigs = _json.loads(sig_path.read_text(encoding="utf-8"))
+        except Exception:
+            sigs = {}
+        for s in redone:
+            src = ((s.get("broll_prompt") or "") + "|chars:"
+                   + ",".join(s.get("characters") or []))
+            sigs[str(s["id"])] = hashlib.md5(src.encode("utf-8")).hexdigest()
+        sig_path.write_text(_json.dumps(sigs, indent=0), encoding="utf-8")
+        # Segunda mirada SOLO a las regeneradas: si alguna sigue infiel, se
+        # avisa con claridad (no se vuelve a cobrar otra regeneración).
+        second = _qa_batches(llm, cfg, redone, broll_dir, project)
+        still = [s["id"] for s in redone
+                 if second.get(s["id"]) and not second[s["id"]].get("fiel", True)]
+        if still:
+            project.add_warning(
+                "A pesar de la regeneración, la(s) escena(s) "
+                + ", ".join(map(str, still)) + " pueden seguir sin respetar "
+                "un hecho de la narración (los generadores fallan contando "
+                "o con anatomías poco comunes). Revísalas en el Storyboard; "
+                "puedes editar el prompt a mano o subir tu B-roll.")
 
 
 _REFRAME_MISMATCH = 1.45  # 1:1 sobre 16:9 da 1.78 (reencuadrar); 4:3 da 1.33 (ok)
@@ -801,7 +985,12 @@ def run(project, cfg) -> None:
     #     persiste, se usa un fondo cinematográfico neutro para esa escena.
     concept = project.get("concept") or {}
     palette = (concept.get("visual_style") or {}).get("palette") or []
-    nsfw_scenes: list[int] = []
+    prefix = (concept.get("visual_style") or {}).get("prompt_prefix") or \
+        "cinematic documentary still"
+    from ytstudio.catalog import lang_name
+    lang = lang_name(cfg)
+    nsfw_scenes: list[int] = []       # quedaron con respaldo local sin costo
+    safe_scenes: list[int] = []       # quedaron con plano atmosférico seguro
 
     # ELENCO: referencias de identidad por personaje, resueltas EN SERIE antes
     # del pool (genera la referencia del personaje sin fotos una sola vez).
@@ -832,13 +1021,77 @@ def run(project, cfg) -> None:
     from ytstudio.progress import get_sink
     sink = get_sink()
 
+    # Escenas con TEXTO LEGIBLE dentro de la imagen (image_text del director):
+    # se rutean al modelo con mejor tipografía disponible. Elección DINÁMICA
+    # por escena — el resto sigue con el modelo configurado (más económico).
+    text_images = None
+    text_ids = sorted({s["id"] for s in ai_scenes if s.get("image_text")})
+    if text_ids:
+        import os as _os
+        if _os.environ.get("OPENAI_API_KEY"):
+            try:
+                from ytstudio.providers.images import OpenAIImages
+                text_images = OpenAIImages(cfg)
+                notify(f"🔤 {len(text_ids)} escena(s) con texto legible "
+                       f"({', '.join(map(str, text_ids))}): el director las "
+                       "genera con gpt-image-1 (la mejor tipografía "
+                       "disponible), en el idioma del guion.")
+            except Exception as e:
+                project.add_warning(f"No se pudo preparar gpt-image-1 para "
+                                    f"las escenas con texto ({e}).")
+        if text_images is None:
+            project.add_warning(
+                "Escena(s) " + ", ".join(map(str, text_ids)) + " piden texto "
+                "legible en la imagen, pero no hay clave de OpenAI "
+                "(gpt-image-1): se usa el modelo estándar con énfasis "
+                "tipográfico. Revisa esas imágenes — los modelos estándar "
+                "suelen deformar las letras. Configura tu OPENAI_API_KEY en "
+                "⚙ Configuración para tipografía de verdad.")
+
+    def _texted(scene: dict, prompt: str) -> str:
+        """Si la escena define image_text, el prompt exige ESE texto exacto,
+        en el idioma del guion — sin esto, los generadores inventan letras y
+        siempre en inglés."""
+        txt = (scene.get("image_text") or "").strip()
+        if not txt:
+            return prompt
+        return (f'{prompt}. The only legible text in the image is exactly '
+                f'"{txt}" (written in {lang}), spelled correctly, integrated '
+                "naturally into the scene (headline, sign or document), "
+                "clean professional typography. No other text or letters "
+                "anywhere.")
+
+    def _safe_prompt() -> str:
+        """Plano atmosférico del MISMO mundo visual, sin sujetos: pasa
+        cualquier filtro de contenido y sigue siendo una imagen real del
+        video (no un fondo sintético)."""
+        return (f"{prefix}, quiet atmospheric establishing shot of the "
+                "story's setting, empty landscape with dramatic light and "
+                "haze, no people, no animals, no text, tasteful, safe for "
+                "work")
+
     def _gen_one(scene: dict, prompt: str, img: Path) -> None:
-        """Escalera de UNA imagen: identidad (si hay elenco) → normal →
-        prompt suavizado → fondo neutro. La usan la imagen principal y la
-        segunda mitad de las escenas con pantalla dividida."""
+        """Escalera de UNA imagen: modelo de texto (si la escena pide texto
+        legible) → identidad (si hay elenco) → normal → prompt suavizado →
+        plano atmosférico seguro → respaldo local (vecino desenfocado o
+        degradado). La usan la imagen principal y la segunda mitad de las
+        escenas con pantalla dividida."""
+        prompt = _texted(scene, prompt)
+        refs = _scene_refs(scene)
+        # Texto legible SIN personajes del elenco → mejor tipografía
+        if scene.get("image_text") and text_images is not None and not refs:
+            try:
+                text_images.generate(prompt, img)
+                return
+            except Exception as e:
+                if not _is_content_error(e):
+                    # el ruteo tipográfico es OPCIONAL: nunca tumba la fase
+                    project.add_warning(
+                        f"gpt-image-1 falló en la escena {scene['id']} ({e}) "
+                        "— se usa el modelo estándar para esa imagen.")
+                # y sigue la escalera normal
         # Escena con personajes del elenco → modelo de IDENTIDAD con sus
         # fotos de referencia (misma cara en todas sus escenas).
-        refs = _scene_refs(scene)
         if refs and ref_images is not None:
             try:
                 ref_images.generate_with_refs(prompt, refs, img)
@@ -860,8 +1113,16 @@ def run(project, cfg) -> None:
         except Exception as e:
             if not _is_content_error(e):
                 raise
-        # Sigue rechazado: fondo cinematográfico neutro (el video se completa)
-        _fallback_image(img, cfg, palette)
+        # Sigue rechazado: plano atmosférico SEGURO del mismo mundo visual —
+        # una imagen real (cuesta una imagen más) en vez de un fondo vacío.
+        try:
+            images.generate(_safe_prompt(), img)
+            safe_scenes.append(scene["id"])
+            return
+        except Exception:
+            pass  # último recurso: respaldo local sin costo
+        _fallback_image(img, cfg, palette, broll_dir=broll_dir,
+                        scene_id=scene["id"])
         nsfw_scenes.append(scene["id"])
 
     def _gen_image(scene: dict) -> None:
@@ -900,13 +1161,32 @@ def run(project, cfg) -> None:
         if (s.get("layout") == "dividida"
                 and (broll_dir / f"scene_{s['id']:03d}_b.jpg").exists()):
             s["broll_image_b"] = f"scene_{s['id']:03d}_b.jpg"
-    if nsfw_scenes:
+    if safe_scenes:
         project.add_warning(
             "El generador marcó como sensible el prompt de "
-            f"{len(nsfw_scenes)} escena(s) ({', '.join(map(str, nsfw_scenes))}) "
-            "y usó un fondo neutro. Puedes reformular ese texto del guion y "
-            "«Rehacer desde Imágenes», o subir tu propio B-roll para esas "
-            "escenas.")
+            f"{len(safe_scenes)} escena(s) ({', '.join(map(str, safe_scenes))}) "
+            "incluso suavizado: se generó en su lugar un plano atmosférico "
+            "del mismo mundo visual (sin los sujetos del guion). Puedes "
+            "reformular ese texto y «Rehacer desde Imágenes», o subir tu "
+            "propio B-roll para esas escenas.")
+    if nsfw_scenes:
+        project.add_warning(
+            "El generador rechazó TODOS los intentos (incluido el plano "
+            f"atmosférico) en {len(nsfw_scenes)} escena(s) "
+            f"({', '.join(map(str, nsfw_scenes))}): se usó la escena vecina "
+            "desenfocada como fondo (o un degradado si no había vecina). "
+            "Reformula ese texto del guion y «Rehacer desde Imágenes», o "
+            "sube tu propio B-roll para esas escenas.")
+
+    # 2a-bis) CONTROL DE CALIDAD FACTUAL con visión: el director compara cada
+    #         imagen generada con los HECHOS de su narración y regenera (una
+    #         vez) las que la contradicen — ovejas vivas donde el guion dice
+    #         muertas, 4 orificios donde narró 3 en triángulo, anatomía
+    #         humana donde el sujeto es un animal.
+    from ytstudio.providers.images import MockImages
+    if not isinstance(images, MockImages):
+        _verify_factual(project, llm, cfg, ai_scenes, broll_dir, _gen_one,
+                        set(nsfw_scenes) | set(safe_scenes))
 
     # 2b) Clips de video IA (opcionales: cada fallo degrada ESA escena a
     #     imagen animada, sin detener el proyecto)

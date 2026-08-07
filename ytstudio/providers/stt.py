@@ -65,10 +65,11 @@ class OpenAISTT:
         self.client = OpenAI()
         self.language = cfg.get("language", "es")
 
-    def transcribe(self, audio: Path) -> str:
+    def transcribe(self, audio: Path, hint: str = "") -> str:
         with open(audio, "rb") as f:
+            kwargs = {"prompt": hint[:800]} if hint else {}
             result = self.client.audio.transcriptions.create(
-                model="whisper-1", file=f, language=self.language,
+                model="whisper-1", file=f, language=self.language, **kwargs,
             )
         from ytstudio import pricing, usage
         minutes = probe_duration(audio) / 60.0
@@ -76,10 +77,15 @@ class OpenAISTT:
                     "min", pricing.stt_cost(minutes))
         return result.text
 
-    def transcribe_segments(self, audio: Path) -> list[dict]:
+    def transcribe_segments(self, audio: Path, hint: str = "") -> list[dict]:
         with open(audio, "rb") as f:
+            # `prompt` sesga el vocabulario de Whisper hacia los términos del
+            # material del proyecto (nombres propios, tecnicismos): sin él,
+            # «macacos rhesus» se transcribe como lo más parecido y frecuente
+            # («masivos»). Máx ~224 tokens: se pasa un extracto.
+            kwargs = {"prompt": hint[:800]} if hint else {}
             result = self.client.audio.transcriptions.create(
-                model="whisper-1", file=f, language=self.language,
+                model="whisper-1", file=f, language=self.language, **kwargs,
                 response_format="verbose_json",
                 # "word" da el tiempo de CADA palabra — es lo que permite
                 # sincronizar subtítulos y rótulos con la voz real en vez de
@@ -146,10 +152,10 @@ class MockSTT:
     def __init__(self, cfg: dict):
         pass
 
-    def transcribe(self, audio: Path) -> str:
+    def transcribe(self, audio: Path, hint: str = "") -> str:
         return self.SAMPLE
 
-    def transcribe_segments(self, audio: Path) -> list[dict]:
+    def transcribe_segments(self, audio: Path, hint: str = "") -> list[dict]:
         import re
         duration = probe_duration(audio)
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", self.SAMPLE)

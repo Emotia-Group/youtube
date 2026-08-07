@@ -12,17 +12,28 @@ legítimo del creador; un falso negativo solo deja un tropiezo que ya estaba.
 Por eso cada detector exige EVIDENCIA CONVERGENTE (varias señales a la vez),
 no una sola pista.
 
-Cuatro detectores deterministas (sin costo, sin modelo):
+Cinco detectores deterministas (sin costo, sin modelo):
 
 1. FALSO ARRANQUE: el narrador empieza una frase, se corta y la reinicia.
    Evidencia: (a) el reintento REPITE las primeras palabras del intento,
    (b) hay una PAUSA real entre ambos, (c) el intento quedó TRUNCADO (corto
    y sin puntuación de cierre). Las tres juntas — una anáfora retórica
    («El registro dice esto. El registro dice aquello») no cumple (c).
-2. REPETICIÓN INMEDIATA de la misma palabra («el el registro»).
-3. MULETILLA aislada («eh», «este», «o sea») rodeada de pausas.
-4. MARCADOR EXPLÍCITO de error («voy de nuevo», «corrijo», «otra vez»): se
+2. FRASE REINICIADA: el intento terminó «bien» según Whisper (con
+   puntuación), pero tras una pausa real el narrador lo vuelve a decir desde
+   el principio — coincidencia larga (≥4 palabras) que el reintento continúa,
+   o la frase completa repetida tras una pausa clara. Cubre el redo que el
+   detector 1 no puede ver.
+3. REPETICIÓN INMEDIATA de la misma palabra («el el registro»).
+4. MULETILLA aislada («eh», «este») rodeada de pausas — NUNCA conectores
+   discursivos («es decir», «o sea»): esos son contenido.
+5. MARCADOR EXPLÍCITO de error («voy de nuevo», «corrijo», «otra vez»): se
    borra el marcador Y el intento anterior hasta el inicio de la frase.
+
+Todos los cortes llevan GUARDAS DE EMPALME: el corte termina dentro de la
+pausa, a 100-350 ms del inicio nominal de la palabra que se conserva (los
+tiempos de Whisper traen ±100 ms de error; sin guarda, el empalme se comía
+el ataque de la palabra siguiente y sonaba a tartamudeo).
 
 Y una capa opcional con el MODELO (`review_with_llm`) que juzga los casos
 ambiguos que la heurística no puede decidir sola — la inteligencia que
@@ -48,9 +59,19 @@ def norm(text: str) -> str:
 
 # Muletillas que SOLO se quitan si van aisladas entre pausas (nunca dentro de
 # una frase fluida, donde pueden ser palabras legítimas: «este libro»).
-FILLERS = {"eh", "ehh", "em", "emm", "mmm", "mm", "ah", "aah", "este",
-           "esto", "osea", "bueno", "digamos", "verdad"}
-FILLER_PHRASES = {("o", "sea"), ("es", "decir"), ("o", "sea", "que")}
+# - VOCAL: sonidos sin contenido («eh», «mmm») — aislados, siempre tropiezo.
+# - WORD: palabras reales usadas como relleno («este…», «bueno…») — además de
+#   aisladas, NO pueden venir tras puntuación (ahí abren o retoman frase
+#   legítimamente: «Bueno, sigamos»).
+# Los CONECTORES DISCURSIVOS («es decir», «o sea», «en fin», «ahora bien») NO
+# están y NUNCA deben estar aquí: enlazan ideas, y el narrador hace pausa
+# natural alrededor («…térmica; es decir, el tejido…») — v0.40.0 los cortaba
+# como "muletilla aislada" y destruía contenido legítimo (caso real del
+# usuario). Si alguna vez son relleno de verdad, lo decide la revisión IA con
+# contexto, nunca una lista.
+VOCAL_FILLERS = {"eh", "ehh", "em", "emm", "mmm", "mm", "ah", "aah"}
+WORD_FILLERS = {"este", "esto", "bueno", "digamos", "verdad"}
+FILLERS = VOCAL_FILLERS | WORD_FILLERS  # compat: conjunto completo
 
 # Marcadores donde el narrador DICE que se equivocó.
 RESTART_MARKERS = [
@@ -84,6 +105,32 @@ def _gap(words: list[dict], i: int) -> float:
     return max(0.0, words[i + 1]["start"] - words[i]["end"])
 
 
+def _cut_end(words: list[dict], last_idx: int) -> float:
+    """Fin SEGURO de un corte cuyo último tramo borrado es la palabra
+    last_idx: dentro de la pausa que sigue, dejando un margen antes del
+    inicio nominal de la palabra siguiente. Los tiempos de Whisper traen
+    ±100 ms de error — cortar exactamente en el 'start' de la palabra que se
+    conserva puede comerse su ataque real, y el empalme suena como un gageo
+    («e-el tejido», caso real del usuario)."""
+    if last_idx + 1 >= len(words):
+        return words[last_idx]["end"]
+    nxt = words[last_idx + 1]["start"]
+    gap = max(0.0, nxt - words[last_idx]["end"])
+    guard = min(0.35, max(0.10, gap * 0.5))
+    return max(words[last_idx]["end"], nxt - guard)
+
+
+def _cut_start(words: list[dict], idx: int) -> float:
+    """Inicio seguro de un corte que empieza en la palabra idx: un pelo antes
+    de su inicio nominal (dentro del silencio previo, si lo hay) para no dejar
+    el arranque de la palabra borrada sonando en el empalme."""
+    w = words[idx]
+    if idx == 0:
+        return w["start"]
+    gap = max(0.0, w["start"] - words[idx - 1]["end"])
+    return w["start"] - min(0.06, gap * 0.3)
+
+
 def detect_false_starts(words: list[dict], min_pause: float = 0.30,
                         max_attempt_words: int = 9) -> list[dict]:
     """FALSO ARRANQUE (el caso real del usuario: «El registró veterinario»
@@ -113,7 +160,7 @@ def detect_false_starts(words: list[dict], min_pause: float = 0.30,
             continue
         cuts.append({
             "kind": "falso_arranque",
-            "start": attempt[0]["start"], "end": words[i + 1]["start"],
+            "start": _cut_start(words, start_idx), "end": _cut_end(words, i),
             "text": " ".join(w["text"] for w in attempt),
             "reason": (f"reinicio de frase: se repite «"
                        + " ".join(w["text"] for w in words[i + 1:i + 1 + k])
@@ -168,45 +215,96 @@ def detect_immediate_repeats(words: list[dict],
         # números y palabras de una letra pueden repetirse legítimamente
         if len(norm(a["text"])) < 2 or norm(a["text"]).isdigit():
             continue
-        cuts.append({"kind": "repeticion", "start": a["start"],
-                     "end": b["start"], "text": a["text"],
+        cuts.append({"kind": "repeticion", "start": _cut_start(words, i),
+                     "end": _cut_end(words, i), "text": a["text"],
                      "reason": f"palabra repetida: «{a['text']} {b['text']}»",
                      "confidence": "alta"})
     return cuts
 
 
+def _prefix_overlap(attempt: list[dict], rest: list[dict]) -> int:
+    """Cuántas palabras iniciales de `attempt` se repiten, en orden, al
+    comienzo de `rest` (normalizadas: tildes y puntuación fuera)."""
+    k = 0
+    for a, b in zip(attempt, rest):
+        if not norm(a["text"]) or norm(a["text"]) != norm(b["text"]):
+            break
+        k += 1
+    return k
+
+
+def detect_sentence_restarts(words: list[dict],
+                             min_pause: float = 0.35,
+                             max_attempt_words: int = 18) -> list[dict]:
+    """REDO DE FRASE: el narrador termina (o casi) una frase, hace una pausa
+    y la VUELVE A DECIR desde el principio. Es el caso que detect_false_starts
+    no cubre: si Whisper le puso puntuación de cierre al intento («El registró
+    veterinario.»), la condición de truncado lo protegía y el redo se quedaba
+    ENTERO en el video (reportado por el usuario en v0.41.0).
+
+    Evidencia convergente exigida (una anáfora retórica no la cumple):
+    - el reintento repite las palabras INICIALES del intento, y
+    - (R1) la coincidencia es larga (≥4 palabras) y el reintento CONTINÚA más
+      allá del intento (lo corrige/completa), con pausa real ≥ min_pause; o
+    - (R2) el reintento repite el intento COMPLETO (≥3 palabras) tras una
+      pausa clara (≥0.8 s; ≥0.5 s si son ≥5 palabras — cuanto más larga la
+      coincidencia, menos probable el eco retórico).
+    Se corta el PRIMER intento; el reintento (la versión buena) se conserva."""
+    cuts: list[dict] = []
+    n = len(words)
+    for i in range(n - 1):
+        pause = _gap(words, i)
+        if pause < min_pause:
+            continue
+        start_idx = _phrase_start(words, i)
+        attempt = words[start_idx:i + 1]
+        if len(attempt) < 3 or len(attempt) > max_attempt_words:
+            continue
+        rest = words[i + 1:]
+        k = _prefix_overlap(attempt, rest)
+        full = k == len(attempt)
+        extends = full and len(rest) > k  # el reintento sigue más allá
+        r1 = k >= 4 and (extends or not full)
+        r2 = full and (pause >= 0.5 if k >= 5 else pause >= 0.8)
+        if not (r1 and k >= 4) and not r2:
+            continue
+        cuts.append({
+            "kind": "falso_arranque",
+            "start": _cut_start(words, start_idx), "end": _cut_end(words, i),
+            "text": " ".join(w["text"] for w in attempt),
+            "reason": (f"frase reiniciada: tras una pausa de {pause:.1f}s se "
+                       "repite «"
+                       + " ".join(w["text"] for w in rest[:k]) + "»"),
+            "confidence": "alta" if k >= 4 else "media",
+        })
+    return cuts
+
+
 def detect_fillers(words: list[dict], min_around: float = 0.25) -> list[dict]:
     """Muletillas AISLADAS: rodeadas de pausa a ambos lados. Dentro de una
-    frase fluida no se tocan (pueden ser palabras reales)."""
+    frase fluida no se tocan (pueden ser palabras reales). Ya NO se detectan
+    frases conectoras («es decir», «o sea»): enlazan ideas y llevan pausa
+    natural alrededor — cortarlas destruye contenido legítimo."""
     cuts = []
-    i = 0
-    while i < len(words):
-        # frases de 2-3 palabras («o sea», «es decir»)
-        matched = None
-        for size in (3, 2):
-            chunk = tuple(norm(w["text"]) for w in words[i:i + size])
-            if len(chunk) == size and chunk in FILLER_PHRASES:
-                matched = size
-                break
-        if matched is None and norm(words[i]["text"]) in FILLERS:
-            matched = 1
-        if matched:
-            before = words[i - 1]["end"] if i > 0 else None
-            after_idx = i + matched
-            gap_before = (words[i]["start"] - before) if before is not None else 99
-            gap_after = ((words[after_idx]["start"] - words[after_idx - 1]["end"])
-                         if after_idx < len(words) else 99)
-            if gap_before >= min_around and gap_after >= min_around:
-                txt = " ".join(w["text"] for w in words[i:i + matched])
-                cuts.append({"kind": "muletilla",
-                             "start": words[i]["start"],
-                             "end": words[after_idx - 1]["end"],
-                             "text": txt,
-                             "reason": f"muletilla aislada: «{txt}»",
-                             "confidence": "media"})
-                i = after_idx
-                continue
-        i += 1
+    for i, w in enumerate(words):
+        token = norm(w["text"])
+        if token not in FILLERS:
+            continue
+        prev_txt = words[i - 1]["text"].rstrip() if i > 0 else ""
+        # Una palabra-relleno tras puntuación abre o retoma frase de forma
+        # legítima («Bueno, sigamos» · «…terminó. Este fue el resultado»):
+        # la pausa alrededor la explica la puntuación, no el tropiezo.
+        if token in WORD_FILLERS and prev_txt[-1:] in ",.;:!?…":
+            continue
+        gap_before = (w["start"] - words[i - 1]["end"]) if i > 0 else 99
+        gap_after = _gap(words, i) if i + 1 < len(words) else 99
+        if gap_before >= min_around and gap_after >= min_around:
+            cuts.append({"kind": "muletilla",
+                         "start": _cut_start(words, i),
+                         "end": _cut_end(words, i),
+                         "text": w["text"],
+                         "reason": f"muletilla aislada: «{w['text']}»",
+                         "confidence": "media"})
     return cuts
 
 
@@ -224,11 +322,10 @@ def detect_explicit_restarts(words: list[dict]) -> list[dict]:
                 continue
             start_idx = _phrase_start(words, max(0, i - 1))
             end_idx = i + k - 1
-            end_t = (words[end_idx + 1]["start"] if end_idx + 1 < n
-                     else words[end_idx]["end"])
             cuts.append({
                 "kind": "correccion_explicita",
-                "start": words[start_idx]["start"], "end": end_t,
+                "start": _cut_start(words, start_idx),
+                "end": _cut_end(words, end_idx),
                 "text": " ".join(w["text"] for w in words[start_idx:end_idx + 1]),
                 "reason": f"el narrador anuncia la corrección: «{' '.join(m)}»",
                 "confidence": "alta"})
@@ -242,6 +339,7 @@ def detect_all(segments: list[dict]) -> list[dict]:
     if len(words) < 3:
         return []
     cuts = (detect_explicit_restarts(words) + detect_false_starts(words)
+            + detect_sentence_restarts(words)
             + detect_immediate_repeats(words) + detect_fillers(words))
     return merge_cuts(cuts)
 
@@ -392,17 +490,26 @@ def review_with_llm(llm, segments: list[dict], lang: str = "español",
     prompt = (
         "Marca los tramos que son claramente un ERROR DE GRABACIÓN:\n"
         "- falso_arranque: empieza una frase, se corta y la reinicia (con "
-        "las mismas palabras o reformulada).\n"
-        "- repeticion: repite palabras o una frase entera sin intención.\n"
-        "- muletilla: relleno aislado sin contenido ('eh', 'o sea'…).\n"
+        "las mismas palabras o reformulada) INMEDIATAMENTE después.\n"
+        "- repeticion: repite palabras o una frase entera sin intención, "
+        "SEGUIDAS (el reintento viene justo después del tropiezo).\n"
+        "- muletilla: relleno vocal aislado sin contenido ('eh', 'mmm'…).\n"
         "- correccion_explicita: dice que se equivocó ('voy de nuevo', "
         "'corrijo', 'perdón').\n\n"
-        "NO marques: repeticiones RETÓRICAS con intención (anáforas, "
-        "énfasis), enumeraciones, muletillas integradas en una frase fluida, "
-        "ni nada que forme parte del contenido. Si dudas, no lo marques.\n"
+        "NO marques JAMÁS:\n"
+        "- conectores discursivos («es decir», «o sea», «en fin», «ahora "
+        "bien», «dicho esto»): enlazan ideas y son contenido, aunque lleven "
+        "pausas alrededor.\n"
+        "- una frase o idea que se retoma MÁS TARDE en la narración (a "
+        "muchas palabras de distancia): reformular o recapitular es un "
+        "recurso del narrador, no un tropiezo. Un error de grabación y su "
+        "reintento son SIEMPRE contiguos.\n"
+        "- repeticiones RETÓRICAS con intención (anáforas, énfasis), "
+        "enumeraciones, muletillas integradas en una frase fluida, ni nada "
+        "que forme parte del contenido. Si dudas, no lo marques.\n"
         "Indica el rango por ÍNDICE de palabra (inicio_palabra y "
         "fin_palabra, ambos incluidos) y usa seguridad='alta' solo cuando "
-        "sea indiscutible.\n"
+        "sea indiscutible — SOLO los 'alta' se cortan.\n"
         + ya +
         f"\n\nTRANSCRIPCIÓN CON PAUSAS:\n{listado}")
     try:
@@ -418,12 +525,12 @@ def review_with_llm(llm, segments: list[dict], lang: str = "español",
             continue
         if not (0 <= i0 <= i1 < len(words)):
             continue
-        if e.get("seguridad") == "baja":
-            continue  # solo se corta con evidencia clara
-        end_t = (words[i1 + 1]["start"] if i1 + 1 < len(words)
-                 else words[i1]["end"])
+        if e.get("seguridad") != "alta":
+            continue  # la IA solo corta con evidencia INDISCUTIBLE: un corte
+            # 'media' equivocado destruye contenido (caso «monos masivos»,
+            # una recapitulación a 70 s del original cortada como repetición)
         out.append({"kind": e.get("tipo", "falso_arranque"),
-                    "start": words[i0]["start"], "end": end_t,
+                    "start": _cut_start(words, i0), "end": _cut_end(words, i1),
                     "text": " ".join(w["text"] for w in words[i0:i1 + 1]),
                     "reason": str(e.get("motivo", ""))[:160] + " (revisión IA)",
                     "confidence": e.get("seguridad", "media")})
