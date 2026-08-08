@@ -228,6 +228,24 @@ DIRECTION_SCHEMA = {
 }
 
 
+# Máximo de escenas por LLAMADA en los pases que devuelven todas las escenas.
+# Un video largo (~200 escenas de un guion de 20 min) supera el límite de
+# tokens de SALIDA del modelo y el JSON llega cortado — la fase moría con un
+# críptico «Unterminated string» (pasó de verdad). Por encima de este número
+# el trabajo se hace por TANDAS.
+_SCENES_PER_CALL = 40
+
+_BIBLE_SCHEMA = {
+    "type": "object",
+    "properties": {"bible": DIRECTION_SCHEMA["properties"]["bible"]},
+    "required": ["bible"], "additionalProperties": False}
+
+_DIR_SCENES_SCHEMA = {
+    "type": "object",
+    "properties": {"scenes": DIRECTION_SCHEMA["properties"]["scenes"]},
+    "required": ["scenes"], "additionalProperties": False}
+
+
 def _board_lines(scenes: list[dict]) -> str:
     """Storyboard compacto para el pase de dirección: narración + decisiones
     actuales de cada escena, para que el director de arte revise el CONJUNTO."""
@@ -275,15 +293,15 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "como una biblia de arte de producción real: un solo mundo visual, "
         "prompts con nivel de detalle profesional y una banda sonora y "
         "rotulación que funcionan como sistema.")
-    prompt = (
-        "Haz el pase de dirección de arte de este video completo:\n\n"
+    bible_instr = (
         "1) BIBLIA VISUAL (bible) — lee TODO el storyboard y define el mundo "
         "visual ÚNICO del video: época y lugar (era_setting), paleta de color "
         "(palette), luz (lighting), lenguaje de cámara (camera_language: "
         "encuadres, ópticas, alturas de cámara), textura y acabado "
         "(texture_grade: grano, contraste, grading) y 2-4 MOTIVOS visuales "
         "recurrentes (motifs) que unan el video (un objeto, un elemento del "
-        "paisaje, un gesto de luz que reaparece en momentos clave).\n\n"
+        "paisaje, un gesto de luz que reaparece en momentos clave).")
+    rules_24 = (
         "2) PROMPTS (broll_prompt de CADA escena, EN INGLÉS, empezando "
         f"SIEMPRE con el prefijo de estilo \"{prefix}\") — reescríbelos "
         "aplicando la biblia:\n"
@@ -325,14 +343,25 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "como sistema coherente (mismo estilo de kicker, sin repetir datos); "
         "fundidos solo en fronteras de sección o momentos dramáticos; sfx "
         "sin fatiga; variedad de ritmo.\n"
-        + cast_rules +
-        f"\nDevuelve TODAS las escenas (mismos ids, mismo orden).\n\n"
-        f"STORYBOARD ACTUAL ({len(scenes)} escenas):\n{_board_lines(scenes)}")
+        + cast_rules)
     try:
-        result = llm.complete_json(system, prompt, schema=DIRECTION_SCHEMA,
-                                   max_tokens=64000, purpose="direction")
-        by_id = {int(d.get("id", -1)): d for d in (result.get("scenes") or [])}
-        bible = result.get("bible") or {}
+        if len(scenes) <= _SCENES_PER_CALL:
+            prompt = (
+                "Haz el pase de dirección de arte de este video completo:\n\n"
+                + bible_instr + "\n\n" + rules_24 +
+                "\nDevuelve TODAS las escenas (mismos ids, mismo orden).\n\n"
+                f"STORYBOARD ACTUAL ({len(scenes)} escenas):\n"
+                f"{_board_lines(scenes)}")
+            result = llm.complete_json(system, prompt, schema=DIRECTION_SCHEMA,
+                                       max_tokens=64000, purpose="direction")
+            by_id = {int(d.get("id", -1)): d
+                     for d in (result.get("scenes") or [])}
+            bible = result.get("bible") or {}
+        else:
+            # VIDEO LARGO: la respuesta con todas las escenas no cabe en una
+            # sola llamada — biblia primero, prompts por tandas.
+            bible, by_id = _direction_in_batches(llm, system, scenes,
+                                                 bible_instr, rules_24)
     except Exception as e:
         project.add_warning(
             f"El pase de dirección de arte no se pudo aplicar ({e}): se "
@@ -364,6 +393,46 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
                f"({', '.join(map(str, risky_video))}) — sus prompts se "
                "reescribieron hacia movimiento de cámara y atmósfera (sujetos "
                "casi estáticos) para evitar artefactos del modelo.")
+
+
+def _direction_in_batches(llm, system: str, scenes: list[dict],
+                          bible_instr: str, rules_24: str):
+    """Pase de dirección para videos LARGOS (> _SCENES_PER_CALL escenas):
+    (1) UNA llamada corta define la biblia leyendo el storyboard entero;
+    (2) los prompts se reescriben por tandas — cada tanda recibe la biblia
+    y el ÍNDICE completo del video para no perder la visión de conjunto.
+    Devuelve (bible, {id: escena_dirigida})."""
+    import json as _json
+    from ytstudio.progress import notify
+    board = _board_lines(scenes)
+    prompt_b = ("Define SOLO la biblia visual de este video (las escenas se "
+                "trabajarán después):\n\n" + bible_instr +
+                f"\n\nSTORYBOARD ACTUAL ({len(scenes)} escenas):\n{board}")
+    bible = llm.complete_json(system, prompt_b, schema=_BIBLE_SCHEMA,
+                              max_tokens=8000, purpose="direction")["bible"]
+    index = "\n".join(f"[{s['id']}] {s.get('section', '')} — "
+                      f"{(s.get('narration') or '')[:70]}" for s in scenes)
+    by_id: dict[int, dict] = {}
+    total = -(-len(scenes) // _SCENES_PER_CALL)
+    for n, start in enumerate(range(0, len(scenes), _SCENES_PER_CALL), 1):
+        chunk = scenes[start:start + _SCENES_PER_CALL]
+        notify(f"🎨 Dirección de arte (tanda {n}/{total}): escenas "
+               f"{chunk[0]['id']}–{chunk[-1]['id']}…")
+        prompt = (
+            "La BIBLIA VISUAL de este video ya está definida:\n"
+            + _json.dumps(bible, ensure_ascii=False) +
+            "\n\nÍNDICE COMPLETO del video (solo para que mantengas la "
+            "visión de conjunto):\n" + index +
+            "\n\nHaz el pase de dirección de arte SOLO de las escenas de "
+            "esta tanda, aplicando la biblia y estas reglas:\n\n" + rules_24 +
+            "\nDevuelve TODAS las escenas de esta tanda (mismos ids, mismo "
+            f"orden).\n\nESCENAS DE ESTA TANDA ({len(chunk)}):\n"
+            + _board_lines(chunk))
+        result = llm.complete_json(system, prompt, schema=_DIR_SCENES_SCHEMA,
+                                   max_tokens=32000, purpose="direction")
+        for d in (result.get("scenes") or []):
+            by_id[int(d.get("id", -1))] = d
+    return bible, by_id
 
 
 def _schema_with_cast(base_schema: dict, cast_names: list[str]) -> dict:
@@ -736,33 +805,49 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
     }
     cast_names, cast_rules = _cast_rules(project) if project else ([], "")
     schema = _schema_with_cast(schema, cast_names)
-    narr = "\n".join(f"[{s['id']}] {s['narration']}" for s in scenes)
     system = (
         f"Eres a la vez director de fotografía, editor senior y director "
         f"creativo de documentales y videos largos de YouTube en {lang}. Las "
         "escenas y su narración YA están fijadas por el audio del narrador; tú "
         "diseñas el apoyo visual, los rótulos y la dirección de la banda "
         "sonora de cada una con criterio cinematográfico.")
-    prompt = (
-        f"Para cada una de estas {len(scenes)} escenas (en el mismo orden y "
-        "cantidad), diseña el apoyo audiovisual de lo que se dice:\n"
-        "- broll_prompt: prompt EN INGLÉS, detallado, que ilustre el contenido "
-        f"de esa narración concreta, comenzando con el prefijo de estilo "
-        f"\"{prefix}\". Sin texto ni letras en la imagen (salvo el image_text "
-        "exacto de las escenas que lo definan), sin personas reales.\n"
-        + (f"- broll_type: 'video' solo en las {videogen_scenes} de mayor "
-           "impacto, el resto 'image'.\n" if videogen_scenes else
-           "- broll_type: siempre 'image'.\n")
-        + "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
-        "- section: título temático corto del tramo (para los capítulos).\n\n"
-        + CREATIVE_RULES
-        + (SHORT_FORM_RULES if short_form else "")
-        + template_rules
-        + cast_rules
-        + f"\nNARRACIÓN POR ESCENA:\n{narr}")
-    result = llm.complete_json(system, prompt, schema=schema,
-                               max_tokens=32000, purpose="broll_fixed")
-    got = result["scenes"]
+    # Por TANDAS: un video largo (~200 escenas) no cabe en una sola respuesta
+    # del modelo — el JSON llegaba cortado y la fase moría («Unterminated
+    # string», caso real con un video de ~20 min).
+    from ytstudio.progress import notify
+    got: list[dict] = []
+    tandas = -(-len(scenes) // _SCENES_PER_CALL)
+    for n_t, start in enumerate(range(0, len(scenes), _SCENES_PER_CALL), 1):
+        chunk = scenes[start:start + _SCENES_PER_CALL]
+        if tandas > 1:
+            notify(f"🎬 Diseño de escenas (tanda {n_t}/{tandas}): escenas "
+                   f"{chunk[0]['id']}–{chunk[-1]['id']}…")
+        narr = "\n".join(f"[{s['id']}] {s['narration']}" for s in chunk)
+        parte = (f"(Es la TANDA {n_t} de {tandas} de un video de "
+                 f"{len(scenes)} escenas — mantén un criterio consistente "
+                 "con el resto.)\n" if tandas > 1 else "")
+        prompt = (
+            f"Para cada una de estas {len(chunk)} escenas (en el mismo orden "
+            "y cantidad), diseña el apoyo audiovisual de lo que se dice:\n"
+            + parte +
+            "- broll_prompt: prompt EN INGLÉS, detallado, que ilustre el "
+            f"contenido de esa narración concreta, comenzando con el prefijo "
+            f"de estilo \"{prefix}\". Sin texto ni letras en la imagen (salvo "
+            "el image_text exacto de las escenas que lo definan), sin "
+            "personas reales.\n"
+            + (f"- broll_type: 'video' solo en las {videogen_scenes} de mayor "
+               "impacto del video completo, el resto 'image'.\n"
+               if videogen_scenes else "- broll_type: siempre 'image'.\n")
+            + "- animation: alterna zoom_in/zoom_out/pan_left/pan_right.\n"
+            "- section: título temático corto del tramo (para los capítulos).\n\n"
+            + CREATIVE_RULES
+            + (SHORT_FORM_RULES if short_form else "")
+            + template_rules
+            + cast_rules
+            + f"\nNARRACIÓN POR ESCENA:\n{narr}")
+        result = llm.complete_json(system, prompt, schema=schema,
+                                   max_tokens=32000, purpose="broll_fixed")
+        got += list(result["scenes"])[:len(chunk)]
     for i, s in enumerate(scenes):
         b = got[i] if i < len(got) else {}
         s["broll_prompt"] = b.get("broll_prompt") or f"{prefix}, {s['narration'][:50]}"

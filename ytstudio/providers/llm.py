@@ -7,6 +7,23 @@ import json
 import mimetypes
 from pathlib import Path
 
+
+def _sniff_media_type(data: bytes, name: str) -> str:
+    """Tipo real de la imagen por sus BYTES, no por la extensión: algunos
+    generadores devuelven PNG aunque se les pida .jpg, y la API rechaza con
+    un 400 la imagen cuyo media_type declarado no coincide con el contenido
+    (pasó de verdad: el control de calidad con visión falló entero por una
+    'jpg' que era PNG)."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return mimetypes.guess_type(name)[0] or "image/jpeg"
+
 # Palabras clave de JSON Schema que la API de structured output NO admite.
 # Un schema con cualquiera de ellas se rechaza ENTERO con un error 400 críptico
 # a mitad del pipeline (pasó de verdad: 'minItems: 3' tumbó la fase de
@@ -60,13 +77,13 @@ class ClaudeLLM:
                  purpose: str = "") -> str:
         content: list[dict] = []
         for img in images or []:
-            media_type = mimetypes.guess_type(img.name)[0] or "image/jpeg"
+            data = img.read_bytes()
             content.append({
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": media_type,
-                    "data": base64.standard_b64encode(img.read_bytes()).decode(),
+                    "media_type": _sniff_media_type(data, img.name),
+                    "data": base64.standard_b64encode(data).decode(),
                 },
             })
         content.append({"type": "text", "text": prompt})
@@ -86,6 +103,14 @@ class ClaudeLLM:
             message = stream.get_final_message()
         if message.stop_reason == "refusal":
             raise RuntimeError("El modelo rechazó la petición (stop_reason=refusal).")
+        if message.stop_reason == "max_tokens":
+            # Sin esto, el JSON cortado a la mitad revienta después con un
+            # críptico «Unterminated string» (pasó de verdad: la fase de
+            # escenas de un video de ~20 min murió así).
+            raise RuntimeError(
+                f"La respuesta del modelo se cortó por el límite de tokens "
+                f"(max_tokens={max_tokens}) — la petición es demasiado "
+                "grande y debe partirse en tandas.")
         self._record_usage(message, purpose)
         return next(b.text for b in message.content if b.type == "text")
 

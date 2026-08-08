@@ -9,6 +9,52 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.42.1 — 2026-08-08
+Arreglos a partir del log real de tus 2 últimas corridas (test-1-mansa-musa
+y 2-mansa-musa) — cinco causas raíz encontradas y corregidas:
+
+- ✂ ENUMERACIONES CORTADAS POR ERROR (lo más grave: 12.7 s quitados de tu
+  narración de Mansa Musa): el detector de falsos arranques cortó «ni en
+  América Latina,» y «ni en Europa,» de una enumeración («no en Estados
+  Unidos, ni en América Latina, ni en Europa…»), «tuvo la visión, tuvo la
+  generosidad,» de una anáfora, y «luego las rutas comerciales,» — porque
+  le bastaba que el siguiente tramo repitiera 2 palabras del arranque («ni
+  en», «tuvo la») tras una pausa. Regla nueva en AMBOS detectores de redos:
+  la coincidencia debe cubrir el intento COMPLETO (todo lo que dijiste se
+  vuelve a decir) — ese es el patrón de un redo real; la coincidencia
+  parcial de arranque es el patrón de las enumeraciones y anáforas, y ya
+  NUNCA corta. Además, un redo que corrige/extiende la frase exige ahora
+  una pausa larga (≥1.2 s, como los 2 s de tu caso del «registro
+  veterinario») para no tocar el eco retórico de extensión («Nadie lo
+  sabía. Nadie lo sabía hasta hoy.»). Verificado con tus 4 casos del log:
+  ninguno se corta ya; los redos reales sí.
+- 📖 LA CORRIDA GRANDE QUE NO TERMINÓ («Unterminated string» en la fase de
+  escenas): tu video de ~20 min genera tantas escenas que la respuesta del
+  modelo YA NO CABE en una sola llamada — el JSON llegaba cortado por el
+  límite de tokens y la fase moría con ese error críptico. Ahora el diseño
+  de escenas y el pase de dirección de arte trabajan POR TANDAS de 40
+  escenas cuando el video es largo (la biblia visual se define primero con
+  el storyboard entero; cada tanda la recibe junto con el índice completo
+  para no perder la visión de conjunto). Y si aun así una respuesta se
+  cortara, el error ahora lo dice claro («la petición debe partirse en
+  tandas») en vez del críptico «Unterminated string».
+- 👁 EL 400 DEL CONTROL FACTUAL («image/jpeg… appears to be image/png»):
+  algunos generadores devuelven PNG aunque se les pida .jpg, y la API de
+  visión rechaza la imagen cuyo tipo declarado no coincide. El tipo se
+  detecta ahora por los BYTES reales del archivo (PNG/JPEG/WebP/GIF), no
+  por la extensión — afecta a todo el programa (control factual, revisión
+  de tu B-roll, análisis de referencias).
+- 🤥 AVISO ENGAÑOSO: tras fallar esa llamada, el programa decía «todas las
+  imágenes respetan lo narrado» — sin veredictos no se puede afirmar nada.
+  Ahora, si la revisión con visión falla, solo avisa del fallo y no
+  presume de un control que no ocurrió.
+- 🙅 PULIDO DE TRANSCRIPCIÓN RECHAZADO (stop_reason=refusal en
+  2-mansa-musa): el prompt ahora deja claro que el texto es la
+  transcripción Whisper de TU PROPIA grabación y que el creador pide
+  revisar su calidad — el encuadre anterior podía leerse como una petición
+  de transcribir contenido ajeno. (Si aún así el modelo se rehúsa, el
+  programa sigue avisando y usa la transcripción tal cual: nada se rompe.)
+
 ## v0.42.0 — 2026-08-07
 Debug general a partir de tu video «2-chupacabras» (59 escenas, ~15 min):
 siete frentes, cada uno con su causa raíz encontrada en el log y verificado

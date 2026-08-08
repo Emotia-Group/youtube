@@ -482,8 +482,11 @@ _QA_SCHEMA = {
 
 
 def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
-                project) -> dict[int, dict]:
-    """Pasa las imágenes por visión en tandas y devuelve {id: veredicto}."""
+                project) -> dict[int, dict] | None:
+    """Pasa las imágenes por visión en tandas y devuelve {id: veredicto}.
+    Devuelve None si alguna tanda FALLÓ: sin veredictos completos no se puede
+    afirmar nada (v0.42.0 decía «todas las imágenes respetan lo narrado»
+    justo después de que la llamada de visión fallara con un 400)."""
     from ytstudio.catalog import lang_name
     lang = lang_name(cfg)
     verdicts: dict[int, dict] = {}
@@ -531,7 +534,7 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
             project.add_warning(f"El control de calidad factual con visión "
                                 f"no se pudo completar ({e}) — las imágenes "
                                 "quedan como salieron.")
-            return verdicts
+            return None
         for r in result.get("reviews", []):
             verdicts[int(r.get("scene", -1))] = r
     return verdicts
@@ -558,6 +561,8 @@ def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
     notify(f"👁 Control de calidad factual: el director compara "
            f"{len(targets)} imagen(es) con los hechos de su narración…")
     verdicts = _qa_batches(llm, cfg, targets, broll_dir, project)
+    if verdicts is None:
+        return  # la revisión falló (ya avisó): no se afirma nada
     bad = []
     for s in targets:
         v = verdicts.get(s["id"])
@@ -606,7 +611,7 @@ def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
         sig_path.write_text(_json.dumps(sigs, indent=0), encoding="utf-8")
         # Segunda mirada SOLO a las regeneradas: si alguna sigue infiel, se
         # avisa con claridad (no se vuelve a cobrar otra regeneración).
-        second = _qa_batches(llm, cfg, redone, broll_dir, project)
+        second = _qa_batches(llm, cfg, redone, broll_dir, project) or {}
         still = [s["id"] for s in redone
                  if second.get(s["id"]) and not second[s["id"]].get("fiel", True)]
         if still:

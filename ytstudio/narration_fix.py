@@ -154,9 +154,15 @@ def detect_false_starts(words: list[dict], min_pause: float = 0.30,
         # terminada es contenido legítimo, no un tropiezo.
         if attempt[-1]["text"].rstrip()[-1:] in _PUNCT_END:
             continue
-        # (a) el reintento repite el arranque del intento
-        k = _overlap_len(attempt, words[i + 1:])
-        if k <= 0:
+        # (a) el reintento repite el intento COMPLETO: todo lo que el
+        # narrador alcanzó a decir se vuelve a decir. Una coincidencia
+        # PARCIAL de arranque («ni en…», «tuvo la…», «luego las…») es el
+        # patrón de las ENUMERACIONES y anáforas — caso real: en v0.42.0
+        # este detector cortó «ni en América Latina,» y «ni en Europa,» de
+        # una enumeración porque el siguiente ítem repetía «ni en». Un redo
+        # de verdad re-dice el intento entero.
+        k = _overlap_len(attempt, words[i + 1:], max_k=len(attempt))
+        if k <= 0 or k < len(attempt):
             continue
         cuts.append({
             "kind": "falso_arranque",
@@ -243,11 +249,16 @@ def detect_sentence_restarts(words: list[dict],
     ENTERO en el video (reportado por el usuario en v0.41.0).
 
     Evidencia convergente exigida (una anáfora retórica no la cumple):
-    - el reintento repite las palabras INICIALES del intento, y
-    - (R1) la coincidencia es larga (≥4 palabras) y el reintento CONTINÚA más
-      allá del intento (lo corrige/completa), con pausa real ≥ min_pause; o
-    - (R2) el reintento repite el intento COMPLETO (≥3 palabras) tras una
-      pausa clara (≥0.8 s; ≥0.5 s si son ≥5 palabras — cuanto más larga la
+    - el reintento repite el intento COMPLETO (≥3 palabras): todo lo que el
+      narrador dijo se vuelve a decir. Una coincidencia PARCIAL de arranque
+      («ni en…», «tuvo la…») es el patrón de las enumeraciones y anáforas
+      (caso real que v0.42.0 cortó mal), nunca base suficiente para cortar.
+    - pausa real proporcional a la ambigüedad: si el reintento CONTINÚA más
+      allá del intento (lo corrige/completa) hace falta una pausa larga
+      (≥1.2 s — el eco retórico de extensión «Nadie lo sabía. Nadie lo sabía
+      hasta hoy.» se dice con pausa corta; un redo real viene tras un reset
+      largo, como los 2 s del caso del usuario). Si es una repetición
+      idéntica: ≥0.8 s (≥0.5 s con ≥5 palabras — cuanto más larga la
       coincidencia, menos probable el eco retórico).
     Se corta el PRIMER intento; el reintento (la versión buena) se conserva."""
     cuts: list[dict] = []
@@ -262,11 +273,15 @@ def detect_sentence_restarts(words: list[dict],
             continue
         rest = words[i + 1:]
         k = _prefix_overlap(attempt, rest)
-        full = k == len(attempt)
-        extends = full and len(rest) > k  # el reintento sigue más allá
-        r1 = k >= 4 and (extends or not full)
-        r2 = full and (pause >= 0.5 if k >= 5 else pause >= 0.8)
-        if not (r1 and k >= 4) and not r2:
+        if k < len(attempt):
+            continue  # cobertura COMPLETA o nada (protege enumeraciones)
+        # ¿El reintento SIGUE la frase más allá del intento (lo corrige o
+        # completa), o fue una repetición idéntica que terminó ahí?
+        j = i + k  # última palabra re-dicha, en índice global
+        ended = (words[j]["text"].rstrip()[-1:] in _PUNCT_END
+                 or j == n - 1 or _gap(words, j) >= 0.5)
+        need = (0.5 if k >= 5 else 0.8) if ended else 1.2
+        if pause < need:
             continue
         cuts.append({
             "kind": "falso_arranque",

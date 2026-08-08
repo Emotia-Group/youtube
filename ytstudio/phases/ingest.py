@@ -294,7 +294,10 @@ def _polish_transcript(project, cfg, llm, segments, lang):
         return segments
     text = " ".join(s["text"] for s in segments)
     system = (
-        f"Eres corrector de transcripciones automáticas en {lang}. Whisper "
+        f"Eres corrector de transcripciones automáticas en {lang}, al "
+        "servicio del propio creador del contenido: el texto es la "
+        "transcripción Whisper de SU PROPIA grabación de voz para su video, "
+        "y te pide revisar la calidad de esa transcripción. Whisper "
         "transcribe lo fonéticamente más FRECUENTE, no lo que el contexto "
         "exige: los tecnicismos, especies, nombres propios y lugares poco "
         "comunes salen convertidos en palabras parecidas sin sentido. Tu "
