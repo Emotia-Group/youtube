@@ -253,7 +253,7 @@ def _semantic_map(llm, scenes: list[dict], assets: list[dict],
         "- scene = -1 si el asset no encaja de verdad en ninguna escena "
         "(mejor generar imagen nueva que colocar material fuera de contexto).\n"
         "- Prioriza los emparejamientos más claros.",
-        schema=schema, max_tokens=16000, purpose="broll_semantic")
+        schema=schema, max_tokens=32000, purpose="broll_semantic")
     mapping: dict[int, int] = {}
     used_assets: set[int] = set()
     for pair in result["assignments"]:

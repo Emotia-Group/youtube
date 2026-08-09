@@ -64,6 +64,14 @@ def check_schema(schema, _path: str = "schema") -> None:
             check_schema(value, f"{_path}.{key}")
 
 
+class _Truncated(Exception):
+    """La respuesta se cortó por el límite de tokens (uso interno)."""
+
+    def __init__(self, max_tokens: int):
+        super().__init__(f"respuesta cortada en {max_tokens} tokens")
+        self.max_tokens = max_tokens
+
+
 class ClaudeLLM:
     is_mock = False
 
@@ -72,9 +80,43 @@ class ClaudeLLM:
         self.client = anthropic.Anthropic()
         self.model = cfg["providers"]["llm"].get("model", "claude-opus-4-8")
 
+    # Techo de salida del modelo (Opus 4.8/5: 128K). El límite de salida NO se
+    # reserva ni se cobra: solo se paga lo que el modelo genera de verdad. Por
+    # eso pedir un techo alto es GRATIS y evita respuestas cortadas.
+    MAX_OUTPUT = 128000
+
     def complete(self, system: str, prompt: str, *, schema: dict | None = None,
-                 images: list[Path] | None = None, max_tokens: int = 16000,
+                 images: list[Path] | None = None, max_tokens: int = 64000,
                  purpose: str = "") -> str:
+        """Una llamada al modelo. Si la respuesta se corta por el límite de
+        tokens, se REINTENTA UNA VEZ con el techo ampliado — el gasto de la
+        llamada cortada se registra igual (se pagó), pero la fase no muere."""
+        try:
+            return self._once(system, prompt, schema=schema, images=images,
+                              max_tokens=max_tokens, purpose=purpose)
+        except _Truncated as e:
+            bigger = min(self.MAX_OUTPUT, max(e.max_tokens * 3, 96000))
+            if bigger <= e.max_tokens:
+                raise RuntimeError(
+                    "La respuesta del modelo se cortó incluso con el techo "
+                    f"máximo de tokens ({e.max_tokens}) — la petición es "
+                    "demasiado grande y debe partirse en tandas.") from None
+            from ytstudio.progress import notify
+            notify(f"↻ La respuesta se cortó por el límite de tokens "
+                   f"({e.max_tokens}); se reintenta con {bigger} "
+                   "(el modelo solo cobra lo que genera).")
+            try:
+                return self._once(system, prompt, schema=schema, images=images,
+                                  max_tokens=bigger, purpose=purpose)
+            except _Truncated:
+                raise RuntimeError(
+                    f"La respuesta del modelo se cortó dos veces (hasta "
+                    f"{bigger} tokens): la petición es demasiado grande y "
+                    "debe partirse en tandas.") from None
+
+    def _once(self, system: str, prompt: str, *, schema: dict | None = None,
+              images: list[Path] | None = None, max_tokens: int = 64000,
+              purpose: str = "") -> str:
         content: list[dict] = []
         for img in images or []:
             data = img.read_bytes()
@@ -101,18 +143,27 @@ class ClaudeLLM:
 
         with self.client.messages.stream(**kwargs) as stream:
             message = stream.get_final_message()
+        # EL GASTO SE ANOTA SIEMPRE, PASE LO QUE PASE. La API cobra los tokens
+        # que generó aunque la respuesta se rechace o se corte: si se anotara
+        # después de los controles de abajo, ese dinero quedaría INVISIBLE en
+        # el reporte (pasó de verdad — una respuesta cortada de 16 000 tokens
+        # de Opus no apareció en el gasto de la corrida).
+        self._record_usage(message, purpose)
         if message.stop_reason == "refusal":
             raise RuntimeError("El modelo rechazó la petición (stop_reason=refusal).")
         if message.stop_reason == "max_tokens":
-            # Sin esto, el JSON cortado a la mitad revienta después con un
-            # críptico «Unterminated string» (pasó de verdad: la fase de
-            # escenas de un video de ~20 min murió así).
-            raise RuntimeError(
-                f"La respuesta del modelo se cortó por el límite de tokens "
-                f"(max_tokens={max_tokens}) — la petición es demasiado "
-                "grande y debe partirse en tandas.")
-        self._record_usage(message, purpose)
-        return next(b.text for b in message.content if b.type == "text")
+            # Con pensamiento adaptativo, max_tokens acota PENSAMIENTO +
+            # RESPUESTA: en una petición grande el razonamiento puede
+            # consumirlo entero y el JSON llega cortado (revienta después con
+            # un críptico «Unterminated string»). Lo maneja complete() con un
+            # reintento de techo ampliado.
+            raise _Truncated(max_tokens)
+        text = next((b.text for b in message.content if b.type == "text"), None)
+        if text is None:
+            # Respuesta sin texto (solo bloques de razonamiento): tratarla
+            # como cortada — el reintento con más techo la completa.
+            raise _Truncated(max_tokens)
+        return text
 
     def _record_usage(self, message, purpose: str) -> None:
         # Gasto REAL (no estimado): la API devuelve los tokens exactos que
@@ -128,7 +179,7 @@ class ClaudeLLM:
         usage.record("anthropic", purpose or "llm", in_tok + out_tok, "tokens", usd)
 
     def complete_json(self, system: str, prompt: str, *, schema: dict,
-                      images: list[Path] | None = None, max_tokens: int = 16000,
+                      images: list[Path] | None = None, max_tokens: int = 64000,
                       purpose: str = "") -> dict:
         text = self.complete(system, prompt, schema=schema, images=images,
                              max_tokens=max_tokens, purpose=purpose)
@@ -145,7 +196,7 @@ class MockLLM:
         self.cfg = cfg
 
     def complete(self, system: str, prompt: str, *, schema: dict | None = None,
-                 images=None, max_tokens: int = 16000, purpose: str = "") -> str:
+                 images=None, max_tokens: int = 64000, purpose: str = "") -> str:
         if schema is not None:
             # El mock valida el schema IGUAL que la API: así un schema
             # inválido se detecta en las pruebas locales (sin clave) y no en
@@ -155,7 +206,7 @@ class MockLLM:
         return self._mock_text(purpose)
 
     def complete_json(self, system: str, prompt: str, *, schema: dict,
-                      images=None, max_tokens: int = 16000, purpose: str = "") -> dict:
+                      images=None, max_tokens: int = 64000, purpose: str = "") -> dict:
         check_schema(schema)
         return self._mock_for(purpose)
 

@@ -318,7 +318,7 @@ def _polish_transcript(project, cfg, llm, segments, lang):
         f"TRANSCRIPCIÓN:\n{text}")
     try:
         res = llm.complete_json(system, prompt, schema=POLISH_SCHEMA,
-                                max_tokens=4000, purpose="transcript_polish")
+                                max_tokens=32000, purpose="transcript_polish")
     except Exception as e:
         project.add_warning(f"No se pudo revisar la transcripción en busca "
                             f"de términos mal oídos ({e}): se usa tal cual.")

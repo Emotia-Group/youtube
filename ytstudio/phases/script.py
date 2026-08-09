@@ -107,7 +107,7 @@ def run(project, cfg) -> None:
             + hooks_block
         )
 
-    script_md = llm.complete(system, prompt, max_tokens=32000, purpose="script")
+    script_md = llm.complete(system, prompt, max_tokens=64000, purpose="script")
     project.path("script", "guion.md").write_text(script_md, encoding="utf-8")
     project.set("script_words", len(script_md.split()))
 

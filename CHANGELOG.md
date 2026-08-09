@@ -9,6 +9,36 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.42.2 — 2026-08-09
+Dos arreglos a partir de tu última corrida (proyecto 2-mansa-musa), uno de
+ellos de DINERO:
+
+- 🧠 LA FASE «CONCEPTO» QUE MURIÓ (tu error nuevo): el modelo piensa antes de
+  responder, y ese razonamiento CUENTA dentro del mismo límite de tokens que
+  la respuesta. Con un brief grande (análisis del video de referencia +
+  transcripción de 20 min + imágenes), el razonamiento se comió los 16 000
+  tokens del techo y el JSON llegó cortado. Tres capas de arreglo:
+  · El techo por defecto sube de 16 000 a 64 000 tokens. **Esto no cuesta
+    nada**: el techo es un LÍMITE, no una reserva — la API solo cobra lo que
+    el modelo genera de verdad. Quedarse corto era pura pérdida.
+  · Si aun así una respuesta se corta, ahora se REINTENTA UNA VEZ sola con
+    el techo ampliado (hasta 128 000, el máximo del modelo) y la fase
+    continúa, en vez de morir a mitad del proyecto.
+  · Subí también los techos apretados de las fases que revisan tu narración
+    (4 000 y 8 000 tokens): con un audio de 20 minutos eran igual de
+    vulnerables al mismo corte.
+- 💸 GASTO INVISIBLE — el que explica «sigo perdiendo tokens»: cuando una
+  llamada se cortaba o el modelo la rechazaba, el programa lanzaba el error
+  ANTES de anotar el gasto. Esos tokens ya estaban COBRADOS por la API (en
+  tu corrida, una respuesta cortada de 16 000 tokens de salida de Opus ≈
+  $0.55) y no aparecían en el reporte de la corrida. Ahora el gasto se anota
+  SIEMPRE, pase lo que pase: primero se registra, después se decide qué
+  hacer con el error. Lo mismo aplica al rechazo del pulido de transcripción
+  que viste en la corrida anterior.
+- Además, si una respuesta se corta te avisa en el log con el reintento
+  («↻ La respuesta se cortó… se reintenta con N»), para que veas el motivo
+  en vez de un error críptico.
+
 ## v0.42.1 — 2026-08-08
 Arreglos a partir del log real de tus 2 últimas corridas (test-1-mansa-musa
 y 2-mansa-musa) — cinco causas raíz encontradas y corregidas:

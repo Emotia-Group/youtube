@@ -529,7 +529,7 @@ def review_with_llm(llm, segments: list[dict], lang: str = "español",
         f"\n\nTRANSCRIPCIÓN CON PAUSAS:\n{listado}")
     try:
         res = llm.complete_json(system, prompt, schema=REVIEW_SCHEMA,
-                                max_tokens=8000, purpose="narration_fix")
+                                max_tokens=32000, purpose="narration_fix")
     except Exception:
         return []
     out = []

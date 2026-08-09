@@ -409,7 +409,7 @@ def _direction_in_batches(llm, system: str, scenes: list[dict],
                 "trabajarán después):\n\n" + bible_instr +
                 f"\n\nSTORYBOARD ACTUAL ({len(scenes)} escenas):\n{board}")
     bible = llm.complete_json(system, prompt_b, schema=_BIBLE_SCHEMA,
-                              max_tokens=8000, purpose="direction")["bible"]
+                              max_tokens=16000, purpose="direction")["bible"]
     index = "\n".join(f"[{s['id']}] {s.get('section', '')} — "
                       f"{(s.get('narration') or '')[:70]}" for s in scenes)
     by_id: dict[int, dict] = {}
