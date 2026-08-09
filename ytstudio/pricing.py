@@ -77,12 +77,34 @@ def llm_price(model: str) -> tuple[float, float]:
     return LLM_PRICES.get(model, LLM_DEFAULT_PRICE)
 
 
+# Qué modelo usa DE VERDAD cada proveedor de imágenes. El campo
+# providers.images.model del config solo lo respeta Replicate; OpenAI genera
+# siempre con gpt-image-1. Sin esta distinción, un config con name=openai que
+# conservaba el model de FLUX (caso real del creador) hacía que la estimación
+# —y con ella el TOPE DE GASTO— usara el precio de FLUX ($0.04-0.05) para
+# imágenes que costaban $0.07-0.25: 83 imágenes estimadas en $3.32-$4.15
+# cuando de verdad valían $5.81-$20.75.
+_FIXED_IMAGE_MODEL = {"openai": "gpt-image-1"}
+_DEFAULT_IMAGE_MODEL = {"replicate": "black-forest-labs/flux-1.1-pro"}
+
+
+def effective_image_model(provider: str, configured: str = "") -> str:
+    """El modelo de imágenes que realmente se usará con ese proveedor."""
+    if provider in _FIXED_IMAGE_MODEL:
+        return _FIXED_IMAGE_MODEL[provider]
+    return configured or _DEFAULT_IMAGE_MODEL.get(provider, "")
+
+
 def img_cost_range(provider: str, model: str = "") -> tuple[float, float]:
-    """Rango de costo por imagen: por MODELO si se conoce; si no, por proveedor."""
+    """Rango de costo por imagen: por MODELO si se conoce; si no, por proveedor.
+    El modelo se normaliza al que el proveedor usa de verdad, para que un
+    'model' heredado de otro proveedor no falsee el precio."""
+    model = effective_image_model(provider, model)
     return IMG_MODEL_COST.get(model) or IMG_COST.get(provider, (0.0, 0.0))
 
 
 def img_seconds_range(provider: str, model: str = "") -> tuple[float, float]:
+    model = effective_image_model(provider, model)
     return IMG_MODEL_SECONDS.get(model) or IMG_SECONDS.get(provider, (8, 25))
 
 

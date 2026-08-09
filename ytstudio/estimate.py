@@ -173,14 +173,18 @@ def estimate(project, cfg: dict) -> dict:
 
     # --- Imágenes ------------------------------------------------------------
     perf = cfg.get("performance", {})
-    img_model = prov.get("images", {}).get("model", "")
+    from ytstudio.pricing import effective_image_model
+    # El modelo REAL (OpenAI ignora el 'model' del config y usa gpt-image-1):
+    # así el precio, el tiempo y la etiqueta describen lo que va a pasar.
+    img_model = effective_image_model(img_name,
+                                      prov.get("images", {}).get("model", ""))
     if n_ai_images and img_name in IMG_COST:
         from ytstudio.pricing import img_cost_range, img_seconds_range
         c = img_cost_range(img_name, img_model)
         s = img_seconds_range(img_name, img_model)
         iw = max(1, int(perf.get("parallel_images", 4)))
-        if img_name == "replicate":
-            iw = min(iw, 2)
+        if img_name in ("replicate", "openai"):
+            iw = min(iw, 2)  # ambos limitan las imágenes por minuto
         model_tag = img_model.split("/")[-1] if img_model else img_name
         add(f"Imágenes IA ({model_tag})",
             f"{n_ai_images} imágenes (de {n_scenes} escenas, "

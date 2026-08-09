@@ -7,9 +7,28 @@ from pathlib import Path
 from ytstudio.providers.replicate_util import replicate_call
 
 
+def _rate_limit_wait(exc: Exception, attempt: int) -> float | None:
+    """Segundos que hay que esperar ante un límite de peticiones, o None si el
+    error NO es un límite. OpenAI dice en el mensaje cuánto falta («Please try
+    again in 12s»): se respeta ese número; si no lo trae, espera creciente."""
+    import re
+    msg = str(exc)
+    code = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None)
+    if code != 429 and "rate_limit" not in msg and "429" not in msg:
+        return None
+    m = re.search(r"try again in ([\d.]+)\s*(ms|s)\b", msg, re.I)
+    if m:
+        secs = float(m.group(1)) / (1000 if m.group(2).lower() == "ms" else 1)
+        return min(90.0, max(2.0, secs + 2.0))  # +2s de margen
+    return min(90.0, 15.0 * attempt)
+
+
 class OpenAIImages:
     # gpt-image-1 solo admite estos tamaños; se elige por orientación del video
     _VALID = {"1024x1024", "1536x1024", "1024x1536", "auto"}
+    MODEL = "gpt-image-1"     # el modelo es fijo: el 'model' del config no aplica
+    RATE_RETRIES = 6          # reintentos ante límite de peticiones
 
     def __init__(self, cfg: dict):
         from openai import OpenAI
@@ -39,12 +58,43 @@ class OpenAIImages:
 
     def generate(self, prompt: str, out: Path) -> Path:
         import base64
+        import time
+
         from ytstudio import pricing, usage
-        usd = pricing.img_cost_mid("openai")
+        from ytstudio.progress import notify
+        usd = pricing.img_cost_mid("openai", self.MODEL)
         usage.check_budget(usd, "una imagen de OpenAI")
-        result = self.client.images.generate(
-            model="gpt-image-1", prompt=prompt, size=self.size, n=1,
-        )
+
+        # LÍMITE DE PETICIONES: gpt-image-1 admite MUY pocas imágenes por
+        # minuto (5 en cuentas nuevas). Un 429 es TRANSITORIO — la propia API
+        # dice cuántos segundos faltan — y antes tumbaba la fase entera
+        # dejando pagadas las imágenes ya generadas (caso real del creador:
+        # 8 imágenes hechas y el proyecto muerto).
+        last: Exception | None = None
+        for attempt in range(1, self.RATE_RETRIES + 1):
+            try:
+                result = self.client.images.generate(
+                    model=self.MODEL, prompt=prompt, size=self.size, n=1,
+                )
+                break
+            except Exception as e:
+                wait = _rate_limit_wait(e, attempt)
+                if wait is None:
+                    raise
+                last = e
+                if attempt == self.RATE_RETRIES:
+                    raise RuntimeError(
+                        "OpenAI está limitando las imágenes de este proyecto "
+                        f"({self.MODEL}) y no cedió tras {self.RATE_RETRIES} "
+                        "esperas. Las imágenes ya generadas se conservan: "
+                        "reanuda con «Rehacer desde Imágenes» dentro de un "
+                        "rato, baja performance.parallel_images, o sube el "
+                        "límite de tu cuenta en platform.openai.com. "
+                        f"({e})") from e
+                notify(f"⏳ OpenAI limita las imágenes por minuto; espero "
+                       f"{wait:.0f}s y reintento "
+                       f"({attempt}/{self.RATE_RETRIES - 1})…")
+                time.sleep(wait)
         # El cobro ocurre al responder la API: se anota AQUÍ, antes de tocar
         # el disco, para que ningún fallo posterior deje gasto invisible.
         usage.record("openai", "imagen", 1, "img", usd)

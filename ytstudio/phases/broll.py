@@ -976,8 +976,14 @@ def run(project, cfg) -> None:
 
     perf = cfg.get("performance", {})
     img_workers = max(1, int(perf.get("parallel_images", 4)))
-    if cfg["providers"]["images"].get("name") == "replicate":
+    _img_name = cfg["providers"]["images"].get("name")
+    if _img_name == "replicate":
         # con crédito bajo Replicate limita a 6/min: más hilos solo generan 429
+        img_workers = min(img_workers, 2)
+    elif _img_name == "openai":
+        # gpt-image-1 admite MUY pocas imágenes por minuto (5 en cuentas
+        # nuevas): con 4 hilos el 429 es inevitable. Con 2 el ritmo se acerca
+        # al límite y los reintentos con espera absorben lo que sobre.
         img_workers = min(img_workers, 2)
     vid_workers = max(1, int(perf.get("parallel_video", 2)))
 
@@ -1033,9 +1039,11 @@ def run(project, cfg) -> None:
     text_ids = sorted({s["id"] for s in ai_scenes if s.get("image_text")})
     if text_ids:
         import os as _os
-        if _os.environ.get("OPENAI_API_KEY"):
+        from ytstudio.providers.images import OpenAIImages
+        if isinstance(images, OpenAIImages):
+            text_images = images   # ya es gpt-image-1: no abras un segundo
+        elif _os.environ.get("OPENAI_API_KEY"):
             try:
-                from ytstudio.providers.images import OpenAIImages
                 text_images = OpenAIImages(cfg)
                 notify(f"🔤 {len(text_ids)} escena(s) con texto legible "
                        f"({', '.join(map(str, text_ids))}): el director las "

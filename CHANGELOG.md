@@ -9,6 +9,38 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.43.1 — 2026-08-09
+Tu corrida de «3-mansa-musa» murió en Imágenes con un error 429 de OpenAI
+tras 8 imágenes ya generadas. Tres causas, y una es de dinero:
+
+- 🖼 EL ERROR QUE FRENÓ TODO: gpt-image-1 admite MUY pocas imágenes por
+  minuto (5 en tu cuenta) y devolvió «Rate limit reached… Please try again
+  in 12s». Ese 429 es **transitorio** —la propia API dice cuántos segundos
+  faltan— pero el programa no lo manejaba: el camino de Replicate sí tenía
+  reintentos y el de OpenAI no. Ahora espera EXACTAMENTE lo que la API pide
+  (12s en tu caso, no un número inventado) y reintenta hasta 5 veces,
+  avisándote en el log en vez de dejarte 13 minutos en silencio. Si el
+  límite no cede, el mensaje te dice qué hacer y **las imágenes ya generadas
+  se conservan**: reanudas con «Rehacer desde Imágenes» sin pagarlas otra
+  vez.
+- ⚡ LA CAUSA DE FONDO: el programa lanzaba 4 imágenes en paralelo. Contra un
+  límite de 5 por minuto, el 429 era inevitable. Ahora con OpenAI baja a 2
+  en paralelo (como ya hacía con Replicate) — el ritmo se acerca al límite y
+  los reintentos absorben lo que sobre.
+- 💰 LA ESTIMACIÓN TE MENTÍA (y con ella el tope de gasto): tu configuración
+  tiene proveedor `openai` pero conservaba el `model` de FLUX de una prueba
+  anterior. OpenAI ignora ese campo —siempre genera con gpt-image-1— pero la
+  estimación sí lo leía, así que calculaba con el precio de FLUX ($0.04-0.05
+  por imagen) lo que de verdad cuesta $0.07-0.25. En tu video: **estimó
+  $3.32-$4.15 por 83 imágenes cuando el costo real era $5.81-$20.75**, y el
+  tope de presupuesto se calculó sobre esa base equivocada. Ahora el precio,
+  el tiempo y la etiqueta usan el modelo que se va a usar DE VERDAD
+  (verás «gpt-image-1» en el panel, no «flux-1.1-pro»). Replicate sigue
+  respetando el modelo que elijas.
+- 🔤 Detalle: cuando OpenAI ya es tu proveedor de imágenes, las escenas con
+  texto legible reutilizan esa misma conexión en vez de abrir una segunda
+  contra el mismo límite.
+
 ## v0.43.0 — 2026-08-09
 - 🧪 REVISIÓN DE SALUD DEL PROGRAMA, EN TUS MANOS: las 41 baterías de prueba
   que he ido escribiendo con cada versión vivían fuera del programa — en mi
