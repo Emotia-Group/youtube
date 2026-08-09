@@ -72,6 +72,32 @@ class _Truncated(Exception):
         self.max_tokens = max_tokens
 
 
+def _server_wait(e: Exception, attempt: int) -> float | None:
+    """Segundos de espera si el error es TRANSITORIO del servidor de Anthropic
+    (límite de peticiones 429, sobrecarga 529, 5xx, o corte de conexión), o
+    None si es un error real (400/401/404…) que debe subir intacto.
+
+    Un video largo hace ~25 llamadas grandes seguidas (tandas de escenas,
+    dirección de arte, control factual con visión…): sin esto, el primer 429
+    de Anthropic mataría la fase igual que el de OpenAI mató la de imágenes
+    (el SDK reintenta solo 2 veces con esperas cortas — insuficiente para un
+    límite de tokens-por-minuto)."""
+    code = getattr(e, "status_code", None)
+    transient = (code in (429, 529)
+                 or (isinstance(code, int) and code >= 500)
+                 or type(e).__name__ in ("APIConnectionError",
+                                         "APITimeoutError"))
+    if not transient:
+        return None
+    retry_after = 0.0
+    try:
+        headers = getattr(getattr(e, "response", None), "headers", None) or {}
+        retry_after = float(headers.get("retry-after") or 0)
+    except (TypeError, ValueError):
+        pass
+    return min(120.0, max(retry_after + 1.0, 20.0 * attempt))
+
+
 class ClaudeLLM:
     is_mock = False
 
@@ -84,6 +110,19 @@ class ClaudeLLM:
     # reserva ni se cobra: solo se paga lo que el modelo genera de verdad. Por
     # eso pedir un techo alto es GRATIS y evita respuestas cortadas.
     MAX_OUTPUT = 128000
+    SERVER_RETRIES = 4   # reintentos ante 429/529/5xx/corte de conexión
+
+    # Profundidad de razonamiento por PROPÓSITO: las tareas creativas (guion,
+    # escenas, dirección de arte, concepto) razonan a fondo; las auxiliares
+    # (describir B-roll, elegir música, pulir transcripción, revisar con
+    # visión) no necesitan tanto — bajarlas a 'medium' ahorra tokens de
+    # razonamiento sin tocar la calidad del video.
+    EFFORT_BY_PURPOSE = {
+        "broll_describe": "medium", "broll_semantic": "medium",
+        "broll_review": "medium", "broll_qa": "medium",
+        "music_pick": "medium", "music_pick_acts": "medium",
+        "transcript_polish": "medium", "ingest_analysis": "medium",
+    }
 
     def complete(self, system: str, prompt: str, *, schema: dict | None = None,
                  images: list[Path] | None = None, max_tokens: int = 64000,
@@ -92,8 +131,9 @@ class ClaudeLLM:
         tokens, se REINTENTA UNA VEZ con el techo ampliado — el gasto de la
         llamada cortada se registra igual (se pagó), pero la fase no muere."""
         try:
-            return self._once(system, prompt, schema=schema, images=images,
-                              max_tokens=max_tokens, purpose=purpose)
+            return self._resilient(system, prompt, schema=schema,
+                                   images=images, max_tokens=max_tokens,
+                                   purpose=purpose)
         except _Truncated as e:
             bigger = min(self.MAX_OUTPUT, max(e.max_tokens * 3, 96000))
             if bigger <= e.max_tokens:
@@ -106,13 +146,39 @@ class ClaudeLLM:
                    f"({e.max_tokens}); se reintenta con {bigger} "
                    "(el modelo solo cobra lo que genera).")
             try:
-                return self._once(system, prompt, schema=schema, images=images,
-                                  max_tokens=bigger, purpose=purpose)
+                return self._resilient(system, prompt, schema=schema,
+                                       images=images, max_tokens=bigger,
+                                       purpose=purpose)
             except _Truncated:
                 raise RuntimeError(
                     f"La respuesta del modelo se cortó dos veces (hasta "
                     f"{bigger} tokens): la petición es demasiado grande y "
                     "debe partirse en tandas.") from None
+
+    def _resilient(self, system: str, prompt: str, **kw) -> str:
+        """_once con reintentos ante errores TRANSITORIOS del servidor: espera
+        lo que pida el retry-after (o 20s·intento, tope 120s) y avisa en el
+        log. Los errores reales (400/401/404, refusal, truncado) suben tal
+        cual — reintentarlos sería gastar dinero en el mismo fallo."""
+        import time
+
+        from ytstudio.progress import notify
+        for attempt in range(1, self.SERVER_RETRIES + 1):
+            try:
+                return self._once(system, prompt, **kw)
+            except (_Truncated, RuntimeError):
+                raise
+            except Exception as e:
+                wait = _server_wait(e, attempt)
+                if wait is None or attempt == self.SERVER_RETRIES:
+                    raise
+                code = getattr(e, "status_code", None)
+                tag = f"{type(e).__name__}{f' {code}' if code else ''}"
+                notify(f"⏳ Anthropic no responde ({tag}): espero "
+                       f"{wait:.0f}s y reintento "
+                       f"({attempt}/{self.SERVER_RETRIES - 1})…")
+                time.sleep(wait)
+        raise RuntimeError("inalcanzable")  # el bucle siempre retorna o lanza
 
     def _once(self, system: str, prompt: str, *, schema: dict | None = None,
               images: list[Path] | None = None, max_tokens: int = 64000,
@@ -137,9 +203,23 @@ class ClaudeLLM:
             thinking={"type": "adaptive"},
             messages=[{"role": "user", "content": content}],
         )
+        out_cfg: dict = {}
+        effort = self.EFFORT_BY_PURPOSE.get(purpose, "high")
+        if effort != "high":   # 'high' es el default de la API: no se envía
+            out_cfg["effort"] = effort
         if schema is not None:
             check_schema(schema)  # falla claro ANTES de gastar la llamada
-            kwargs["output_config"] = {"format": {"type": "json_schema", "schema": schema}}
+            out_cfg["format"] = {"type": "json_schema", "schema": schema}
+        if "effort" in out_cfg:
+            # Va por extra_body y no como kwarg tipado: un SDK algo viejo
+            # rechazaría el parámetro desconocido y rompería TODAS las
+            # llamadas. OJO: extra_body PISA el kwarg homónimo al armar el
+            # cuerpo, así que effort y format viajan JUNTOS en un único
+            # output_config — separados, el effort borraría el format y la
+            # respuesta llegaría sin JSON estructurado.
+            kwargs["extra_body"] = {"output_config": out_cfg}
+        elif out_cfg:
+            kwargs["output_config"] = out_cfg
 
         with self.client.messages.stream(**kwargs) as stream:
             message = stream.get_final_message()

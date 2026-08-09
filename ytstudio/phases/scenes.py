@@ -845,9 +845,29 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
             + template_rules
             + cast_rules
             + f"\nNARRACIÓN POR ESCENA:\n{narr}")
-        result = llm.complete_json(system, prompt, schema=schema,
-                                   max_tokens=32000, purpose="broll_fixed")
-        got += list(result["scenes"])[:len(chunk)]
+        try:
+            result = llm.complete_json(system, prompt, schema=schema,
+                                       max_tokens=32000, purpose="broll_fixed")
+            got += list(result["scenes"])[:len(chunk)]
+        except Exception as e:
+            # UNA tanda fallida no puede tumbar el storyboard entero (y
+            # obligar a re-pagar las tandas buenas al reanudar): sus escenas
+            # salen con un prompt básico desde la narración — el pase de
+            # dirección de arte (que corre después) las reescribe con la
+            # biblia visual, así que en la práctica se recuperan solas.
+            anims = ["zoom_in", "pan_right", "zoom_out", "pan_left"]
+            got += [{"broll_prompt":
+                     f"{prefix}, {(s.get('narration') or '')[:80]}".strip(", "),
+                     "broll_type": "image",
+                     "animation": anims[i % 4], "section": "Narración"}
+                    for i, s in enumerate(chunk)]
+            aviso = (f"El diseño de las escenas {chunk[0]['id']}–"
+                     f"{chunk[-1]['id']} falló ({e}): salen con un prompt "
+                     "básico que el pase de dirección de arte refina después.")
+            if project is not None:
+                project.add_warning(aviso)
+            else:
+                notify("⚠ " + aviso)
     for i, s in enumerate(scenes):
         b = got[i] if i < len(got) else {}
         s["broll_prompt"] = b.get("broll_prompt") or f"{prefix}, {s['narration'][:50]}"

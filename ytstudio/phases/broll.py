@@ -499,6 +499,7 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
         "ubicación exacta de heridas o marcas, el objeto clave narrado. Una "
         "ilustración parcial o atmosférica NO es infiel; una que CONTRADICE "
         "lo narrado, SÍ.")
+    jobs: list[tuple[list[Path], str]] = []
     for start in range(0, len(targets), 6):
         chunk = targets[start:start + 6]
         images, manifest = [], []
@@ -527,16 +528,43 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
             "original pero codificando los hechos de forma REDUNDANTE e "
             "inequívoca (número exacto repetido, especie en cada mención, "
             "estado sin vida explícito, ubicación exacta). Vacío si fiel.")
-        try:
-            result = llm.complete_json(system, prompt, schema=_QA_SCHEMA,
-                                       images=images, purpose="broll_qa")
-        except Exception as e:
-            project.add_warning(f"El control de calidad factual con visión "
-                                f"no se pudo completar ({e}) — las imágenes "
-                                "quedan como salieron.")
-            return None
-        for r in result.get("reviews", []):
-            verdicts[int(r.get("scene", -1))] = r
+        jobs.append((images, prompt))
+    if not jobs:
+        return verdicts
+
+    # En PARALELO (2 a la vez): en un video de 84 escenas son ~14 tandas de
+    # visión — en serie añadían 7-14 minutos a la fase. Los hilos re-vinculan
+    # el acumulador de gasto y el canal de avisos, como el resto de la fase.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from ytstudio import usage as usage_mod
+    from ytstudio.progress import get_sink
+    usage_items = usage_mod.get_state()
+    sink = get_sink()
+
+    def _review(job):
+        usage_mod.bind(usage_items)
+        _bind_worker_logging(sink)
+        images, prompt = job
+        return llm.complete_json(system, prompt, schema=_QA_SCHEMA,
+                                 images=images, purpose="broll_qa")
+
+    failed: Exception | None = None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(_review, j) for j in jobs]
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception as e:
+                failed = failed or e
+                continue
+            for r in result.get("reviews", []):
+                verdicts[int(r.get("scene", -1))] = r
+    if failed is not None:
+        project.add_warning(f"El control de calidad factual con visión "
+                            f"no se pudo completar ({failed}) — las imágenes "
+                            "quedan como salieron.")
+        return None
     return verdicts
 
 

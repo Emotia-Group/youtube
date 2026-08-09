@@ -9,6 +9,60 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.44.0 — 2026-08-09
+Blindaje ANTICIPADO para tu primera versión estable, con prioridad en los
+videos largos. Esta vez no esperé a que un error apareciera en tu log: recorrí
+el pipeline completo preguntando «¿qué es lo SIGUIENTE que va a fallar en una
+corrida larga?» y cerré los seis agujeros con más papeletas — más una falsa
+alarma que sí salió en tu última corrida.
+
+- 🛡 EL PRÓXIMO 429, DESACTIVADO ANTES DE QUE TE PASE: el límite de OpenAI
+  mató tu fase de imágenes (v0.43.1); el de **Anthropic** tiene el mismo
+  agujero y un video largo hace ~25 llamadas grandes seguidas (tandas de
+  escenas, dirección de arte, visión…). Ahora TODA llamada al modelo
+  sobrevive a los errores transitorios del servidor (límite 429, sobrecarga
+  529, caídas 5xx, cortes de conexión): espera lo que la API pida —o una
+  rampa de 20s/40s/60s, tope 120s—, avisa en el log y reintenta hasta 4
+  veces. Los errores REALES (clave inválida, petición mal hecha) suben
+  intactos y sin esperas: reintentarlos sería pagar dos veces el mismo fallo.
+- 💰 ECONOMÍA DE TOKENS POR PROPÓSITO: el modelo ahora razona A FONDO solo
+  donde se nota en pantalla (concepto, guion, diseño de escenas, dirección de
+  arte, metadatos) y con esfuerzo MEDIO en las tareas auxiliares (describir
+  B-roll, elegir música, pulir la transcripción, control de calidad con
+  visión). Menos tokens de razonamiento en ~8 tipos de llamada por video, sin
+  tocar la calidad creativa. De paso cacé un fallo LATENTE de la propia
+  mejora: el ajuste de esfuerzo podía PISAR el formato JSON estructurado en
+  las llamadas que usan ambos (la revisión con visión) — viajan juntos desde
+  el principio, así que nunca te ocurrirá.
+- 🎙 NARRACIONES LARGAS SIN TECHO DE 25MB: Whisper rechaza archivos de más de
+  25MB y una narración de ~25 minutos a 128kbps ya lo supera — justo el
+  tamaño de video al que estás llegando. Por encima del umbral se transcribe
+  una copia ligera MONO a 48kbps (misma duración → mismos tiempos por
+  palabra; la copia se borra sola) — el techo real pasa a ~69 minutos. Si ni
+  así cabe, el error te dice qué hacer (dividir la grabación) en vez del 413
+  críptico de la API.
+- 🎬 UNA TANDA FALLIDA YA NO TUMBA EL STORYBOARD: el diseño de escenas de un
+  video largo va en tandas de 40; si UNA fallaba (un 429 agotado, un corte de
+  red), moría la fase entera y reanudar re-pagaba las tandas buenas. Ahora
+  las escenas de la tanda caída salen con un prompt básico desde su
+  narración, queda un aviso con el rango exacto, y el pase de dirección de
+  arte —que corre después— las reescribe con la biblia visual: en la práctica
+  se recuperan solas.
+- ⚡ CONTROL FACTUAL CON VISIÓN EN PARALELO: en un video de 84 escenas son
+  ~14 tandas de revisión que en serie añadían 7-14 minutos a la fase de
+  imágenes. Ahora corren 2 a la vez (mismo patrón que la generación): la
+  espera se reduce a cerca de la mitad sin acercarse a los límites de la API.
+- 🔇 LA FALSA ALARMA DE TU ÚLTIMO LOG: «deriva inesperada» en la voz con
+  804.77s contra 811.21s. No había deriva: tu grabación tenía 109 pausas
+  ajustadas y cada compresión se lleva ~60ms de ruido sub-umbral que el
+  detector contaba como voz (109 × 60ms ≈ los 6.4s del aviso) — la
+  comprobación DURA de duración total pasó con 2 centésimas. La tolerancia
+  ahora escala con las pausas ajustadas (1.2s + 60ms por pausa); la señal
+  dura de 0.15s sigue intacta, que es la que de verdad protege el video.
+
+Batería nueva (`tests/test_v0_44_0.py`, 30 comprobaciones) y las 43
+anteriores en verde: `probar.bat` las corre todas.
+
 ## v0.43.1 — 2026-08-09
 Tu corrida de «3-mansa-musa» murió en Imágenes con un error 429 de OpenAI
 tras 8 imágenes ya generadas. Tres causas, y una es de dinero:

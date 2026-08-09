@@ -60,17 +60,54 @@ def _restore_punctuation(seg_text: str, words: list[dict]) -> list[dict]:
 class OpenAISTT:
     is_mock = False
 
+    # Whisper API rechaza archivos de más de 25MB. Una narración de ~25 min
+    # a 128kbps ya lo supera — y el creador va subiendo la duración de sus
+    # videos. Por encima de este umbral se transcribe una COPIA mono a
+    # 48kbps (misma duración → mismos timestamps; la voz no pierde
+    # inteligibilidad): 24MB a 48kbps ≈ 69 minutos de narración.
+    MAX_UPLOAD_BYTES = 24 * 1024 * 1024
+
     def __init__(self, cfg: dict):
         from openai import OpenAI
         self.client = OpenAI()
         self.language = cfg.get("language", "es")
 
+    def _uploadable(self, audio: Path) -> tuple[Path, bool]:
+        """(archivo a subir, hay_que_borrarlo). Si pesa de más, copia mono a
+        48kbps; si NI ASÍ cabe (>69 min), error claro en vez del críptico
+        413 de la API."""
+        if audio.stat().st_size <= self.MAX_UPLOAD_BYTES:
+            return audio, False
+        from ytstudio.progress import notify
+        from ytstudio.utils.media import run_ffmpeg
+        small = audio.with_name(audio.stem + "_stt48k.mp3")
+        notify(f"🎙 Tu narración pesa "
+               f"{audio.stat().st_size / 1024 / 1024:.0f}MB (el límite de "
+               "Whisper es 25MB): se transcribe una copia ligera mono a "
+               "48kbps — mismos tiempos, misma calidad de transcripción.")
+        run_ffmpeg(["-i", str(audio), "-ac", "1", "-b:a", "48k",
+                    "-c:a", "libmp3lame", str(small)],
+                   "copia ligera para transcripción")
+        if small.stat().st_size > self.MAX_UPLOAD_BYTES:
+            small.unlink(missing_ok=True)
+            raise RuntimeError(
+                "La narración supera ~69 minutos y no cabe en el límite de "
+                "25MB de Whisper ni comprimida. Divide la grabación en dos "
+                "archivos de voz (se transcriben y unen en orden) o recórtala.")
+        return small, True
+
     def transcribe(self, audio: Path, hint: str = "") -> str:
-        with open(audio, "rb") as f:
-            kwargs = {"prompt": hint[:800]} if hint else {}
-            result = self.client.audio.transcriptions.create(
-                model="whisper-1", file=f, language=self.language, **kwargs,
-            )
+        upload, temp = self._uploadable(audio)
+        try:
+            with open(upload, "rb") as f:
+                kwargs = {"prompt": hint[:800]} if hint else {}
+                result = self.client.audio.transcriptions.create(
+                    model="whisper-1", file=f, language=self.language,
+                    **kwargs,
+                )
+        finally:
+            if temp:
+                upload.unlink(missing_ok=True)
         from ytstudio import pricing, usage
         minutes = probe_duration(audio) / 60.0
         usage.record("openai", "transcripción de referencia (Whisper)", minutes,
@@ -78,20 +115,27 @@ class OpenAISTT:
         return result.text
 
     def transcribe_segments(self, audio: Path, hint: str = "") -> list[dict]:
-        with open(audio, "rb") as f:
-            # `prompt` sesga el vocabulario de Whisper hacia los términos del
-            # material del proyecto (nombres propios, tecnicismos): sin él,
-            # «macacos rhesus» se transcribe como lo más parecido y frecuente
-            # («masivos»). Máx ~224 tokens: se pasa un extracto.
-            kwargs = {"prompt": hint[:800]} if hint else {}
-            result = self.client.audio.transcriptions.create(
-                model="whisper-1", file=f, language=self.language, **kwargs,
-                response_format="verbose_json",
-                # "word" da el tiempo de CADA palabra — es lo que permite
-                # sincronizar subtítulos y rótulos con la voz real en vez de
-                # estimar por proporción de caracteres.
-                timestamp_granularities=["segment", "word"],
-            )
+        upload, temp = self._uploadable(audio)
+        try:
+            with open(upload, "rb") as f:
+                # `prompt` sesga el vocabulario de Whisper hacia los términos
+                # del material del proyecto (nombres propios, tecnicismos):
+                # sin él, «macacos rhesus» se transcribe como lo más parecido
+                # y frecuente («masivos»). Máx ~224 tokens: se pasa un
+                # extracto.
+                kwargs = {"prompt": hint[:800]} if hint else {}
+                result = self.client.audio.transcriptions.create(
+                    model="whisper-1", file=f, language=self.language,
+                    **kwargs,
+                    response_format="verbose_json",
+                    # "word" da el tiempo de CADA palabra — es lo que permite
+                    # sincronizar subtítulos y rótulos con la voz real en vez
+                    # de estimar por proporción de caracteres.
+                    timestamp_granularities=["segment", "word"],
+                )
+        finally:
+            if temp:
+                upload.unlink(missing_ok=True)
 
         def get(o, k):
             return o[k] if isinstance(o, dict) else getattr(o, k)

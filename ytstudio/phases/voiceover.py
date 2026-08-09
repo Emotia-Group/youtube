@@ -55,6 +55,12 @@ def _safe_cuts(words: list[dict],
     return cuts
 
 
+def _speech_tolerance(n_adjusted_pauses: int) -> float:
+    """Tolerancia de la comprobación de voz-hablada: base de 1.2s + 60ms por
+    pausa ajustada (el ruido sub-umbral que cada compresión se lleva)."""
+    return 1.2 + 0.06 * max(0, n_adjusted_pauses)
+
+
 def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
                     narration_file, vo_dir, audio_total: float, fps: float):
     """Construye la línea de tiempo de la voz al estilo documental, con el
@@ -396,10 +402,14 @@ def _build_timeline(scenes: list[dict], narration: dict, cfg: dict,
             for s, e in src_sils if s < audio_total)
         speech_tl = got - sum(e - s
                               for s, e in detect_silences(out, noise_db=-45))
-        # Umbral de voz-hablada holgado (1.2s): silencedetect mide con ruido
-        # en los bordes cuando los respiros insertados quedan pegados a
-        # silencios reales — la señal DURA es la duración total (0.15s).
-        if abs(got - want) > 0.15 or abs(speech_tl - speech_src) > 1.2:
+        # Umbral de voz-hablada PROPORCIONAL a las pausas ajustadas: cada
+        # pausa comprimida quita también los micro-ruidos sub-umbral de su
+        # interior (~60ms por pausa que silencedetect contaba como «voz» en
+        # la grabación). Con umbral fijo de 1.2s, un video de 20 min con 109
+        # pausas recortadas disparaba una falsa «deriva inesperada» de 6.4s
+        # (caso real) — la señal DURA sigue siendo la duración total (0.15s).
+        speech_tol = _speech_tolerance(n_comp + n_ext)
+        if abs(got - want) > 0.15 or abs(speech_tl - speech_src) > speech_tol:
             check = (f"Autocomprobación de la voz: la pista mide {got:.2f}s "
                      f"(esperados {want:.2f}s) con {speech_tl:.2f}s de voz "
                      f"({speech_src:.2f}s en tu grabación). Hay una deriva "
