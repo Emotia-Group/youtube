@@ -113,6 +113,36 @@ El pipeline es **reanudable**: cada fase guarda su estado en
 `projects/<slug>/project.json` y los artefactos ya generados (voces, imágenes,
 escenas renderizadas) no se regeneran al relanzar.
 
+## Revisar la salud del programa (antes de gastar)
+
+Generar un video cuesta dinero real. Antes de una corrida importante —o tras
+actualizar— puedes comprobar que el programa está sano:
+
+### Windows
+Doble clic en **`probar.bat`**.
+
+### Linux / Mac
+```bash
+./probar.sh
+```
+
+Corre las baterías de prueba (una por versión, con su historia de fallos ya
+corregidos) y termina con un veredicto claro: **TODO EN VERDE**, o qué falló y
+dónde. Tarda unos minutos.
+
+- **No usa ninguna clave de API ni internet**: proveedores falsos, audio
+  sintético y ffmpeg local. No gasta un centavo.
+- **No toca tus proyectos**: todo ocurre en carpetas temporales.
+
+```bash
+py tests/probar_todo.py            # todas
+py tests/probar_todo.py 42         # solo las baterías de la v0.42.x
+py tests/probar_todo.py --lista    # ver qué hay, sin correr nada
+```
+
+Si algo sale en rojo, copia el resumen y pásaselo a Claude: identifica la
+batería, la comprobación exacta y el valor medido que falló.
+
 ## Tipos de input
 
 | Input | Detección | Qué hace el sistema |

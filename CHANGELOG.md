@@ -9,6 +9,39 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.43.0 — 2026-08-09
+- 🧪 REVISIÓN DE SALUD DEL PROGRAMA, EN TUS MANOS: las 41 baterías de prueba
+  que he ido escribiendo con cada versión vivían fuera del programa — en mi
+  espacio de trabajo temporal, sin control de versiones, y solo yo las
+  corría. Ahora están DENTRO del proyecto (`tests/`) y las puedes ejecutar
+  tú: doble clic en **`probar.bat`** (o `./probar.sh` en Linux/Mac).
+  · Te dice en claro **TODO EN VERDE** o qué falló, en qué batería y con qué
+    valor medido — un resumen que puedes copiarme para diagnosticarlo.
+  · **No cuesta un centavo**: sin claves de API ni internet (proveedores
+    falsos, audio sintético, ffmpeg local). **No toca tus proyectos**: todo
+    ocurre en carpetas temporales.
+  · Tarda unos 6 minutos. Úsalo antes de una generación importante o después
+    de actualizar — es la forma de saber que el programa está sano ANTES de
+    gastar dinero en una corrida.
+  · Filtro por si quieres ir rápido: `py tests\probar_todo.py 42` corre solo
+    las baterías de la v0.42.x; `--lista` muestra todas sin ejecutarlas.
+- 🩺 De paso, arreglé las 2 baterías que llevaban tiempo en rojo. Ninguna era
+  un fallo del programa: **eran pruebas caducadas** que verificaban cosas que
+  yo mismo cambié después.
+  · Una probaba la «calibración de Whisper», una función que retiré a
+    propósito en v0.24.0 porque medía ±380 ms de dispersión sobre la MISMA
+    grabación; la sustituyó el lazo cerrado de subtítulos que ves funcionando
+    en tus logs. Curiosamente, las comprobaciones que SÍ importaban —que los
+    subtítulos caigan sobre la voz— pasaban: el test demostraba que quitarla
+    fue correcto mientras marcaba rojo por buscar el mecanismo viejo.
+  · La otra llamaba a funciones internas con la firma de v0.21 (hoy devuelven
+    más datos) y pedía los subtítulos sin el mapa de tiempo que necesitan
+    desde v0.25.1. Verifiqué a fondo que no escondían ninguna regresión real.
+  · La suite queda **41 de 41 en verde**. Un test que se queda rojo deja de
+    mirarse, y así es como un fallo de verdad se escondería.
+- 🛡 Una batería creaba su proyecto de prueba en tu carpeta `projects/` real
+  (y solo lo borraba si terminaba bien): ahora todas trabajan aisladas.
+
 ## v0.42.2 — 2026-08-09
 Dos arreglos a partir de tu última corrida (proyecto 2-mansa-musa), uno de
 ellos de DINERO:

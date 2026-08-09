@@ -11,3 +11,8 @@ client_secrets.json
 token.json
 .venv/
 predicciones.jsonl
+
+# Artefactos que generan las baterías de prueba al correr (se rehacen solos)
+tests/t*/
+tests/thumbs_demo/
+tests/__pycache__/
