@@ -164,7 +164,8 @@ import copy
 
 from PIL import Image
 
-from ytstudio.phases.assembly import _hook_filters, _overlay_filters, _still_filter
+from ytstudio.phases.assembly import (_hook_filters, _lower_third_setup,
+                                      _overlay_filters, _still_filter)
 
 TDIR = TMP / "render"
 TDIR.mkdir()
@@ -175,15 +176,26 @@ Image.new("RGB", (W, H), (15, 15, 20)).save(img, quality=95)
 
 
 def render_overlay(cfg, scene, name):
+    """Renderiza el rótulo por el MISMO camino que el montaje real: desde
+    v0.47.0 los tipos con placa (locator, personaje, dato, lista) se componen
+    como imagen y se superponen; el gancho y la conclusión siguen siendo
+    drawtext. La prueba mide el RESULTADO, no el mecanismo."""
     filt_bg = _still_filter(img, "static", 72, W, H, FPS)
     filters = [f"[0:v]{filt_bg}[v0]"]
     label = "v0"
+    inputs = ["-loop", "1", "-i", str(img), "-t", "3"]
     for i, dt in enumerate(_overlay_filters(scene, 3.0, cfg, TDIR), start=1):
         filters.append(f"[{label}]{dt}[t{i}]")
         label = f"t{i}"
+    l_args, l_chain, l_pos = _lower_third_setup(scene, 3.0, cfg, TDIR)
+    if l_args:
+        inputs += l_args
+        filters.append(l_chain.replace("[1:v]", "[1:v]", 1) + "[lt]")
+        filters.append(f"[{label}][lt]overlay={l_pos}[vlt]")
+        label = "vlt"
     out = TDIR / f"{name}.mp4"
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-loop", "1", "-i", str(img), "-t", "3",
+                    *inputs,
                     "-filter_complex", ";".join(filters), "-map", f"[{label}]",
                     "-frames:v", "72", "-pix_fmt", "yuv420p", str(out)],
                    check=True)

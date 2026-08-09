@@ -9,6 +9,42 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.47.0 — 2026-08-09
+**Los rótulos ya son diseño, no texto encima del video.** (Fase 1 de las 4
+acordadas para la calidad audiovisual.) Tú mismo dijiste que se quedaban
+cortos: tenías razón, eran `drawtext` pelado.
+
+- 🎫 RÓTULO CON PLACA, FILETE Y JERARQUÍA: ahora se componen como imagen
+  (igual que tus miniaturas), lo que permite tres cosas que antes eran
+  imposibles:
+  · **Placa de fondo** que garantiza el contraste sobre CUALQUIER B-roll —
+    antes, sobre una imagen clara, el texto blanco se perdía.
+  · **Filete de acento** que ancla el bloque: la marca de tu canal en cada
+    rótulo.
+  · **La palabra clave en color DENTRO de la línea** («Mansa **Musa**»,
+    «**60.000** personas»). `drawtext` solo sabía pintar la línea entera de
+    un color; por eso el énfasis nunca se notaba.
+- 🎨 TRES VARIANTES, ELEGIBLES POR CANAL (⚙ Biblioteca → estilo → «Diseño del
+  rótulo»):
+  · **documental** — placa oscura sobria + filete dorado (por defecto),
+  · **minimal** — sin placa, solo filete y tipografía con sombra,
+  · **bold** — placa del color de acento con texto oscuro, máxima presencia.
+  Los combos de branding de un clic ya traen la variante que les pega
+  (Impacto viral → bold, Minimalista → minimal).
+- 🔒 SIN RIESGOS: el gancho de apertura y la conclusión conservan su lenguaje
+  propio; los proyectos antiguos (texto plano) reciben el diseño
+  automáticamente; si algo fallara al componer, el rótulo sale como siempre.
+  Con `overlay_plate: false` vuelves al estilo clásico cuando quieras.
+- 💰 LA ESTIMACIÓN DECÍA «~7 LLAMADAS» y tu video de 84 escenas hace ~25: no
+  contaba las TANDAS (diseño de escenas, dirección de arte, documentalista)
+  ni el control de calidad con visión (una llamada por cada 6 imágenes). El
+  tope de presupuesto se calculaba sobre esa base corta. Ahora se cuentan de
+  verdad y el costo de inteligencia crece con el tamaño del video, como debe.
+
+Batería nueva (`tests/test_v0_47_0.py`, 23 comprobaciones — mide los píxeles
+de cada variante y verifica con un render REAL de ffmpeg que el rótulo
+aparece cuando lo dices).
+
 ## v0.46.0 — 2026-08-09
 **INSERTOS DOCUMENTALES (Fase 1 aprobada): el video deja de ser solo B-roll.**
 Cuando la narración menciona a Elon Musk, El Cairo, la UNESCO, «60.000

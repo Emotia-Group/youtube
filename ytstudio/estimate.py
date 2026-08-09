@@ -119,6 +119,12 @@ def estimate(project, cfg: dict) -> dict:
         script_tokens = words * TOKENS_PER_WORD
         # llamadas: análisis, concepto, guion, escenas, semántica broll,
         # música, metadatos (+ visión de b-roll y fotogramas de referencia)
+        # El pipeline NO hace 7 llamadas: un video largo se procesa por
+        # TANDAS (40 escenas por llamada) en tres pases distintos, más el
+        # control de calidad con visión (6 imágenes por llamada). Contarlas
+        # de verdad es lo que hace honesto el tope de presupuesto.
+        tandas = max(1, -(-n_scenes // 40))
+        n_qa = max(1, -(-n_scenes // 6)) if n_scenes else 0
         calls_in = (6000                     # análisis + contexto
                     + 8000                   # concepto (brief + preset)
                     + script_tokens * 3      # guion se relee en escenas/metadatos
@@ -126,6 +132,11 @@ def estimate(project, cfg: dict) -> dict:
         calls_out = (1500 + 1500 + script_tokens
                      + n_scenes * 230        # escenas con campos creativos
                      + 1200)
+        # Cada tanda reenvía su contexto (narración del tramo + reglas) en el
+        # diseño de escenas, la dirección de arte y el documentalista.
+        calls_in += tandas * 3 * 9000
+        calls_out += n_scenes * 210          # dirección de arte reescribe prompts
+        calls_out += n_scenes * 25           # documentalista (insertos, breve)
         vision_images = 0
         if user_broll:
             vision_images += sum(2 if a.get("kind") == "video" else 1
@@ -133,9 +144,14 @@ def estimate(project, cfg: dict) -> dict:
             calls_out += user_broll * 70
         if links:
             vision_images += 6 * len(links)
+        # Control de calidad factual: TODAS las imágenes pasan por visión
+        if n_scenes and cfg.get("providers", {}).get("images", {}) \
+                .get("fact_check", True):
+            vision_images += n_scenes
+            calls_out += n_qa * 400
         calls_in += vision_images * VISION_TOKENS_PER_IMAGE
         cost_lo = (calls_in * in_lo + calls_out * out_lo) / 1e6
-        n_calls = 7 + (1 if user_broll else 0)
+        n_calls = (7 + tandas * 3 + n_qa + (1 if user_broll else 0))
         # Rango angosto (±20%): la variación real entre proyectos similares es
         # de reintentos/longitud de guion, no de un orden de magnitud — un
         # rango de 0.8x-1.8x (el anterior) no decía nada útil.

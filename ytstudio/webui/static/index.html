@@ -1160,6 +1160,12 @@ function styleForm(s){
       <option value="" ${!s?.overlay_font_family?'selected':''}>Por defecto</option>
       ${Object.entries(CAT.overlay_font_families||{}).map(([k,f])=>`<option value="${k}" ${s?.overlay_font_family===k?'selected':''} title="${esc(f.hint||'')}">${esc(f.label)}</option>`).join('')}
     </select></label>
+    <label class="f"><span>Diseño del rótulo</span><select data-f="overlay_style">
+      <option value="" ${!s?.overlay_style?'selected':''}>Por defecto (documental)</option>
+      <option value="documental" ${s?.overlay_style==='documental'?'selected':''}>Documental — placa oscura sobria + filete</option>
+      <option value="minimal" ${s?.overlay_style==='minimal'?'selected':''}>Minimal — sin placa, solo filete</option>
+      <option value="bold" ${s?.overlay_style==='bold'?'selected':''}>Bold — placa del color de acento</option>
+    </select></label>
     <label class="f"><span>Color de acento (hex, sin #)</span><input data-f="overlay_accent" value="${esc(s?.overlay_accent||'')}" placeholder="E8C46B" maxlength="6" style="text-transform:uppercase"></label>
     <label class="f"><span>Color del texto (hex, sin #)</span><input data-f="overlay_text_color" value="${esc(s?.overlay_text_color||'')}" placeholder="FFFFFF" maxlength="6" style="text-transform:uppercase"></label>
     <label class="f" style="grid-column:1/-1"><span>Fórmula narrativa (gancho, estructura, reglas del canal — la IA la replica adaptada a cada tema)</span><textarea data-f="formula" rows="3">${v('formula')}</textarea></label>
@@ -1172,6 +1178,7 @@ function applyBrandingPreset(formId,key){
   root.querySelector('[data-f=overlay_font_family]').value=p.overlay_font_family||'';
   root.querySelector('[data-f=overlay_accent]').value=p.overlay_accent||'';
   root.querySelector('[data-f=overlay_text_color]').value=p.overlay_text_color||'';
+  const st=root.querySelector('[data-f=overlay_style]');if(st)st.value=p.overlay_style||'';
 }
 async function submitStyleForm(id){
   const root=document.getElementById(id);

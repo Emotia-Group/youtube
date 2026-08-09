@@ -31,7 +31,9 @@ STYLE_FIELDS = ("name", "channel_id", "visual_description", "prompt_prefix",
                 "scene_seconds", "transition", "formula",
                 # Branding de rótulos (v0.41.0) — opcionales: None/"" = usa
                 # el look por defecto del programa (sans, dorado, blanco).
-                "overlay_font_family", "overlay_accent", "overlay_text_color")
+                "overlay_font_family", "overlay_accent", "overlay_text_color",
+                # Diseño del rótulo (v0.47.0): documental | minimal | bold
+                "overlay_style")
 
 _HEX_RE = re.compile(r"^[0-9a-fA-F]{6}$")
 
@@ -196,7 +198,7 @@ def update_style(style_id: str, fields: dict) -> dict:
             style[key] = value or None
         elif key in ("overlay_accent", "overlay_text_color"):
             style[key] = _clean_hex(value)
-        elif key == "overlay_font_family":
+        elif key in ("overlay_font_family", "overlay_style"):
             style[key] = (value or "").strip() or None
         else:
             style[key] = (value or "").strip()
@@ -246,6 +248,9 @@ def branding_overrides_for_project(project) -> dict:
         out["overlay_accent"] = style["overlay_accent"]
     if style.get("overlay_text_color"):
         out["overlay_text_color"] = style["overlay_text_color"]
+    from ytstudio.utils.lower_thirds import STYLES as _LT_STYLES
+    if style.get("overlay_style") in _LT_STYLES:
+        out["overlay_style"] = style["overlay_style"]
     return out
 
 

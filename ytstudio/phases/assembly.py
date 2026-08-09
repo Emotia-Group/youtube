@@ -212,6 +212,76 @@ def _brand_text_color(cfg: dict) -> str:
     return "0x" + str(cfg["video"].get("overlay_text_color", "FFFFFF")).lstrip("#")
 
 
+def _overlay_data(scene: dict) -> dict | None:
+    """El rótulo de la escena, con la migración de los proyectos antiguos
+    (texto plano → diseño de 'dato')."""
+    overlay = scene.get("overlay")
+    if not overlay and scene.get("on_screen_text"):
+        overlay = {"type": "dato", "text": scene["on_screen_text"],
+                   "kicker": "", "emphasis": ""}
+    return overlay or None
+
+
+def _lower_third_plan(scene: dict, cfg: dict, out_dir: Path) -> dict | None:
+    """Compone el rótulo CON DISEÑO (placa + filete + jerarquía) como PNG y
+    devuelve su geometría, o None si este rótulo no lleva placa (gancho y
+    conclusión tienen lenguaje propio) o si la composición no fue posible —
+    en ese caso el montaje usa el camino drawtext de siempre."""
+    overlay = _overlay_data(scene)
+    if not overlay or not cfg["video"].get("overlays", True):
+        return None
+    if not cfg["video"].get("overlay_plate", True):
+        return None   # el creador prefiere el rótulo sin placa (modo clásico)
+    otype = overlay.get("type", "dato")
+    from ytstudio.utils import lower_thirds as lt
+    if otype not in lt.LAYOUTS:
+        return None   # hook / conclusion: composiciones propias
+    text = (overlay.get("text") or "").strip()
+    if not text:
+        return None
+    try:
+        return lt.render(
+            text, overlay.get("kicker") or "", overlay.get("emphasis") or "",
+            otype, out_dir / f"lt_{scene['id']:03d}.png",
+            width=cfg["video"]["width"], height=cfg["video"]["height"],
+            style=str(cfg["video"].get("overlay_style", "documental")),
+            accent=str(cfg["video"].get("overlay_accent", "E8C46B")),
+            text_color=str(cfg["video"].get("overlay_text_color", "FFFFFF")),
+            font_main=_brand_font(cfg, bold=True,
+                                  serif_default=otype == "personaje"),
+            font_kicker=_brand_font(cfg, bold=True),
+            serif=otype == "personaje")
+    except Exception:
+        return None   # nunca se cae por un adorno: se usa el rótulo clásico
+
+
+def _lower_third_setup(scene: dict, dur: float, cfg: dict,
+                       out_dir: Path) -> tuple[list[str], str, str]:
+    """(args de entrada, cadena con [1:v] de marcador, posición) del rótulo
+    con placa. Entra deslizándose desde la izquierda un instante ANTES de que
+    la narración diga esas palabras, se sostiene y se despide."""
+    plan = _lower_third_plan(scene, cfg, out_dir)
+    if plan is None:
+        return [], "", ""
+    fps = cfg["video"]["fps"]
+    moment = _narration_moment(scene, dur)
+    t0 = (max(0.25, min(moment - 0.35, dur - 2.2)) if moment is not None
+          else (0.45 if dur > 4 else 0.25))
+    t1 = min(dur - 0.75, t0 + 4.8)
+    if t1 < t0 + 0.8:
+        t1 = max(t0 + 0.8, dur - 0.4)
+    chain = (f"[1:v]format=rgba,"
+             f"fade=t=in:st={t0:.2f}:d=0.45:alpha=1,"
+             f"fade=t=out:st={t1:.2f}:d=0.55:alpha=1")
+    # Deriva de entrada: el bloque llega desde la izquierda y se asienta
+    slide = f"{plan['x']}-26*max(0,1-(t-{t0:.2f})/0.9)"
+    pos = (f"x='{slide}':y={plan['y']}:"
+           f"enable='between(t,{t0:.2f},{t1 + 0.6:.2f})'")
+    args = ["-loop", "1", "-framerate", str(fps), "-t", f"{dur:.3f}",
+            "-i", str(plan["file"])]
+    return args, chain, pos
+
+
 def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[str]:
     """Filtros drawtext del rótulo de la escena (o [] si no lleva). El rótulo
     entra con fundido y una deriva sutil, se sostiene unos segundos y se va:
@@ -237,6 +307,12 @@ def _overlay_filters(scene: dict, dur: float, cfg: dict, out_dir: Path) -> list[
     # El gancho de apertura (formatos cortos) tiene su propio lenguaje
     if overlay["type"] == "hook":
         return _hook_filters(scene, overlay, dur, cfg, out_dir, accent)
+    # Los tipos con PLACA (locator, personaje, dato, lista) se componen como
+    # imagen en _lower_third_setup: placa, filete y palabra de énfasis en
+    # color, que drawtext no puede dar. Aquí solo queda el camino de
+    # RESPALDO (si la composición falla, el rótulo sale como siempre).
+    if _lower_third_plan(scene, cfg, out_dir) is not None:
+        return []
 
     main_font = _brand_font(cfg, bold=True, serif_default=lay["serif"])
 
@@ -765,6 +841,15 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     for i, dt in enumerate(_overlay_filters(scene, dur, cfg, out.parent), start=1):
         filters.append(f"[{label}]{dt}[t{i}]")
         label = f"t{i}"
+    # RÓTULO CON PLACA (locator, personaje, dato, lista): imagen compuesta con
+    # placa, filete de acento y palabra de énfasis en color.
+    l_args, l_chain, l_pos = _lower_third_setup(scene, dur, cfg, out.parent)
+    if l_args:
+        l_idx = len([a for a in inputs if a == "-i"])
+        inputs += l_args
+        filters.append(l_chain.replace("[1:v]", f"[{l_idx}:v]", 1) + "[lt]")
+        filters.append(f"[{label}][lt]overlay={l_pos}[vlt]")
+        label = "vlt"
     # STICKER nativo animado (después de la ruptura: los stickers de la app
     # no se zoomean con el contenido — así parece puesto por la plataforma)
     s_args, s_chain, s_pos, s_post = _sticker_setup(scene, dur, cfg, out.parent)
@@ -933,7 +1018,8 @@ def _render_signature(scenes, plans, cfg, project) -> str:
         "fmt": 2,
         "video": {k: v.get(k) for k in
                   ("width", "height", "fps", "transition", "overlays",
-                   "overlay_accent")},
+                   "overlay_accent", "overlay_style", "overlay_plate",
+                   "overlay_text_color", "overlay_font_family")},
         "scenes": [{
             "id": s["id"], "img": s.get("broll_image"),
             "vid": s.get("broll_video"), "anim": s.get("animation"),

@@ -14,6 +14,13 @@ video:
                              # 5-6 dinámico · 8-10 estándar · 14+ contemplativo
   overlays: true             # rótulos cinematográficos en los momentos clave
   overlay_accent: E8C46B     # color de acento de los rótulos (dorado cine)
+  overlay_plate: true        # rótulos CON DISEÑO: placa de fondo (contraste
+                             # sobre cualquier B-roll), filete de acento y la
+                             # palabra clave en color. false = texto pelado
+                             # (el estilo clásico anterior a la v0.47.0)
+  overlay_style: documental  # documental (placa oscura sobria) · minimal (sin
+                             # placa, solo filete) · bold (placa del color de
+                             # acento con texto oscuro, máxima presencia)
   elements: true             # INSERTOS documentales sobre el B-roll: foto real
                              # del personaje/lugar mencionado (banco propio en
                              # assets/elements/ o Wikimedia con licencia libre y
