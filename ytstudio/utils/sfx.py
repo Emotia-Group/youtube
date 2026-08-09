@@ -13,16 +13,19 @@ from pathlib import Path
 from ytstudio.config import ROOT
 from ytstudio.utils.media import run_ffmpeg
 
-KINDS = ("whoosh", "riser", "boom", "pop")
+KINDS = ("whoosh", "riser", "boom", "pop", "papel", "latido")
 
 # Duración de cada efecto sintetizado y cómo se alinea con el corte de escena:
-# whoosh/riser terminan EN el corte (anticipan); boom suena EN el corte;
-# pop es el acento sutil de los INSERTOS documentales (suena en la mención).
+# whoosh/riser terminan EN el corte (anticipan); boom/papel/latido suenan EN
+# el corte; pop es el acento sutil de los INSERTOS documentales (suena en la
+# mención, no en el corte).
 SFX_SPECS = {
     "whoosh": {"dur": 1.0, "before_cut": 0.85},
     "riser": {"dur": 2.4, "before_cut": 2.4},
     "boom": {"dur": 2.2, "before_cut": 0.0},
     "pop": {"dur": 0.4, "before_cut": 0.0},
+    "papel": {"dur": 0.9, "before_cut": 0.15},
+    "latido": {"dur": 1.6, "before_cut": 0.0},
 }
 
 
@@ -49,6 +52,18 @@ def _synthesize(kind: str, out: Path) -> Path:
         # Toque breve y suave (barrido corto descendente): acento de inserto.
         expr = "0.55*sin(2*PI*(820-600*t)*t)*exp(-16*t)"
         post = "highpass=f=200,lowpass=f=2600"
+    elif kind == "papel":
+        # Roce de papel/archivo: dos ráfagas cortas de ruido agudo — el gesto
+        # de pasar un documento, para los tramos de archivo y datos.
+        expr = ("(random(0)-0.5)*1.4*exp(-13*t)"
+                "+(random(0)-0.5)*1.1*exp(-16*max(0\\,t-0.28))")
+        post = "highpass=f=1200,lowpass=f=7000"
+    elif kind == "latido":
+        # Latido (lub-dub): dos golpes graves con la separación real del
+        # corazón — tensión sostenida sin música añadida.
+        expr = ("0.9*sin(2*PI*46*t)*exp(-7*t)"
+                "+0.7*sin(2*PI*42*max(0\\,t-0.34))*exp(-8*max(0\\,t-0.34))")
+        post = "lowpass=f=180"
     else:  # boom
         # Sub-golpe (52 Hz con caída exponencial) + ataque breve de ruido.
         expr = (f"0.95*sin(2*PI*52*t)*exp(-3.2*t)"

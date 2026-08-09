@@ -992,6 +992,26 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
     return args, filters, "sfx"
 
 
+def _ambience_input(project, cfg, total: float,
+                    idx: int) -> tuple[list[str], str, str | None]:
+    """(args de entrada, filtro, etiqueta) de la CAMA DE AMBIENTE, o vacío si
+    no hay o está desactivada.
+
+    Va por debajo de todo: entra con un fundido, se acota a la duración exacta
+    del video y muere con él. Al nivel de `ambience_db` (−30 dB por defecto)
+    no compite con la voz — solo llena el fondo que antes estaba vacío."""
+    amb_path = project.path("music", "ambiente.wav")
+    if not cfg["audio"].get("ambience", True) or not amb_path.exists():
+        return [], "", None
+    amb_db = float(cfg["audio"].get("ambience_db", -30))
+    fade = min(3.0, max(0.5, total * 0.02))
+    filt = (f"[{idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
+            f"atrim=0:{total:.3f},apad=whole_dur={total:.3f},"
+            f"volume={amb_db}dB,afade=t=in:st=0:d={fade:.2f},"
+            f"afade=t=out:st={max(0.0, total - fade):.2f}:d={fade:.2f}[amb]")
+    return ["-i", str(amb_path)], filt, "amb"
+
+
 def _render_signature(scenes, plans, cfg, project) -> str:
     """Huella de todo lo que afecta al render de cada escena (imagen/video,
     animación, duración, rótulo, transición y ajustes de video). Si cambia, se
@@ -1195,6 +1215,14 @@ def run(project, cfg) -> None:
         voice_sc, voice_mx = None, "vmx"
     next_idx = narr_idx + 1
 
+    # CAMA DE AMBIENTE (v0.48.0): por debajo de todo, da lugar a cada tramo.
+    amb_args, amb_filter, amb_label = _ambience_input(project, cfg, total,
+                                                      next_idx)
+    if amb_args:
+        args += amb_args
+        afilters.append(amb_filter)
+        next_idx += 1
+
     envelope = _music_envelope(scenes, music_db, swing_db)
     afilters.append(f"[1:a]volume='{envelope}':eval=frame[m]")
     if duck:
@@ -1205,8 +1233,10 @@ def run(project, cfg) -> None:
         music_label = "m"
 
     afilters += sfx_filters
-    mix_in = f"[{voice_mx}][{music_label}]" + (f"[{sfx_label}]" if sfx_label else "")
-    n_mix = 3 if sfx_label else 2
+    mix_in = (f"[{voice_mx}][{music_label}]"
+              + (f"[{sfx_label}]" if sfx_label else "")
+              + (f"[{amb_label}]" if amb_label else ""))
+    n_mix = 2 + (1 if sfx_label else 0) + (1 if amb_label else 0)
     # Cierre: fundido LARGO del audio (mínimo 2.5s) que muere EXACTAMENTE con
     # la imagen — un fundido corto que arrancaba al acabar la voz sonaba a
     # «la música termina antes que el video, y de golpe».

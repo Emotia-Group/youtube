@@ -9,6 +9,38 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.48.0 — 2026-08-09
+**Diseño de sonido documental** (Fase 2 de las 4). La música ya dibujaba el
+arco dramático, pero el fondo estaba VACÍO: un tramo que narra el desierto
+sonaba exactamente igual que uno que narra un mercado.
+
+- 🎧 UN DIRECTOR DE SONIDO EN EL EQUIPO: decide el AMBIENTE de cada acto
+  (los mismos tramos que ya usa la música) según lo que se narra ahí —
+  viento en el desierto, multitud en el mercado, sala en los tramos de
+  archivo, lluvia, mar, fuego o un dron de tensión. Los ambientes se funden
+  entre tramos, así que el lugar cambia con la historia y no de golpe.
+  · **Una sola llamada por video** (~$0.02) con esfuerzo medio.
+  · Puede elegir **'ninguno'**: el silencio también es diseño de sonido.
+- 🔊 SIN COSTO DE MATERIAL: si tienes archivos propios en
+  `assets/sfx/ambientes/` (`viento*.wav`, `multitud*.mp3`…), **mandan
+  ellos**; si no, el programa los **sintetiza en tu equipo**, gratis. Hay un
+  README en `assets/sfx/` con los nombres y dónde conseguir packs libres.
+- 🎚 EN SU SITIO, NO ENCIMA: la cama va a −30 dB (ajustable con
+  `ambience_db`), por debajo de la voz y la música, con fundido de entrada y
+  muriendo exactamente con el video. Verificado midiendo una mezcla real:
+  se oye, pero aporta menos de 1.5 dB al total — acompaña, no protagoniza.
+- 🥁 DOS ACENTOS NUEVOS LIGADOS AL CONTENIDO, que el director coloca donde
+  la narración lo pide: **'papel'** (un documento, un registro, una cifra de
+  archivo) y **'latido'** (suspenso sostenido: peligro, espera, cuenta
+  atrás). Se suman a whoosh/riser/boom y al 'pop' de los insertos.
+- 🔌 Todo desactivable: `audio.ambience: false` deja el video con música y
+  voz como hasta ahora. Y si el modelo falla o no hay escenas, la fase
+  continúa con un aviso — el sonido de apoyo jamás detiene una generación.
+
+Batería nueva (`tests/test_v0_48_0.py`, 24 comprobaciones que MIDEN el audio
+real con ffmpeg: nivel de cada ambiente, prioridad de tu biblioteca, duración
+y fundidos de la cama, y la aportación exacta a la mezcla final).
+
 ## v0.47.0 — 2026-08-09
 **Los rótulos ya son diseño, no texto encima del video.** (Fase 1 de las 4
 acordadas para la calidad audiovisual.) Tú mismo dijiste que se quedaban

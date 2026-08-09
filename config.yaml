@@ -101,8 +101,17 @@ audio:
   vo_lufs: -16
   intensity_db: 8            # cuánto sube/baja la música según la intensidad
                              # dramática de cada escena (dB de recorrido)
-  sfx: true                  # efectos incidentales (whoosh/riser/boom) en cortes
+  sfx: true                  # efectos incidentales en los cortes: whoosh, riser,
+                             # boom, papel (archivo/documentos) y latido
+                             # (suspenso), más el 'pop' de los insertos
   sfx_db: -18                # volumen de los efectos (propios en assets/sfx)
+  ambience: true             # CAMA DE AMBIENTE por actos: el director de sonido
+                             # elige el fondo de cada tramo (viento, multitud,
+                             # sala, lluvia, mar, fuego, tensión) según lo que se
+                             # narra. Usa tus archivos de assets/sfx/ambientes/
+                             # y, si no hay, los sintetiza en local (gratis).
+  ambience_db: -30           # volumen de la cama de ambiente (muy por debajo de
+                             # la voz: acompaña, no protagoniza)
   end_fade: 1.5               # fundido de cierre del audio al final (segundos)
   # Respiración estilo documental (narración propia): los espacios en blanco
   # se insertan SOLO dentro de las pausas naturales de tu grabación — la voz

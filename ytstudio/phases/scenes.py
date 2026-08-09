@@ -24,7 +24,8 @@ _CREATIVE_PROPS = {
     "music_intensity": {"type": "number"},
     "pause_after": {"type": "number"},
     "pace": {"type": "string", "enum": ["ligado", "normal", "amplio"]},
-    "sfx": {"type": "string", "enum": ["ninguno", "whoosh", "riser", "boom"]},
+    "sfx": {"type": "string",
+            "enum": ["ninguno", "whoosh", "riser", "boom", "papel", "latido"]},
     "transition": {"type": "string", "enum": ["corte", "fundido"]},
     # Composición de pantalla: 'dividida' = dos visuales a la vez (arriba/
     # abajo en vertical, izquierda/derecha en horizontal) para comparaciones.
@@ -120,7 +121,9 @@ escena (respiros breves al final de cada frase, sin cortar nunca la voz).
 EFECTOS DE SONIDO (sfx): acento en el corte de ENTRADA de la escena.
 - 'whoosh' al cambiar de sección/lugar/tiempo · 'riser' en la escena que
   desemboca en el clímax (crea anticipación) · 'boom' en una revelación
-  impactante · 'ninguno' en el resto (máximo 1 de cada 4 escenas).
+  impactante · 'papel' cuando se narra un documento, un registro, una cifra
+  de archivo · 'latido' en suspenso sostenido (peligro, cuenta atrás, una
+  espera tensa) · 'ninguno' en el resto (máximo 1 de cada 4 escenas).
 
 PANTALLA DIVIDIDA (layout): 'completo' casi siempre. 'dividida' SOLO cuando la
 narración COMPARA dos cosas de verdad (antes/después, esto vs aquello, opción
@@ -600,8 +603,8 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
         s["pace"] = s.get("pace") if s.get("pace") in \
             ("ligado", "normal", "amplio") else "normal"
 
-        s["sfx"] = s.get("sfx") if s.get("sfx") in ("whoosh", "riser", "boom") \
-            else None
+        s["sfx"] = s.get("sfx") if s.get("sfx") in (
+            "whoosh", "riser", "boom", "papel", "latido") else None
 
         s["transition"] = s.get("transition") if s.get("transition") in \
             ("corte", "fundido") else None

@@ -215,12 +215,118 @@ def _try_multi_track(project, cfg, music: LibraryMusic, llm, tracks,
         return False
 
 
+_AMBIENCE_SCHEMA = {
+    "type": "object",
+    "properties": {"actos": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"acto": {"type": "integer"},
+                       "ambiente": {"type": "string"},
+                       "motivo": {"type": "string"}},
+        "required": ["acto", "ambiente", "motivo"],
+        "additionalProperties": False}}},
+    "required": ["actos"], "additionalProperties": False,
+}
+
+
+def _build_ambience(project, cfg, llm, total: float) -> None:
+    """DIRECTOR DE SONIDO: bajo la música y la voz, una cama de AMBIENTE que
+    da lugar a cada tramo (viento en el desierto, murmullo en el mercado, sala
+    en los tramos de archivo). Se decide por ACTOS —los mismos que la música—
+    en UNA sola llamada, y se sintetiza en local si no tienes biblioteca.
+
+    Es una capa de apoyo: cualquier fallo la quita y el video sale igual."""
+    from ytstudio.progress import notify
+    from ytstudio.utils import ambience as amb
+    if not cfg.get("audio", {}).get("ambience", True):
+        return
+    out = project.path("music", "ambiente.wav")
+    if out.exists():
+        return                      # reanudación: ya construida
+    try:
+        from ytstudio.phases.scenes import load_scenes
+        scenes = load_scenes(project)
+    except Exception:
+        return
+    if not scenes or not all(s.get("duration") for s in scenes):
+        return
+    acts = _acts_from_scenes(scenes, min_len=45.0, max_acts=8)
+    if not acts:
+        return
+
+    plan: list[tuple[str, float]] = []
+    reasons: list[str] = []
+    if getattr(llm, "is_mock", False):
+        plan = [("sala", a["dur"]) for a in acts]
+    else:
+        from ytstudio.catalog import lang_name
+        acts_txt = "\n".join(
+            f"[{i}] {a['dur']:.0f}s · intensidad {a['band']} · "
+            + " / ".join(dict.fromkeys(
+                s.get("section", "") for s in a["scenes"] if s.get("section")))
+            + " — «" + " ".join(
+                (s.get("narration") or "") for s in a["scenes"][:3])[:260] + "»"
+            for i, a in enumerate(acts))
+        try:
+            res = llm.complete_json(
+                f"Eres el DIRECTOR DE SONIDO de un documental en "
+                f"{lang_name(cfg)}. Eliges el ambiente de fondo de cada tramo: "
+                "el sonido del LUGAR o del clima emocional, por debajo de la "
+                "música y la voz. Sobrio: el ambiente acompaña, no protagoniza.",
+                "Elige UN ambiente por acto de este catálogo:\n"
+                + amb.catalog_text()
+                + "\n- ninguno: silencio de fondo (úsalo cuando el tramo pide "
+                "desnudez o cuando ningún ambiente encaja de verdad).\n\n"
+                "Criterio: el ambiente debe corresponder a lo que se NARRA en "
+                "ese tramo (un desierto suena a viento; un mercado, a "
+                "multitud; un tramo de documentos y cifras, a sala). No "
+                "repitas el mismo en todos los actos si la historia cambia de "
+                "lugar; tampoco los alternes sin motivo.\n\n"
+                f"ACTOS:\n{acts_txt}",
+                schema=_AMBIENCE_SCHEMA, max_tokens=8000,
+                purpose="sound_design")
+            by_act = {int(r.get("acto", -1)): r for r in res.get("actos", [])}
+            for i, a in enumerate(acts):
+                r = by_act.get(i) or {}
+                kind = r.get("ambiente") if r.get("ambiente") in amb.KINDS \
+                    else "ninguno"
+                plan.append((kind, a["dur"]))
+                if kind != "ninguno":
+                    reasons.append(f"{kind} ({a['dur']:.0f}s)")
+        except Exception as e:
+            project.add_warning(
+                f"El diseño de ambiente no se pudo consultar ({e}): el video "
+                "sale con música y voz, sin cama de ambiente.")
+            return
+    try:
+        # el ambiente cubre el video entero (el último tramo estira la cola)
+        if plan:
+            plan[-1] = (plan[-1][0], plan[-1][1] + 3.0)
+        built = amb.build_bed(plan, out, work_dir=project.path("music"))
+    except Exception as e:
+        project.add_warning(f"La cama de ambiente no se pudo construir ({e}): "
+                            "el video sale con música y voz.")
+        return
+    if built is None:
+        return
+    project.set("ambience_plan", [{"ambiente": k, "seconds": round(d, 1)}
+                                  for k, d in plan])
+    notify("🎧 Diseño de sonido: cama de ambiente por actos"
+           + (" — " + ", ".join(reasons) if reasons else "")
+           + " (por debajo de la música y la voz).")
+
+
 def run(project, cfg) -> None:
     music = get_music(cfg)
     concept = project.get("concept")
     total = project.get("total_duration")
     if not total:
         raise RuntimeError("Ejecuta primero la fase 'voiceover' (define la duración).")
+
+    # Cama de AMBIENTE (independiente de qué proveedor de música se use)
+    try:
+        _build_ambience(project, cfg, get_llm(cfg), total)
+    except Exception as e:
+        project.add_warning(f"Diseño de ambiente omitido ({e}).")
 
     out = project.path("music", "musica.mp3")
     mood = concept["music_direction"]["mood"]
