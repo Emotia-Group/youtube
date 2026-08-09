@@ -19,6 +19,7 @@ import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import urllib.parse
 from urllib.parse import parse_qs, urlparse
 
 import yaml
@@ -826,6 +827,34 @@ def api_edit_scenes(slug: str, body: dict) -> dict:
     return {"saved": True, "rerun_from": rerun}
 
 
+def api_elements_list() -> dict:
+    """Inventario del BANCO DE ELEMENTOS (material de superposición propio)."""
+    from ytstudio.utils.elements import CATEGORIES, bank_list
+    return {"categories": list(CATEGORIES), "items": bank_list()}
+
+
+def api_elements_add(body: dict) -> dict:
+    from ytstudio.utils.elements import bank_add
+    cat = str(body.get("category") or "")
+    f = body.get("file") or {}
+    if not f.get("data_base64"):
+        raise ApiError(400, "Falta el archivo.")
+    try:
+        data = base64.b64decode(f["data_base64"])
+        return {"ok": True,
+                "item": bank_add(cat, f.get("name") or "", data)}
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_elements_delete(category: str, filename: str) -> dict:
+    from ytstudio.utils.elements import bank_delete
+    try:
+        return {"ok": bank_delete(category, urllib.parse.unquote(filename))}
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
 def api_get_config() -> dict:
     return {
         "config": load_config(),
@@ -1033,6 +1062,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._serve_file(target)
 
+    def _element_file(self, category: str, name: str) -> None:
+        """Sirve un archivo del BANCO DE ELEMENTOS para la vista previa."""
+        from ytstudio.utils.elements import BANK_DIR
+        base = BANK_DIR.resolve()
+        target = (base / category / urllib.parse.unquote(name)).resolve()
+        if not str(target).startswith(str(base)):
+            self._json({"error": "Ruta inválida"}, 403)
+            return
+        self._serve_file(target)
+
     def log_message(self, fmt, *args):  # silenciar el log por request
         pass
 
@@ -1065,6 +1104,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_changelog())
             elif path == "/api/library":
                 self._json(api_library())
+            elif path == "/api/elements":
+                self._json(api_elements_list())
+            elif m := re.fullmatch(r"/elements/([\w-]+)/(.+)", path):
+                self._element_file(m.group(1), m.group(2))
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
                 self._project_file(m.group(1), m.group(2))
             else:
@@ -1101,6 +1144,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_channel_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
                 self._json(api_channel_update(m.group(1), self._body()))
+            elif path == "/api/elements":
+                self._json(api_elements_add(self._body()), 201)
             elif path == "/api/styles":
                 self._json(api_style_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
@@ -1147,6 +1192,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_character_delete(m.group(1), m.group(2)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes/(\d+)/broll", path):
                 self._json(api_scene_broll_delete(m.group(1), int(m.group(2))))
+            elif m := re.fullmatch(r"/api/elements/([\w-]+)/(.+)", path):
+                self._json(api_elements_delete(m.group(1), m.group(2)))
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
                 self._json(api_channel_delete(m.group(1)))
             elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):

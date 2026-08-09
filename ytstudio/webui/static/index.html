@@ -1120,7 +1120,57 @@ async function showLibrary(){
       ${styles.length?styles.map(s=>styleCard(s)).join(''):'<div class="muted" style="margin-top:6px">Sin estilos aún — guárdalos desde un proyecto o créalos abajo.</div>'}
     </div>`}).join('')}
   <div class="card"><h3>Nuevo estilo desde cero</h3>${styleForm(null)}</div>
-  <div id="style-edit"></div>`;
+  <div id="style-edit"></div>
+  <h1 style="margin-top:26px">🗄 Banco de elementos</h1>
+  <p class="muted">Material propio para los INSERTOS que se superponen al B-roll cuando la narración menciona a alguien o algo (una foto de Elon Musk, un plano de El Cairo, un logo, un clip corto). <b>Tu material siempre tiene prioridad</b> sobre la búsqueda en Wikimedia. El nombre del archivo es la clave: <code>elon-musk.jpg</code> encuentra la mención «Elon Musk» (sin importar tildes ni mayúsculas). Usa solo material de uso libre o propio.</p>
+  <div id="bank"></div>`;
+  renderBank();
+}
+const BANK_LABELS={personajes:'👤 Personajes',lugares:'📍 Lugares',entidades:'🏛 Entidades y marcas',mapas:'🗺 Mapas',stickers:'✨ Stickers y adornos'};
+async function renderBank(){
+  const b=await api('/api/elements').catch(()=>null);
+  if(!b){$('#bank').innerHTML='<div class="card muted">No se pudo leer el banco.</div>';return}
+  $('#bank').innerHTML=b.categories.map(cat=>{
+    const items=b.items[cat]||[];
+    return `<div class="card">
+      <div class="row" style="justify-content:space-between">
+        <b>${BANK_LABELS[cat]||esc(cat)}</b>
+        <label class="btn sec small" style="cursor:pointer">＋ Añadir archivos
+          <input type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" style="display:none" onchange="bankUpload('${cat}',this)">
+        </label>
+      </div>
+      ${items.length?`<div class="row" style="flex-wrap:wrap;gap:10px;margin-top:10px">${items.map(it=>`
+        <div style="width:132px">
+          ${it.kind==='video'
+            ? `<video src="/elements/${cat}/${encodeURIComponent(it.file)}" style="width:132px;height:88px;object-fit:cover;border-radius:6px;background:#000" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>`
+            : `<img src="/elements/${cat}/${encodeURIComponent(it.file)}" style="width:132px;height:88px;object-fit:cover;border-radius:6px">`}
+          <div style="font-size:12px;margin-top:3px;word-break:break-word">${esc(it.etiqueta)}</div>
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <span class="muted" style="font-size:11px">${it.kind==='video'?'clip':'imagen'} · ${Math.round(it.size/1024)} KB</span>
+            <button class="btn sec small" style="padding:1px 6px" title="Quitar del banco" onclick="bankDelete('${cat}','${esc(it.file)}')">🗑</button>
+          </div>
+        </div>`).join('')}</div>`
+        :'<div class="muted" style="margin-top:6px;font-size:13px">Vacío. Añade archivos con el nombre de lo que representan.</div>'}
+    </div>`}).join('');
+}
+async function bankUpload(cat,input){
+  const files=[...input.files];input.value='';
+  if(!files.length)return;
+  let ok=0;
+  for(const f of files){
+    try{
+      const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)});
+      await api('/api/elements',{method:'POST',body:JSON.stringify({category:cat,file:{name:f.name,data_base64:b64}})});
+      ok++;
+    }catch(e){toast('⚠ '+f.name+': '+e.message)}
+  }
+  if(ok)toast(`✅ ${ok} elemento(s) añadidos`);
+  renderBank();
+}
+async function bankDelete(cat,file){
+  if(!confirm(`¿Quitar «${file}» del banco?`))return;
+  try{await api(`/api/elements/${cat}/${encodeURIComponent(file)}`,{method:'DELETE'});renderBank()}
+  catch(e){toast('⚠ '+e.message)}
 }
 function styleCard(s){
   return `<div class="scene" style="margin-top:8px"><div style="flex:1">

@@ -29,6 +29,11 @@ video:
                              # Densidad: máx 1 por escena y ~1 de cada 3-4.
   elements_web: true         # permite descargar fotos LIBRES de Wikimedia para
                              # los insertos (si no, solo banco propio y tarjetas)
+  elements_ai: false         # ÚLTIMO recurso para los insertos sin foto libre:
+                             # ilustrarlos con IA. CUESTA como una imagen de
+                             # B-roll cada uno (~$0.04 con FLUX), por eso viene
+                             # apagado — enciéndelo si prefieres cobertura total
+  elements_ai_max: 3         # tope de ilustraciones IA por video (freno de mano)
 providers:
   llm:
     name: anthropic

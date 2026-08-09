@@ -756,6 +756,21 @@ def _element_setup(scene: dict, dur: float, cfg: dict,
     slide = f"{x_final}+40*max(0,1-(t-{t0:.2f})/0.35)"
     pos = (f"x='{slide}':y={y}:eof_action=repeat:"
            f"enable='between(t,{t0:.2f},{t1 + 0.3:.2f})'")
+    if el.get("mode") == "video":
+        # CLIP de archivo: se escala al ancho de tarjeta y se enmarca como una
+        # copia impresa (el mismo lenguaje que las fotos), en bucle si el clip
+        # es más corto que la ventana del inserto.
+        card_w = int(min(w, h) * 0.34)
+        border = max(4, int(card_w * 0.035))
+        args = ["-stream_loop", "-1", "-i", str(files[0]),
+                "-t", f"{t1 + 0.4:.3f}"]
+        chain = (f"[1:v]scale={card_w}:-2,"
+                 f"pad=iw+{border * 2}:ih+{border * 2}:{border}:{border}:"
+                 f"color=0xF8F6F0,fps={fps},format=rgba,"
+                 f"setpts=PTS-STARTPTS+{t0:.3f}/TB,"
+                 f"fade=t=in:st={t0:.2f}:d=0.3:alpha=1,"
+                 f"fade=t=out:st={t1:.2f}:d=0.3:alpha=1")
+        return args, chain, pos
     if el.get("mode") == "stat" and len(files) > 1:
         # Secuencia de CUENTA ASCENDENTE (14 cuadros a 12 fps ≈ 1.2s):
         # desplazada al instante de la mención; el último cuadro (el valor

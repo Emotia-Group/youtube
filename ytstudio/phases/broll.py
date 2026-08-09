@@ -4,6 +4,7 @@ IA la imagen (o clip) de las escenas restantes."""
 from __future__ import annotations
 
 import shutil
+import threading
 from pathlib import Path
 
 from ytstudio.phases.scenes import load_scenes, save_scenes
@@ -568,8 +569,8 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
     return verdicts
 
 
-def _resolve_elements(project, cfg, scenes: list[dict],
-                      broll_dir: Path) -> None:
+def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
+                      images=None) -> None:
     """Materializa los ELEMENTOS de archivo planificados por el documentalista:
     banco local del creador → foto libre de Wikimedia (con atribución que va
     sola a la descripción) → tarjeta generada en local (cifras y fechas, $0).
@@ -590,6 +591,27 @@ def _resolve_elements(project, cfg, scenes: list[dict],
            "(banco propio → Wikimedia con licencia libre → generado local)…")
     credits: set[str] = set()
     sin_fuente: list[str] = []
+    ilustradas: list[str] = []
+    concept = project.get("concept") or {}
+    prefix_ai = ((concept.get("visual_style") or {}).get("prompt_prefix")
+                 or "cinematic documentary still")
+    if images is None or getattr(images, "is_mock", False):
+        cfg = {**cfg, "video": {**cfg["video"], "elements_ai": False}}
+
+    # Presupuesto de ilustraciones IA: los insertos se resuelven en PARALELO,
+    # así que la reserva tiene que ser atómica — comprobar y restar por
+    # separado dejaba que tres hilos pasaran el mismo control y se generara
+    # (y pagara) más de lo autorizado.
+    ai_budget = [int(cfg["video"].get("elements_ai_max", 3))
+                 if cfg["video"].get("elements_ai", False) else 0]
+    ai_lock = threading.Lock()
+
+    def _reservar_ia() -> bool:
+        with ai_lock:
+            if ai_budget[0] <= 0:
+                return False
+            ai_budget[0] -= 1
+            return True
 
     def _uno(s, el):
         sid = s["id"]
@@ -604,11 +626,35 @@ def _resolve_elements(project, cfg, scenes: list[dict],
             el["mode"] = "stat"
             return
         src = elib.bank_lookup(el.get("consulta", ""))
+        # CLIP DE VIDEO del banco: se copia al proyecto y se compone como
+        # inserto en movimiento (el montaje lo escala y enmarca).
+        if src is not None and elib.is_video(src):
+            clip = eldir / f"clip_{sid:03d}{src.suffix.lower()}"
+            shutil.copyfile(src, clip)
+            el["files"] = [clip.name]
+            el["mode"] = "video"
+            return
         credit = None
         if src is None and permitir_web:
             got = elib.wiki_photo(el.get("consulta", ""), lang_code, eldir)
             if got:
                 src, credit = got["file"], got["credit"]
+        if src is None and _reservar_ia():
+            # ÚLTIMO recurso, y solo si el creador lo autorizó: una
+            # ilustración editorial generada (cuesta lo que una imagen del
+            # B-roll). El presupuesto se comparte entre todos los insertos.
+            try:
+                ai = eldir / f"ai_{sid:03d}.jpg"
+                images.generate(
+                    f"editorial documentary illustration of "
+                    f"{el.get('consulta', '')}, {prefix_ai}, muted palette, "
+                    "no text, no letters, no watermark", ai)
+                src = ai
+                ilustradas.append(f"{el.get('consulta')} (escena {sid})")
+            except Exception:
+                src = None
+                with ai_lock:      # el fallo devuelve el cupo al presupuesto
+                    ai_budget[0] += 1
         if src is None:
             sin_fuente.append(f"{el.get('consulta')} (escena {sid})")
             el["files"] = []
@@ -635,12 +681,18 @@ def _resolve_elements(project, cfg, scenes: list[dict],
             s["elements"] = [e for e in s["elements"] if e is not el]
     prev = set(project.get("element_credits") or [])
     project.set("element_credits", sorted(prev | credits))
+    if ilustradas:
+        notify(f"🎨 {len(ilustradas)} inserto(s) sin foto libre se ilustraron "
+               "con IA (lo autorizaste con elements_ai).")
     if sin_fuente:
         project.add_warning(
             "Sin foto de licencia libre para: " + ", ".join(sin_fuente[:6])
             + (" y más" if len(sin_fuente) > 6 else "")
-            + ". Puedes poner tu propia imagen en assets/elements/ (con el "
-            "nombre de la entidad) y «Rehacer desde Imágenes».")
+            + ". Puedes añadir tu propio archivo (imagen o clip) desde "
+            "📚 Biblioteca → Banco de elementos y «Rehacer desde Imágenes»"
+            + ("" if cfg["video"].get("elements_ai") else
+               ", o activar `elements_ai` para ilustrarlos con IA (cuesta "
+               "como una imagen de B-roll cada uno)") + ".")
 
 
 def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
@@ -1097,7 +1149,7 @@ def run(project, cfg) -> None:
     # las imágenes — descargas rápidas y tarjetas locales; un fallo aquí quita
     # el adorno, nunca la fase.
     try:
-        _resolve_elements(project, cfg, scenes, broll_dir)
+        _resolve_elements(project, cfg, scenes, broll_dir, images=images)
     except Exception as e:
         project.add_warning(f"El material de archivo no se pudo preparar "
                             f"({e}): el video sale sin insertos documentales.")

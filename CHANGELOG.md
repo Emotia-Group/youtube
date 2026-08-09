@@ -9,6 +9,37 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.49.0 — 2026-08-09
+**El banco de elementos, ahora desde la interfaz — y los insertos ya pueden
+ser VIDEO** (Fase 3 de las 4).
+
+- 🗄 BANCO GESTIONABLE EN 📚 BIBLIOTECA: nueva sección «Banco de elementos»
+  con las 5 categorías (personajes, lugares, entidades, mapas, stickers).
+  Arrastras archivos, los ves en miniatura (los clips se reproducen al pasar
+  el ratón), y los quitas con un clic. Se acabó copiar carpetas a mano.
+  Recuerda: **el nombre del archivo es la clave** — `elon-musk.jpg` encuentra
+  la mención «Elon Musk», sin importar tildes ni mayúsculas.
+- 🎬 INSERTOS EN VIDEO: el banco ya acepta clips (mp4, webm, mov), no solo
+  imágenes. Un clip se compone enmarcado como una copia impresa —el mismo
+  lenguaje visual que las fotos—, en bucle si es más corto que la ventana del
+  inserto, y con sus fundidos. Ideal para material de archivo en movimiento.
+- 🎨 ILUSTRACIÓN IA DE RESPALDO (opcional, `elements_ai`): cuando una entidad
+  no tiene foto de licencia libre ni archivo tuyo, puede ilustrarse con IA en
+  el estilo visual del video. **Viene APAGADA** porque cuesta como una imagen
+  de B-roll (~$0.04 cada una) y no quiero sorpresas en tu factura; al
+  encenderla hay un tope duro (`elements_ai_max`, 3 por defecto).
+- 🐛 Un fallo de dinero cazado por la propia batería: los insertos se
+  resuelven en 3 hilos a la vez y el tope de ilustraciones se comprobaba sin
+  cerrojo — tres hilos podían pasar el mismo control y generar (y pagar) de
+  más. La reserva de presupuesto ahora es atómica, y si la generación falla,
+  el cupo se devuelve.
+- El aviso de «sin foto libre» ahora te dice exactamente cómo cubrirlo: subir
+  el archivo al banco desde la Biblioteca, o activar la ilustración IA.
+
+Batería nueva (`tests/test_v0_49_0.py`, 27 comprobaciones: API del banco con
+rutas encerradas, clips compuestos con un render REAL de ffmpeg, y el tope de
+gasto verificado en tres corridas seguidas).
+
 ## v0.48.0 — 2026-08-09
 **Diseño de sonido documental** (Fase 2 de las 4). La música ya dibujaba el
 arco dramático, pero el fondo estaba VACÍO: un tramo que narra el desierto

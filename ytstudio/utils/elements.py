@@ -29,6 +29,10 @@ from ytstudio.utils.media import find_font
 BANK_DIR = ROOT / "assets" / "elements"
 CATEGORIES = ("personajes", "lugares", "entidades", "mapas", "stickers")
 
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
+VIDEO_EXT = (".mp4", ".webm", ".mov", ".m4v")
+BANK_EXT = IMAGE_EXT + VIDEO_EXT
+
 # Licencias admitidas de Wikimedia (prefijo del LicenseShortName, minúsculas):
 # solo material libre — con atribución automática en la descripción.
 _FREE_LICENSES = ("cc0", "cc by", "cc-by", "public domain", "pd", "no restrictions")
@@ -44,10 +48,15 @@ def _norm(s: str) -> str:
 
 # --- fuente 1: banco local -------------------------------------------------
 
+def is_video(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXT
+
+
 def bank_lookup(query: str, categories: tuple = CATEGORIES) -> Path | None:
     """Busca en assets/elements/ un archivo cuyo nombre coincida con la
     consulta (sin tildes ni signos): 'elon-musk.jpg' encaja con «Elon Musk».
-    El material del creador SIEMPRE tiene prioridad sobre internet."""
+    El material del creador SIEMPRE tiene prioridad sobre internet, y puede
+    ser imagen O CLIP DE VIDEO."""
     qn = _norm(query)
     if not qn or not BANK_DIR.is_dir():
         return None
@@ -56,8 +65,8 @@ def bank_lookup(query: str, categories: tuple = CATEGORIES) -> Path | None:
         d = BANK_DIR / cat
         if not d.is_dir():
             continue
-        for p in d.iterdir():
-            if p.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+        for p in sorted(d.iterdir()):
+            if p.suffix.lower() not in BANK_EXT:
                 continue
             fn = _norm(p.stem)
             if fn == qn:
@@ -67,6 +76,58 @@ def bank_lookup(query: str, categories: tuple = CATEGORIES) -> Path | None:
                 if best is None or score > best[0]:
                     best = (score, p)
     return best[1] if best else None
+
+
+# --- gestión del banco desde la interfaz ----------------------------------
+
+def bank_list() -> dict[str, list[dict]]:
+    """Inventario del banco por categoría, para la pestaña Biblioteca."""
+    out: dict[str, list[dict]] = {}
+    for cat in CATEGORIES:
+        d = BANK_DIR / cat
+        items: list[dict] = []
+        if d.is_dir():
+            for p in sorted(d.iterdir()):
+                if p.suffix.lower() not in BANK_EXT:
+                    continue
+                items.append({"file": p.name, "etiqueta": p.stem,
+                              "kind": "video" if is_video(p) else "image",
+                              "size": p.stat().st_size})
+        out[cat] = items
+    return out
+
+
+def bank_add(category: str, filename: str, data: bytes) -> dict:
+    """Guarda un elemento en el banco. El NOMBRE es la clave de búsqueda: se
+    conserva tal cual lo escribe el creador (así «El Cairo.jpg» encuentra la
+    mención «El Cairo»)."""
+    if category not in CATEGORIES:
+        raise ValueError(f"Categoría desconocida: {category}")
+    name = Path(filename).name
+    ext = Path(name).suffix.lower()
+    if ext not in BANK_EXT:
+        raise ValueError(
+            f"Formato no admitido: {ext or 'sin extensión'}. Usa imágenes "
+            "(jpg, png, webp) o clips (mp4, webm, mov).")
+    if not data:
+        raise ValueError("El archivo está vacío.")
+    d = BANK_DIR / category
+    d.mkdir(parents=True, exist_ok=True)
+    dest = d / name
+    dest.write_bytes(data)
+    return {"file": dest.name, "etiqueta": dest.stem,
+            "kind": "video" if is_video(dest) else "image",
+            "size": len(data)}
+
+
+def bank_delete(category: str, filename: str) -> bool:
+    if category not in CATEGORIES:
+        raise ValueError(f"Categoría desconocida: {category}")
+    p = (BANK_DIR / category / Path(filename).name)
+    if not p.exists() or p.suffix.lower() not in BANK_EXT:
+        return False
+    p.unlink()
+    return True
 
 
 # --- fuente 2: Wikipedia/Wikimedia (licencias libres) ----------------------
