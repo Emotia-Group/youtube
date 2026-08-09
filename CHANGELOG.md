@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.45.0 — 2026-08-09
+Aprobaste el cambio de proveedor de imágenes: **Replicate FLUX 1.1 Pro pasa a
+ser el estándar** y gpt-image-1 queda solo para las escenas con texto legible.
+
+- 💰 EL PORQUÉ, EN NÚMEROS: un video largo de 83 imágenes cuesta **$3.32-4.15
+  con FLUX** contra $5.81-20.75 con gpt-image-1 — y FLUX no tiene el cuello
+  de botella de 5 imágenes por minuto que te frenó la fase en «3-mansa-musa».
+  Además su look fotorrealista cinematográfico es la referencia para el
+  estilo documental.
+- 🔁 MIGRACIÓN AUTOMÁTICA DE UNA SOLA VEZ: al primer arranque después de
+  actualizar, tu `config.local.yaml` pasa de openai a replicate/FLUX solo. Es
+  UNA vez y queda marcada: si algún día vuelves a elegir OpenAI en
+  ⚙ Configuración, tu elección se respeta para siempre (la marca sobrevive
+  incluso a guardados hechos con una página de Configuración abierta de
+  antes).
+- 🔤 TU PREGUNTA: **sí — el director elige gpt-image-1 automáticamente** en
+  cada escena donde definió texto legible dentro de la imagen (`image_text`),
+  sin que toques nada. Está así desde la v0.42.0 y esta versión lo deja como
+  camino principal: verás en el log «🔤 N escena(s) con texto legible: el
+  director las genera con gpt-image-1». Requiere tu OPENAI_API_KEY (la
+  tienes); si faltara, avisa y esas escenas salen con FLUX con énfasis
+  tipográfico. Suelen ser 1-5 escenas por video: esos centavos extra aparecen
+  en el reporte de gasto como imágenes de OpenAI. Y si gpt-image-1 fallara en
+  una escena, esa escena cae a FLUX — el ruteo nunca tumba la fase.
+
+Batería nueva (`tests/test_v0_45_0.py`, 18 comprobaciones) y las 44
+anteriores en verde.
+
 ## v0.44.0 — 2026-08-09
 Blindaje ANTICIPADO para tu primera versión estable, con prioridad en los
 videos largos. Esta vez no esperé a que un error apareciera en tu log: recorrí

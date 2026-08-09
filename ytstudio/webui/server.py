@@ -858,6 +858,7 @@ _UI_CONFIG_PATHS = (
     ("video", "burn_subtitles"), ("video", "scene_seconds"),
     ("audio", "music_db"), ("audio", "duck"),
     ("providers",),  # el usuario elige proveedores/modelos
+    ("migrations",),  # marcas de migraciones ya aplicadas (ver _apply_migrations)
 )
 
 
@@ -882,18 +883,43 @@ def _prune_to_ui(cfg: dict) -> dict:
     return out
 
 
+def _apply_migrations(cfg: dict) -> dict:
+    """Cambios de configuración recomendada que se aplican UNA sola vez — la
+    marca queda en 'migrations', así que si después el usuario elige otra
+    cosa en ⚙ Configuración, su elección se respeta para siempre.
+
+    images_replicate_v0_45: el proveedor de imágenes recomendado pasa de
+    gpt-image-1 (~$0.07-0.25/img y un límite de 5 img/min que frenaba la
+    fase) a Replicate FLUX 1.1 Pro (~$0.04/img, sin ese cuello de botella).
+    gpt-image-1 sigue entrando SOLO en las escenas con texto legible, a las
+    que el director rutea por su cuenta."""
+    done = list(cfg.get("migrations") or [])
+    if "images_replicate_v0_45" not in done:
+        img = (cfg.get("providers") or {}).get("images") or {}
+        if img.get("name") == "openai":
+            img["name"] = "replicate"
+            img["model"] = "black-forest-labs/flux-1.1-pro"
+            cfg.setdefault("providers", {})["images"] = img
+        done.append("images_replicate_v0_45")
+    cfg["migrations"] = done
+    return cfg
+
+
 def migrate_local_config() -> None:
     """Al arrancar: recorta config.local.yaml a lo que controla la UI, para
     liberar defaults congelados por versiones antiguas (transiciones,
-    rendimiento, overlays, audio avanzado…)."""
+    rendimiento, overlays, audio avanzado…), y aplica las migraciones de una
+    sola vez. Si el archivo no existe se crea solo con las marcas — sin eso,
+    una elección futura del usuario podría ser revertida por una migración
+    vieja al siguiente arranque."""
     path = ROOT / "config.local.yaml"
-    if not path.exists():
-        return
-    try:
-        current = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return
-    pruned = _prune_to_ui(current)
+    current = {}
+    if path.exists():
+        try:
+            current = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return
+    pruned = _apply_migrations(_prune_to_ui(current))
     if pruned != current:
         path.write_text(
             yaml.safe_dump(pruned, allow_unicode=True, sort_keys=False),
@@ -908,8 +934,22 @@ def api_save_config(body: dict) -> dict:
     # que es parte del repositorio y un 'git pull' lo sobreescribiría. Solo se
     # persiste lo que la UI controla (ver _UI_CONFIG_PATHS): así los defaults
     # nuevos del programa nunca quedan tapados por un guardado antiguo.
-    (ROOT / "config.local.yaml").write_text(
-        yaml.safe_dump(_prune_to_ui(cfg), allow_unicode=True, sort_keys=False),
+    saved = _prune_to_ui(cfg)
+    # Las marcas de migración del archivo actual nunca se pierden en un
+    # guardado (la UI podría tener cargada una config anterior a la
+    # migración): sin la unión, la migración se re-aplicaría al siguiente
+    # arranque y pisaría lo que el usuario acaba de elegir.
+    path = ROOT / "config.local.yaml"
+    try:
+        prev = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        prev = {}
+    marks = list(dict.fromkeys([*(prev.get("migrations") or []),
+                                *(saved.get("migrations") or [])]))
+    if marks:
+        saved["migrations"] = marks
+    path.write_text(
+        yaml.safe_dump(saved, allow_unicode=True, sort_keys=False),
         encoding="utf-8")
     return {"saved": True}
 
