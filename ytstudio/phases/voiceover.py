@@ -603,52 +603,58 @@ def _sync_overlays(scenes: list[dict], segments: list[dict],
     seg_norm = [(float(g["start"]), float(g["end"]), norm(g.get("text", "")))
                 for g in segments]
 
-    for idx, s in enumerate(scenes):
-        s["overlay_at"] = None
-        ov = s.get("overlay") or {}
-        text = norm(ov.get("text") or "")
+    def find_hit(s, text: str) -> float | None:
+        """Instante ORIGINAL en que se pronuncia `text` dentro de la escena
+        (tres prioridades: palabra con tiempo real → segmento → proporción)."""
         if "audio_start" not in s or not text:
-            continue
+            return None
         a, b = float(s["audio_start"]), float(s["audio_end"])
         key_words = [w for w in text.split() if len(w) >= 3] or text.split()
-        hit = None
 
         # 1) Coincidencia por PALABRA con su tiempo real. La contención por
         #    substring (para variantes con puntuación/plural) exige longitud
         #    mínima en AMBOS lados — si no, palabras cortas como "la" o "el"
         #    caen falsamente dentro de "Gaugamela" o "Alejandro".
-        sw = word_map.get(s["id"], [])
-        for w in sw:
+        for w in word_map.get(s["id"], []):
             wn = norm(w["text"])
             if not wn:
                 continue
             if any(wn == kw or (len(wn) >= 4 and len(kw) >= 4
                                 and (wn in kw or kw in wn)) for kw in key_words):
-                hit = float(w["start"])
-                break
+                return float(w["start"])
 
         # 2) Respaldo: segmento que contiene el texto, interpolando su
         #    posición dentro de él (proyectos sin timestamps por palabra)
-        if hit is None:
-            for start, end, txt in seg_norm:
-                if not (a - 0.05 <= start <= b + 0.05):
-                    continue
-                pos = txt.find(text)
-                if pos < 0:
-                    pos = next((txt.find(w) for w in key_words if txt.find(w) >= 0), -1)
-                if pos >= 0:
-                    frac = pos / max(1, len(txt))
-                    hit = start + (end - start) * frac
-                    break
+        for start, end, txt in seg_norm:
+            if not (a - 0.05 <= start <= b + 0.05):
+                continue
+            pos = txt.find(text)
+            if pos < 0:
+                pos = next((txt.find(w) for w in key_words if txt.find(w) >= 0), -1)
+            if pos >= 0:
+                return start + (end - start) * pos / max(1, len(txt))
 
         # 3) Último respaldo: proporción sobre toda la narración de la escena
-        if hit is None:
-            narr = norm(s.get("narration") or "")
-            i2 = next((narr.find(w) for w in key_words if narr.find(w) >= 0), -1)
-            if i2 >= 0 and narr:
-                hit = a + (b - a) * i2 / len(narr)
+        narr = norm(s.get("narration") or "")
+        i2 = next((narr.find(w) for w in key_words if narr.find(w) >= 0), -1)
+        if i2 >= 0 and narr:
+            return a + (b - a) * i2 / len(narr)
+        return None
 
+    for idx, s in enumerate(scenes):
+        s["overlay_at"] = None
+        ov = s.get("overlay") or {}
+        hit = find_hit(s, norm(ov.get("text") or ""))
         if hit is not None:
             local = V(hit) - starts[idx]  # instante del video, relativo a la escena
             local = max(0.0, min(local, float(s["duration"]) - 0.5))
             s["overlay_at"] = round(local, 3)
+        # ELEMENTOS de archivo: mismo anclaje a la palabra exacta de la
+        # mención ('momento' del documentalista) — el inserto aparece cuando
+        # se dice, no cuando arranca la escena.
+        for el in (s.get("elements") or []):
+            eh = find_hit(s, norm(el.get("momento") or ""))
+            if eh is not None:
+                local = V(eh) - starts[idx]
+                el["at"] = round(max(0.0, min(local,
+                                              float(s["duration"]) - 0.5)), 3)

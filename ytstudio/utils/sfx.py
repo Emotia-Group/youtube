@@ -13,14 +13,16 @@ from pathlib import Path
 from ytstudio.config import ROOT
 from ytstudio.utils.media import run_ffmpeg
 
-KINDS = ("whoosh", "riser", "boom")
+KINDS = ("whoosh", "riser", "boom", "pop")
 
 # Duración de cada efecto sintetizado y cómo se alinea con el corte de escena:
-# whoosh/riser terminan EN el corte (anticipan); boom suena EN el corte.
+# whoosh/riser terminan EN el corte (anticipan); boom suena EN el corte;
+# pop es el acento sutil de los INSERTOS documentales (suena en la mención).
 SFX_SPECS = {
     "whoosh": {"dur": 1.0, "before_cut": 0.85},
     "riser": {"dur": 2.4, "before_cut": 2.4},
     "boom": {"dur": 2.2, "before_cut": 0.0},
+    "pop": {"dur": 0.4, "before_cut": 0.0},
 }
 
 
@@ -43,6 +45,10 @@ def _synthesize(kind: str, out: Path) -> Path:
         # Ruido que crece de forma cuadrática hasta el corte: tensión en aumento.
         expr = f"(random(0)-0.5)*1.1*pow(t/{d:.2f}\\,2.4)"
         post = "highpass=f=300,lowpass=f=5000"
+    elif kind == "pop":
+        # Toque breve y suave (barrido corto descendente): acento de inserto.
+        expr = "0.55*sin(2*PI*(820-600*t)*t)*exp(-16*t)"
+        post = "highpass=f=200,lowpass=f=2600"
     else:  # boom
         # Sub-golpe (52 Hz con caída exponencial) + ataque breve de ruido.
         expr = (f"0.95*sin(2*PI*52*t)*exp(-3.2*t)"

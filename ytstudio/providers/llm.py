@@ -122,6 +122,7 @@ class ClaudeLLM:
         "broll_review": "medium", "broll_qa": "medium",
         "music_pick": "medium", "music_pick_acts": "medium",
         "transcript_polish": "medium", "ingest_analysis": "medium",
+        "archive_elements": "medium",
     }
 
     def complete(self, system: str, prompt: str, *, schema: dict | None = None,

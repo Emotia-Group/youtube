@@ -150,6 +150,16 @@ def run(project, cfg) -> None:
                              purpose="metadata")
     meta = _norm_meta(meta, concept)
 
+    # ATRIBUCIÓN del material de archivo (Wikimedia): las licencias libres
+    # piden crédito — se añade solo, a TODAS las opciones de descripción,
+    # para que la elección del creador nunca lo pierda.
+    credits = project.get("element_credits") or []
+    if credits:
+        bloque = ("\n\nMaterial de archivo (Wikimedia Commons):\n"
+                  + "\n".join(f"• {c}" for c in credits))
+        for o in meta["description_options"]:
+            o["description"] = o["description"].rstrip() + bloque
+
     # Miniaturas: 3 diseños profesionales locales (PIL) — sin IA extra
     from ytstudio.utils.thumbs import render_thumbnails
     thumb_files = render_thumbnails(project, cfg, meta["thumbnail_options"],

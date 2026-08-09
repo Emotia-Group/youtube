@@ -653,6 +653,50 @@ def _sticker_setup(scene: dict, dur: float, cfg: dict,
     return args, chain, pos, post
 
 
+def _element_setup(scene: dict, dur: float, cfg: dict,
+                   project) -> tuple[list[str], str, str]:
+    """Prepara el INSERTO documental de la escena (tarjeta de archivo o cifra
+    animada del documentalista). Devuelve (args de entrada, cadena con [1:v]
+    de marcador, posición del overlay) o vacío. El inserto entra deslizándose
+    en el instante de la mención (el['at'], anclado a la palabra real), se
+    sostiene ~4s y se despide — arriba a la derecha, lejos de rótulos (abajo/
+    centro) y subtítulos."""
+    els = [e for e in (scene.get("elements") or []) if e.get("files")]
+    if not els or not cfg["video"].get("elements", True):
+        return [], "", ""
+    el = els[0]
+    eldir = project.path("broll", "elements")
+    files = [eldir / f for f in el["files"]]
+    if not all(f.exists() for f in files):
+        return [], "", ""
+    w, h, fps = cfg["video"]["width"], cfg["video"]["height"], cfg["video"]["fps"]
+    at = float(el.get("at") or 0.9)
+    t0 = min(max(0.35, at), max(0.35, dur - 2.4))
+    t1 = min(dur - 0.35, t0 + 4.2)
+    if t1 - t0 < 1.4:
+        return [], "", ""   # escena demasiado corta para el inserto
+    x_final = f"W-w-{int(w * 0.045)}"
+    y = int(h * 0.16)
+    slide = f"{x_final}+40*max(0,1-(t-{t0:.2f})/0.35)"
+    pos = (f"x='{slide}':y={y}:eof_action=repeat:"
+           f"enable='between(t,{t0:.2f},{t1 + 0.3:.2f})'")
+    if el.get("mode") == "stat" and len(files) > 1:
+        # Secuencia de CUENTA ASCENDENTE (14 cuadros a 12 fps ≈ 1.2s):
+        # desplazada al instante de la mención; el último cuadro (el valor
+        # real) se sostiene con eof_action=repeat.
+        patt = str(files[0].parent / "f_%02d.png")
+        args = ["-framerate", "12", "-i", patt]
+        chain = (f"[1:v]format=rgba,setpts=PTS-STARTPTS+{t0:.3f}/TB,"
+                 f"fade=t=in:st={t0:.2f}:d=0.2:alpha=1")
+    else:
+        args = ["-loop", "1", "-framerate", str(fps),
+                "-t", f"{t1 + 0.4:.3f}", "-i", str(files[0])]
+        chain = (f"[1:v]format=rgba,"
+                 f"fade=t=in:st={t0:.2f}:d=0.3:alpha=1,"
+                 f"fade=t=out:st={t1:.2f}:d=0.3:alpha=1")
+    return args, chain, pos
+
+
 def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
     """Renderiza la escena SOLO VIDEO (sin pista de audio). El audio del video
     completo es UNA pista continua (voz + música + SFX) que se mezcla al final
@@ -733,6 +777,15 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
         for j, pf in enumerate(s_post):
             filters.append(f"[{label}]{pf}[vsn{j}]")
             label = f"vsn{j}"
+    # INSERTO documental (tarjeta de archivo / cifra animada) en el instante
+    # de la mención — encima del visual, debajo de los fundidos de escena.
+    e_args, e_chain, e_pos = _element_setup(scene, dur, cfg, project)
+    if e_args:
+        e_idx = len([a for a in inputs if a == "-i"])
+        inputs += e_args
+        filters.append(e_chain.replace("[1:v]", f"[{e_idx}:v]", 1) + "[elc]")
+        filters.append(f"[{label}][elc]overlay={e_pos}[vel]")
+        label = "vel"
     # Transición variable por escena (fundido de entrada/salida independientes)
     segs = []
     if fade.get("fin"):
@@ -814,6 +867,10 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
         if kind in SFX_SPECS and t > 0.5:  # sin efecto en el arranque del video
             start = max(0.0, t - SFX_SPECS[kind]["before_cut"])
             events.append((kind, start))
+        # los INSERTOS documentales entran con un 'pop' sutil en la mención
+        for el in (s.get("elements") or []):
+            if el.get("files") and el.get("at") is not None:
+                events.append(("pop", t + float(el["at"])))
         t += float(s["duration"])
     if not events:
         return [], [], None
@@ -886,6 +943,7 @@ def _render_signature(scenes, plans, cfg, project) -> str:
             "layout": s.get("layout"), "imgb": s.get("broll_image_b"),
             "pip": s.get("pip_video"), "sfx": s.get("sfx"),
             "trans": s.get("transition"), "sticker": s.get("sticker"),
+            "elements": s.get("elements"),
             "src": [stamp(s.get("broll_image")), stamp(s.get("broll_video")),
                     stamp(s.get("broll_image_b")), stamp(s.get("pip_video"))],
         } for s, p in zip(scenes, plans)],

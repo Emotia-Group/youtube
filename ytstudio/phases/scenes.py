@@ -884,6 +884,107 @@ def _broll_for_fixed(llm, concept, scenes, lang, videogen_scenes,
         _normalize_cast(scenes, cast_names)
 
 
+_ELEMENTS_SCHEMA = {
+    "type": "object",
+    "properties": {"scenes": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "elements": {"type": "array", "items": {
+                "type": "object",
+                "properties": {
+                    "tipo": {"type": "string",
+                             "enum": ["persona", "lugar", "entidad", "mapa",
+                                      "cifra", "fecha"]},
+                    "consulta": {"type": "string"},
+                    "etiqueta": {"type": "string"},
+                    "momento": {"type": "string"},
+                },
+                "required": ["tipo", "consulta", "etiqueta", "momento"],
+                "additionalProperties": False,
+            }},
+        },
+        "required": ["id", "elements"],
+        "additionalProperties": False,
+    }}},
+    "required": ["scenes"], "additionalProperties": False,
+}
+
+
+def _archive_pass(llm, project, scenes: list[dict], lang: str, cfg: dict,
+                  short_form: bool) -> None:
+    """DOCUMENTALISTA DE ARCHIVO: recorre la narración ya fijada y decide qué
+    menciones concretas merecen material de apoyo SOBREPUESTO al B-roll — la
+    foto real del personaje o el lugar, la cifra con cuenta ascendente, la
+    fecha en tarjeta. Es un acento documental, no papel tapiz: pocas y buenas.
+    Los elementos se resuelven después (banco local → Wikimedia → generado) y
+    el montaje los anima en el instante exacto de la mención."""
+    if short_form or getattr(llm, "is_mock", False) \
+            or not cfg["video"].get("elements", True):
+        return
+    from ytstudio.progress import notify
+    notify("📎 Documentalista de archivo: buscando menciones que merecen "
+           "material de apoyo (fotos reales, cifras, fechas)…")
+    system = (
+        f"Eres el DOCUMENTALISTA DE ARCHIVO de un documental en {lang}. "
+        "Detectas en la narración las menciones que un editor profesional "
+        "apoyaría con un inserto sobre el B-roll: la foto real de una persona "
+        "o lugar célebre, una cifra impactante, una fecha clave. Eres "
+        "selectivo: un inserto cada 3-4 escenas como MUCHO — el exceso "
+        "abarata el video.")
+    tandas = -(-len(scenes) // _SCENES_PER_CALL)
+    got: dict[int, list] = {}
+    for n_t, start in enumerate(range(0, len(scenes), _SCENES_PER_CALL), 1):
+        chunk = scenes[start:start + _SCENES_PER_CALL]
+        narr = "\n".join(
+            f"[{s['id']}] {s['narration']}"
+            + (f"  (ya lleva rótulo: {s['overlay']['text']})"
+               if s.get("overlay") else "")
+            for s in chunk)
+        prompt = (
+            f"(Tanda {n_t}/{tandas}.) Para estas escenas, marca SOLO las "
+            "menciones que de verdad merecen un inserto de archivo:\n"
+            "- tipo 'persona'/'lugar'/'entidad': algo FAMOSO con foto "
+            "canónica (Elon Musk, El Cairo, la UNESCO). consulta = nombre "
+            "del artículo de Wikipedia. NUNCA personas no públicas.\n"
+            "- tipo 'mapa': cuando ubicar el sitio aporta (un imperio, una "
+            "ruta). consulta = 'X location map'.\n"
+            "- tipo 'cifra'/'fecha': el dato EXACTO como se narra "
+            "(consulta = '60.000 personas', '1324').\n"
+            "- etiqueta: pie de 2-4 palabras en el idioma del video.\n"
+            "- momento: las palabras EXACTAS de la narración donde se "
+            "menciona (para sincronizar el inserto con la voz).\n"
+            "Reglas duras: máximo UN elemento por escena; máximo "
+            f"{max(2, len(chunk) // 3)} en esta tanda; nada en escenas cuyo "
+            "rótulo ya muestra ese mismo dato; ante la duda, ninguno "
+            "(elements=[] en casi todas las escenas es lo normal).\n\n"
+            f"NARRACIÓN POR ESCENA:\n{narr}")
+        try:
+            res = llm.complete_json(system, prompt, schema=_ELEMENTS_SCHEMA,
+                                    max_tokens=16000,
+                                    purpose="archive_elements")
+            for row in res.get("scenes", []):
+                els = [e for e in (row.get("elements") or [])
+                       if e.get("consulta") and e.get("momento")][:1]
+                if els:
+                    got[int(row.get("id", -1))] = els
+        except Exception as e:
+            project.add_warning(
+                f"El documentalista de archivo no pudo revisar las escenas "
+                f"{chunk[0]['id']}–{chunk[-1]['id']} ({e}): salen sin "
+                "insertos (el video no se detiene por un adorno).")
+    cap = max(3, len(scenes) // 3)   # densidad: acento, no papel tapiz
+    for s in scenes:
+        els = got.get(s["id"])
+        if els and cap > 0 and not s.get("sticker"):
+            s["elements"] = els
+            cap -= 1
+    n = sum(len(s.get("elements") or []) for s in scenes)
+    if n:
+        notify(f"📎 {n} inserto(s) de archivo planificados "
+               "(fotos con licencia libre, cifras y fechas animadas).")
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
@@ -912,6 +1013,7 @@ def run(project, cfg) -> None:
                             short_form=short_form,
                             template_rules=tpl_rules)
         _normalize_creative(scenes, short_form=short_form)
+        _archive_pass(llm, project, scenes, lang, cfg, short_form)
         _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
         return
@@ -979,6 +1081,7 @@ def run(project, cfg) -> None:
                         short_form=short_form,
                         template_rules=tpl_rules)
     _normalize_creative(scenes, short_form=short_form)
+    _archive_pass(llm, project, scenes, lang, cfg, short_form)
     _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)
 

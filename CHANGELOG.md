@@ -9,6 +9,48 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.46.0 — 2026-08-09
+**INSERTOS DOCUMENTALES (Fase 1 aprobada): el video deja de ser solo B-roll.**
+Cuando la narración menciona a Elon Musk, El Cairo, la UNESCO, «60.000
+personas» o «1324», un inserto de archivo aparece SOBRE el B-roll en el
+instante exacto en que lo dices — como en un documental editado a mano.
+
+- 🗄 UN NUEVO ESPECIALISTA EN EL EQUIPO: el **documentalista de archivo**.
+  Tras la dirección de arte, recorre la narración y decide qué menciones
+  merecen apoyo visual (personas, lugares, entidades, mapas, cifras, fechas).
+  Es selectivo por diseño: máximo un inserto por escena y ~1 de cada 3-4 —
+  acento documental, no papel tapiz. Corre en tandas con esfuerzo medio
+  (~$0.30-0.60 por video largo) y si falla, el video sale igual (los insertos
+  son un adorno: JAMÁS detienen una fase).
+- 📎 TRES FUENTES, EN ORDEN DE PRIORIDAD:
+  · **Tu banco local** (`assets/elements/personajes|lugares|entidades|mapas|
+    stickers/`): pones `elon-musk.jpg` y esa se usa SIEMPRE primero (la
+    búsqueda tolera tildes, guiones y mayúsculas). Hay un README en la
+    carpeta con las reglas.
+  · **Wikimedia/Wikipedia**: la foto canónica del artículo de la entidad,
+    SOLO con licencia libre verificada (CC/dominio público) — y **el crédito
+    se añade solo a la descripción del video** en Metadatos, a las 3
+    opciones, para cumplir la licencia sin que hagas nada. Desactivable con
+    `elements_web: false`.
+  · **Generado en tu equipo, $0**: las cifras aparecen con CUENTA ASCENDENTE
+    («60.000» sube hasta su valor real, conservando tu formato de miles) y
+    las fechas en tarjeta — PIL local, ni un token.
+- 🎯 EN EL INSTANTE EXACTO: el inserto se ancla a la PALABRA de la mención
+  con los timestamps reales de Whisper (la misma maquinaria de los rótulos).
+  Entra deslizándose arriba a la derecha (lejos de rótulos y subtítulos), se
+  sostiene ~4s y se despide, con un **'pop' sutil** en la banda sonora (SFX
+  local; también puedes poner tu propio `pop.wav` en assets/sfx/).
+- 🎨 RESPETA LA IDENTIDAD: tarjeta de archivo sobria (marco blanco tipo
+  copia impresa, pie con tu color de acento); en formatos cortos ni aparece
+  (ahí mandan los stickers). Interruptor general: `video.elements`.
+- 💰 COSTO REAL POR VIDEO LARGO: ~$0.30-0.60 de LLM + $0 de material
+  (Wikimedia y tarjetas son gratis) + ~1-3 min de render. La mejora de
+  calidad más barata del pipeline.
+
+Batería nueva (`tests/test_v0_46_0.py`, 21 comprobaciones — incluye un render
+REAL de ffmpeg midiendo píxeles para verificar que el inserto aparece cuando
+debe, API de Wikimedia simulada sin internet).
+
 ## v0.45.1 — 2026-08-09
 **El corrector de narración te borró 51.9 segundos de contenido legítimo.**
 Lo encontré en tu log y es un fallo mío de diseño, no de tu grabación.

@@ -568,6 +568,81 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
     return verdicts
 
 
+def _resolve_elements(project, cfg, scenes: list[dict],
+                      broll_dir: Path) -> None:
+    """Materializa los ELEMENTOS de archivo planificados por el documentalista:
+    banco local del creador → foto libre de Wikimedia (con atribución que va
+    sola a la descripción) → tarjeta generada en local (cifras y fechas, $0).
+    Todo es un ADORNO: cualquier fallo quita ese elemento y sigue — jamás
+    detiene la fase ni cuesta reintentos."""
+    targets = [(s, el) for s in scenes for el in (s.get("elements") or [])]
+    if not targets:
+        return
+    from ytstudio.progress import notify
+    from ytstudio.utils import elements as elib
+    eldir = broll_dir / "elements"
+    eldir.mkdir(exist_ok=True)
+    card_w = int(min(cfg["video"]["width"], cfg["video"]["height"]) * 0.34)
+    accent = str(cfg["video"].get("overlay_accent", "E8C46B"))
+    lang_code = cfg.get("language", "es")
+    permitir_web = cfg["video"].get("elements_web", True)
+    notify(f"📎 Material de archivo: preparando {len(targets)} inserto(s) "
+           "(banco propio → Wikimedia con licencia libre → generado local)…")
+    credits: set[str] = set()
+    sin_fuente: list[str] = []
+
+    def _uno(s, el):
+        sid = s["id"]
+        if el.get("files") and all((eldir / f).exists() for f in el["files"]):
+            return   # reanudación: ya resuelto
+        tipo = el.get("tipo", "cifra")
+        if tipo in ("cifra", "fecha"):
+            frames = elib.render_stat_frames(
+                el.get("consulta", ""), el.get("etiqueta", ""),
+                eldir / f"stat_{sid:03d}", card_w, accent)
+            el["files"] = [str(p.relative_to(eldir)) for p in frames]
+            el["mode"] = "stat"
+            return
+        src = elib.bank_lookup(el.get("consulta", ""))
+        credit = None
+        if src is None and permitir_web:
+            got = elib.wiki_photo(el.get("consulta", ""), lang_code, eldir)
+            if got:
+                src, credit = got["file"], got["credit"]
+        if src is None:
+            sin_fuente.append(f"{el.get('consulta')} (escena {sid})")
+            el["files"] = []
+            return
+        card = eldir / f"card_{sid:03d}.png"
+        elib.render_photo_card(src, el.get("etiqueta", ""), card, card_w,
+                               accent)
+        el["files"] = [card.name]
+        el["mode"] = "photo"
+        if credit:
+            el["credit"] = credit
+            credits.add(credit)
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(_uno, s, el) for s, el in targets]
+        for f in futures:
+            try:
+                f.result()
+            except Exception:
+                pass   # adorno: nunca tumba la fase
+    for s, el in targets:   # los que quedaron sin material salen del plan
+        if not el.get("files"):
+            s["elements"] = [e for e in s["elements"] if e is not el]
+    prev = set(project.get("element_credits") or [])
+    project.set("element_credits", sorted(prev | credits))
+    if sin_fuente:
+        project.add_warning(
+            "Sin foto de licencia libre para: " + ", ".join(sin_fuente[:6])
+            + (" y más" if len(sin_fuente) > 6 else "")
+            + ". Puedes poner tu propia imagen en assets/elements/ (con el "
+            "nombre de la entidad) y «Rehacer desde Imágenes».")
+
+
 def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
                     broll_dir: Path, gen_one, skip: set[int]) -> None:
     """El director REVISA con visión cada imagen generada contra los hechos
@@ -1017,6 +1092,15 @@ def run(project, cfg) -> None:
 
     ai_scenes = [s for s in scenes
                  if s.get("broll_source") not in ("user", "manual", "lipsync")]
+
+    # ELEMENTOS de archivo (insertos documentales): se materializan ANTES de
+    # las imágenes — descargas rápidas y tarjetas locales; un fallo aquí quita
+    # el adorno, nunca la fase.
+    try:
+        _resolve_elements(project, cfg, scenes, broll_dir)
+    except Exception as e:
+        project.add_warning(f"El material de archivo no se pudo preparar "
+                            f"({e}): el video sale sin insertos documentales.")
 
     # 2a) Imágenes. Un fallo de INFRAESTRUCTURA (auth, red) detiene la fase
     #     (reanudable). Un rechazo de CONTENIDO (NSFW) de UNA imagen no puede
