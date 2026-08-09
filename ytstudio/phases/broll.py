@@ -581,6 +581,7 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
         return
     from ytstudio.progress import notify
     from ytstudio.utils import elements as elib
+    from ytstudio.utils import maps as mapslib
     eldir = broll_dir / "elements"
     eldir.mkdir(exist_ok=True)
     card_w = int(min(cfg["video"]["width"], cfg["video"]["height"]) * 0.34)
@@ -624,6 +625,36 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
                 eldir / f"stat_{sid:03d}", card_w, accent)
             el["files"] = [str(p.relative_to(eldir)) for p in frames]
             el["mode"] = "stat"
+            return
+        if tipo == "mapa":
+            # LOCALIZADOR: cartografía real de OpenStreetMap centrada en las
+            # coordenadas del lugar (o ficha de coordenadas si no hay red),
+            # con el pin cayendo sobre el punto. Un archivo propio del banco
+            # con ese nombre sigue teniendo prioridad.
+            propio = elib.bank_lookup(el.get("consulta", ""), ("mapas",))
+            if propio is not None and not elib.is_video(propio):
+                card = eldir / f"card_{sid:03d}.png"
+                elib.render_photo_card(propio, el.get("etiqueta", ""), card,
+                                       card_w, accent)
+                el["files"] = [card.name]
+                el["mode"] = "photo"
+                return
+            lugar = el.get("consulta", "").replace(" location map", "").strip()
+            coords = elib.geo_lookup(lugar, lang_code) if permitir_web else None
+            if coords is None:
+                sin_fuente.append(f"{lugar} (mapa, escena {sid})")
+                el["files"] = []
+                return
+            res = mapslib.render_map_frames(
+                el.get("etiqueta") or lugar, coords[0], coords[1],
+                eldir / f"map_{sid:03d}", card_w=card_w, accent=accent,
+                zoom=int(cfg["video"].get("elements_map_zoom", 5)),
+                allow_web=permitir_web)
+            el["files"] = [f"map_{sid:03d}/{n}" for n in res["files"]]
+            el["mode"] = "stat"      # secuencia animada, como las cifras
+            if res["real"]:
+                el["credit"] = mapslib.OSM_CREDIT
+                credits.add(mapslib.OSM_CREDIT)
             return
         src = elib.bank_lookup(el.get("consulta", ""))
         # CLIP DE VIDEO del banco: se copia al proyecto y se compone como

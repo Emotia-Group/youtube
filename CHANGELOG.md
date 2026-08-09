@@ -9,6 +9,40 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.50.0 — 2026-08-09
+**Mapas localizadores animados** (Fase 4 de las 4 — el plan de calidad
+audiovisual queda completo). Cuando la narración sitúa la historia («cruzó el
+Sahara», «llegó a El Cairo», «el Imperio de Malí»), aparece un mapa con el
+**pin cayendo sobre el punto exacto** y un anillo que se expande.
+
+- 🗺 CARTOGRAFÍA REAL Y LIBRE: las coordenadas salen de Wikipedia y el mapa,
+  de OpenStreetMap (vía Wikimedia Maps, licencia ODbL). El crédito
+  «© colaboradores de OpenStreetMap» se añade solo a la descripción del
+  video, igual que las fotos de Wikimedia.
+- 🎨 NO PARECE UNA CAPTURA DE GOOGLE MAPS: el mapa se desatura, se oscurece y
+  se tiñe con tu color de acento antes de componerlo, con el mismo marco de
+  copia impresa que las fotos de archivo. El pie lleva el nombre del lugar y
+  sus coordenadas.
+- 🔍 ACERCAMIENTO CONFIGURABLE (`elements_map_zoom`): 3-4 vista continental ·
+  5-6 país o región (por defecto) · 8-10 ciudad.
+- 🛟 NUNCA FALLA: si no hay internet o el servicio no responde, sale una
+  ficha de coordenadas generada en tu equipo, con el pin en su posición
+  geográfica relativa correcta. Y si el lugar no tiene coordenadas, no se
+  inventa nada: aviso honesto y esa escena queda sin inserto.
+- 📁 Tu mapa propio manda: si pones un archivo con ese nombre en
+  📚 Biblioteca → Banco → Mapas, se usa el tuyo y no se consulta la red.
+
+Batería nueva (`tests/test_v0_50_0.py`, 30 comprobaciones: la proyección Web
+Mercator contra puntos de referencia conocidos, unión de teselas con un
+servidor simulado —incluidas teselas caídas—, la posición del pin medida en
+píxeles y un render REAL de ffmpeg).
+
+⚠ Honestidad sobre lo verificado: mi entorno no tiene acceso a internet, así
+que la descarga de teselas está probada con un servidor SIMULADO (como las
+fotos de Wikimedia en la v0.46.0). El respaldo local, la proyección, la
+animación y el montaje están verificados de verdad. La primera descarga real
+ocurrirá en tu máquina.
+
 ## v0.49.0 — 2026-08-09
 **El banco de elementos, ahora desde la interfaz — y los insertos ya pueden
 ser VIDEO** (Fase 3 de las 4).

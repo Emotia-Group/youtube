@@ -34,6 +34,11 @@ video:
                              # B-roll cada uno (~$0.04 con FLUX), por eso viene
                              # apagado — enciéndelo si prefieres cobertura total
   elements_ai_max: 3         # tope de ilustraciones IA por video (freno de mano)
+  elements_map_zoom: 5       # acercamiento de los MAPAS localizadores: 3-4 vista
+                             # continental · 5-6 país/región (recomendado) ·
+                             # 8-10 ciudad. Cartografía de OpenStreetMap (libre,
+                             # con crédito automático); sin internet sale una
+                             # ficha de coordenadas generada en local
 providers:
   llm:
     name: anthropic

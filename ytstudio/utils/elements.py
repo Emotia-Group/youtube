@@ -158,6 +158,26 @@ def _page_image(query: str, lang: str) -> tuple[str, str] | None:
     return None
 
 
+def geo_lookup(query: str, lang: str = "es") -> tuple[float, float] | None:
+    """Coordenadas (lat, lon) del lugar según Wikipedia, o None. Es lo que
+    permite poner el pin del mapa en el sitio EXACTO que se narra."""
+    for wiki in (lang, "en"):
+        u = (f"https://{wiki}.wikipedia.org/w/api.php?action=query&format=json"
+             f"&redirects=1&prop=coordinates"
+             f"&titles={urllib.parse.quote(query)}")
+        try:
+            pages = (_api_json(u).get("query") or {}).get("pages") or {}
+        except Exception:
+            continue
+        for p in pages.values():
+            for c in (p.get("coordinates") or []):
+                try:
+                    return float(c["lat"]), float(c["lon"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return None
+
+
 def _commons_license(file_name: str) -> tuple[str, str] | None:
     """(licencia, autor) del archivo en Commons, o None si no es libre."""
     u = ("https://commons.wikimedia.org/w/api.php?action=query&format=json"
