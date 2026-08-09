@@ -203,6 +203,28 @@ def _fix_narration(project, cfg, llm, clean, segments, input_dir):
                                           lang_name(cfg), known=cuts))
         if not cuts:
             return clean, segments
+        # VALLA: ningún corte se aplica sin cuadrar con el audio REAL. Los
+        # detectores razonan sobre la transcripción y el audio se corta por
+        # tiempo; cuando la transcripción trae tiempos disparatados o palabras
+        # duplicadas que no están en la grabación, ese salto borra contenido
+        # legítimo (caso real: un tramo de 22 palabras se llevó 48s de audio
+        # con el gancho de apertura dentro).
+        from ytstudio.utils.media import detect_silences, probe_duration
+        try:
+            silences = detect_silences(clean, noise_db=-35, min_d=0.12)
+            total_seconds = probe_duration(clean)
+        except Exception:
+            silences, total_seconds = None, 0.0
+        cuts, descartados = nf.validate_cuts(
+            cuts, nf.flatten(segments), silences=silences,
+            total_seconds=total_seconds)
+        for c in descartados:
+            project.add_warning(
+                f"🛡 Descarté una corrección propuesta en [{c['start']:.1f}s] "
+                f"(«{c['text'][:80]}»): {c['drop_reason']}. Tu grabación queda "
+                "INTACTA ahí.")
+        if not cuts:
+            return clean, segments
         fixed = input_dir / "narration_fixed.mp3"
         if not nf.apply_to_audio(clean, fixed, cuts):
             return clean, segments
@@ -214,9 +236,12 @@ def _fix_narration(project, cfg, llm, clean, segments, input_dir):
                f"({total:.1f}s menos) — el audio y los subtítulos ya no los "
                "incluyen.")
         for c in cuts:
+            # La DURACIÓN va en el aviso: es el dato que delata de un vistazo
+            # un corte absurdo (un «tropiezo» de 48s no es un tropiezo).
             project.add_warning(
-                f"✂ Corregido en tu narración [{c['start']:.1f}s]: se quitó "
-                f"«{c['text']}» — {c['reason']}.")
+                f"✂ Corregido en tu narración [{c['start']:.1f}s, "
+                f"−{c['end'] - c['start']:.1f}s]: se quitó «{c['text']}» — "
+                f"{c['reason']}.")
         project.set("narration_fixes", cuts)
         return fixed, new_segments
     except Exception as e:

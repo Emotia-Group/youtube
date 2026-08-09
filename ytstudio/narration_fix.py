@@ -117,6 +117,10 @@ def _cut_end(words: list[dict], last_idx: int) -> float:
     nxt = words[last_idx + 1]["start"]
     gap = max(0.0, nxt - words[last_idx]["end"])
     guard = min(0.35, max(0.10, gap * 0.5))
+    # El corte llega hasta justo antes del reintento (se lleva la pausa del
+    # tropiezo): así el empalme queda limpio en vez de dejar un hueco muerto.
+    # Tragarse silencio NO es peligroso —no borra contenido—, por eso las
+    # comprobaciones de plausibilidad miden VOZ y no duración total.
     return max(words[last_idx]["end"], nxt - guard)
 
 
@@ -378,6 +382,105 @@ def merge_cuts(cuts: list[dict]) -> list[dict]:
     return out
 
 
+# --- validación: NADA se borra sin que cuadre con el audio ----------------
+#
+# Los detectores y la revisión IA razonan sobre la TRANSCRIPCIÓN (índices de
+# palabra) y el audio se corta por TIEMPO. Ese salto es el punto débil: la
+# transcripción de Whisper puede traer palabras duplicadas que no están en el
+# audio, o tiempos disparatados en un tramo (un conteo, un ruido). Cuando eso
+# pasa, un tramo marcado de 22 palabras se convierte en 48 SEGUNDOS de audio
+# borrado — el caso real que le costó al creador el gancho de apertura de su
+# video. Estas comprobaciones son la valla: ningún corte se aplica si no
+# cuadra con el audio de verdad.
+
+_MAX_CUT_SECONDS = 20.0      # un tropiezo de grabación nunca dura tanto
+_SEC_PER_WORD = 1.2          # ritmo máximo plausible del habla, por palabra
+_RATE_MARGIN = 2.5           # margen fijo (pausa interna del tropiezo)
+
+
+def _in_silence(t: float, silences: list[tuple[float, float]],
+                tol: float = 0.06) -> bool:
+    return any(s0 - tol <= t <= s1 + tol for s0, s1 in silences)
+
+
+def validate_cuts(cuts: list[dict], words: list[dict], *,
+                  silences: list[tuple[float, float]] | None = None,
+                  total_seconds: float = 0.0) -> tuple[list[dict], list[dict]]:
+    """(cortes aplicables, cortes descartados con su motivo).
+
+    Cuatro vallas, todas por el mismo principio: borrar contenido legítimo del
+    narrador es MUCHO peor que dejar pasar un tropiezo.
+
+    1. COHERENCIA texto↔tiempo: en el tramo de audio del corte no puede haber
+       más palabras de las que el corte dice llevarse. Si las hay, los tiempos
+       de la transcripción no corresponden a esas palabras y el corte se
+       llevaría por delante frases que nadie marcó.
+    2. RITMO POSIBLE: 22 palabras no ocupan 48 segundos. Si el tramo no cabe
+       en un ritmo de habla real, los tiempos están mal.
+    3. TOPE POR CORTE: nada que dure más de 20 s es un «tropiezo».
+    4. EL EMPALME CAE EN SILENCIO MEDIDO: un tropiezo real está rodeado de
+       pausa. Si ninguno de los dos bordes cae en un silencio medido en la
+       ONDA, el corte es cirugía en mitad de habla fluida (el caso «producía
+       entre el 50 y el 60 por ciento», donde no había nada que corregir).
+    """
+    keep: list[dict] = []
+    drop: list[dict] = []
+    voz_total = 0.0
+    for c in cuts:
+        dur = float(c["end"]) - float(c["start"])
+        n_words = len(str(c.get("text") or "").split()) or 1
+        dentro = [w for w in words
+                  if c["start"] <= (float(w["start"]) + float(w["end"])) / 2
+                  < c["end"]]
+        # VOZ que se lleva el corte (no su duración total): el silencio que
+        # absorbe hasta el reintento no borra contenido, así que no puede
+        # disparar las vallas — pero la voz sí.
+        voz = (float(dentro[-1]["end"]) - float(dentro[0]["start"])
+               if dentro else 0.0)
+        if len(dentro) > n_words:
+            c = {**c, "drop_reason": (
+                f"el tramo de audio ({dur:.1f}s) contiene {len(dentro)} "
+                f"palabras pero el corte solo marcaba {n_words}: los tiempos "
+                "de la transcripción no corresponden a ese texto")}
+            drop.append(c)
+            continue
+        if voz > _SEC_PER_WORD * n_words + _RATE_MARGIN:
+            c = {**c, "drop_reason": (
+                f"{n_words} palabra(s) no pueden ocupar {voz:.1f}s de habla "
+                "(los tiempos de la transcripción no son fiables ahí)")}
+            drop.append(c)
+            continue
+        if voz > _MAX_CUT_SECONDS:
+            c = {**c, "drop_reason": (
+                f"se llevaría {voz:.1f}s de tu voz — un tropiezo de grabación "
+                "nunca es tan largo")}
+            drop.append(c)
+            continue
+        if silences is not None:
+            borde_ini = c["start"] <= 0.06 or _in_silence(c["start"], silences)
+            borde_fin = (total_seconds and c["end"] >= total_seconds - 0.06) \
+                or _in_silence(c["end"], silences)
+            if not (borde_ini or borde_fin):
+                c = {**c, "drop_reason": (
+                    "ninguno de sus dos bordes cae en un silencio medido en tu "
+                    "grabación: sería cortar en mitad de una frase fluida")}
+                drop.append(c)
+                continue
+        voz_total += voz
+        keep.append(c)
+    # 5. TOPE GLOBAL: si entre todas pretenden llevarse una tajada enorme de la
+    #    VOZ grabada, el problema no son los tropiezos sino la transcripción.
+    #    Se descarta TODO y la narración queda intacta (con aviso).
+    limite = max(45.0, 0.08 * total_seconds) if total_seconds else 45.0
+    if voz_total > limite:
+        drop += [{**c, "drop_reason": (
+            f"entre todas las correcciones sumaban {voz_total:.0f}s de tu voz "
+            f"(tope de seguridad {limite:.0f}s): algo va mal en la "
+            "transcripción, así que no se toca nada")} for c in keep]
+        return [], drop
+    return keep, drop
+
+
 # --- aplicación sobre texto y tiempos -------------------------------------
 
 def apply_to_segments(segments: list[dict], cuts: list[dict]) -> list[dict]:
@@ -522,6 +625,11 @@ def review_with_llm(llm, segments: list[dict], lang: str = "español",
         "- repeticiones RETÓRICAS con intención (anáforas, énfasis), "
         "enumeraciones, muletillas integradas en una frase fluida, ni nada "
         "que forme parte del contenido. Si dudas, no lo marques.\n"
+        "- un tramo SIN NINGUNA PAUSA marcada alrededor. Este texto lo produjo "
+        "un transcriptor automático que a veces DUPLICA o inventa palabras que "
+        "no están en el audio: si el supuesto tropiezo va en habla continua, "
+        "sin pausa ni antes ni después, es un error del transcriptor y "
+        "cortarlo destruiría la frase real del narrador.\n"
         "Indica el rango por ÍNDICE de palabra (inicio_palabra y "
         "fin_palabra, ambos incluidos) y usa seguridad='alta' solo cuando "
         "sea indiscutible — SOLO los 'alta' se cortan.\n"

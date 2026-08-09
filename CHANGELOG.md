@@ -9,6 +9,48 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.45.1 — 2026-08-09
+**El corrector de narración te borró 51.9 segundos de contenido legítimo.**
+Lo encontré en tu log y es un fallo mío de diseño, no de tu grabación.
+
+- 🔍 QUÉ PASÓ, EXACTAMENTE: los detectores razonan sobre la TRANSCRIPCIÓN
+  (índices de palabra) pero el audio se corta por TIEMPO. Ese salto no tenía
+  ninguna comprobación. Tu transcripción traía un tramo con tiempos
+  disparatados al inicio: un corte que decía llevarse **22 palabras** («1 1 2
+  3 4 5…», un conteo) se llevó **~48 SEGUNDOS de audio** — y ahí dentro
+  estaban tu gancho de apertura y el párrafo de Forbes. El aviso solo mostraba
+  las 22 palabras, así que era invisible.
+- 🛡 LA VALLA NUEVA — ningún corte se aplica sin cuadrar con el audio real.
+  Cinco comprobaciones, todas con el mismo principio (borrar contenido tuyo es
+  mucho peor que dejar pasar un tropiezo):
+  · **Coherencia texto↔tiempo**: si en el tramo de audio hay más palabras de
+    las que el corte dice llevarse, se descarta (esto solo habría salvado tus
+    48 segundos).
+  · **Ritmo posible**: 22 palabras no ocupan 48 s. Si no cabe en un ritmo de
+    habla real, los tiempos están mal.
+  · **Tope por corte**: nada que dure más de 20 s es un «tropiezo».
+  · **El empalme cae en silencio MEDIDO en la onda** (no en los tiempos de
+    Whisper, que traen ±100 ms de error).
+  · **Tope global**: si entre todas las correcciones se comen más del 8 % de
+    tu grabación, no se toca NADA.
+- 🎙 EL SEGUNDO CORTE («entre el 50 y el 60 por ciento»): ahí no había nada
+  que corregir. El modelo creyó ver una reformulación en habla continua y el
+  corte se comió desde el final de «producía». Ese caso lo bloquea ahora la
+  cuarta valla: sin silencio en ninguno de los dos bordes, es cirugía en mitad
+  de una frase fluida y se descarta. Además le dije al modelo explícitamente
+  que el transcriptor a veces DUPLICA palabras que no están en el audio, y que
+  un tramo sin pausas alrededor no se marca jamás.
+- 👀 VISIBILIDAD: cada corrección aplicada dice ahora **cuántos segundos
+  quita** (`[0.0s, −48.3s]`) — un «tropiezo» de 48 s salta a la vista. Y cada
+  corrección descartada aparece con su motivo y la frase «Tu grabación queda
+  INTACTA ahí».
+- ✂ El corte deja de tragarse silencios largos que no le corresponden (como
+  mucho 1 s tras la palabra): las pausas son cosa del compresor de pausas de
+  la fase de Voz, con su tope `max_pause`.
+
+Batería nueva (`tests/test_v0_45_1.py`, 16 comprobaciones que reproducen tus
+dos cortes con audio real medido por ffmpeg).
+
 ## v0.45.0 — 2026-08-09
 Aprobaste el cambio de proveedor de imágenes: **Replicate FLUX 1.1 Pro pasa a
 ser el estándar** y gpt-image-1 queda solo para las escenas con texto legible.
