@@ -310,9 +310,13 @@ if ok:
         subprocess.run(["ffmpeg", "-y", "-ss", str(t), "-i", str(out_mp4),
                         "-frames:v", "1", str(f)], capture_output=True)
         return len(set(Image.open(f).convert("RGB").getdata()))
+    # Comparación RELATIVA, no umbral absoluto: un fondo «plano» comprimido no
+    # da 1 color exacto (4 en el equipo del creador, 1-2 en otros). Lo que
+    # demuestra que el mapa apareció es el SALTO de variedad del cuadro.
+    antes_m, despues_m = colores(0.5), colores(3.5)
     check("T6c el mapa SE VE tras la mención y no antes",
-          colores(0.5) <= 2 and colores(3.5) > 20,
-          f"antes={colores(0.5)} después={colores(3.5)}")
+          despues_m > max(20, antes_m * 5),
+          f"antes={antes_m} después={despues_m}")
 
 check("T6d el director tiene el tipo 'mapa' en su catálogo",
       "'mapa'" in inspect.getsource(

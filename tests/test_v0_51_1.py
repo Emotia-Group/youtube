@@ -76,46 +76,53 @@ probar_todo.FFMPEG_PATH = _prev
 
 # ---------------------------------------------------------------------------
 # T2 — sin ffmpeg: UN aviso claro, no 34 errores crípticos
+#
+# El aviso se comprueba sobre la FUNCIÓN que lo produce, no vaciando el PATH:
+# en Windows eso no esconde ffmpeg (el programa lo busca igual en C:\ffmpeg,
+# que es justo lo que debe hacer), así que la simulación por PATH solo
+# funcionaba en Linux — y la batería fallaba en el equipo del creador con el
+# programa correcto.
 # ---------------------------------------------------------------------------
-def correr_runner(con_ffmpeg: bool, filtro: str = "v0_51_0") -> str:
-    """Ejecuta el runner de verdad, con o sin ffmpeg visible en el PATH."""
-    vacio = TMP / "bin_vacio"
-    vacio.mkdir(exist_ok=True)
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    if not con_ffmpeg:
-        # PATH sin ffmpeg pero con lo mínimo para arrancar Python
-        env["PATH"] = str(vacio)
-    r = subprocess.run([sys.executable, str(ROOT / "tests" / "probar_todo.py"),
-                        filtro],
-                       cwd=str(ROOT), capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", env=env, timeout=300)
-    return (r.stdout or "") + (r.stderr or "")
-
-
-sin = correr_runner(con_ffmpeg=False)
-check("T2 sin ffmpeg lo dice explícitamente y arriba del todo",
-      "NO ENCUENTRO FFMPEG" in sin, sin[:200])
+aviso = probar_todo.aviso_sin_ffmpeg()
+check("T2 el aviso dice sin rodeos que no se encuentra ffmpeg",
+      "NO ENCUENTRO FFMPEG" in aviso, aviso[:120])
 check("T2b explica dónde ponerlo en Windows (C:\\ffmpeg) con el enlace",
-      "C:\\ffmpeg" in sin and "gyan.dev" in sin, "")
+      "C:\\ffmpeg" in aviso and "gyan.dev" in aviso, "")
 check("T2c y también para Linux/Mac",
-      "apt install ffmpeg" in sin and "brew install ffmpeg" in sin, "")
-check("T2d el aviso sale UNA vez, no por cada batería",
-      sin.count("NO ENCUENTRO FFMPEG") == 1,
-      str(sin.count("NO ENCUENTRO FFMPEG")))
+      "apt install ffmpeg" in aviso and "brew install ffmpeg" in aviso, "")
+check("T2d advierte de que el resultado no será concluyente",
+      "no puede ser concluyente" in aviso, "")
+src_main = inspect.getsource(probar_todo.main)
+check("T2e el corredor lo imprime UNA sola vez, al principio",
+      src_main.count("aviso_sin_ffmpeg()") == 1
+      and "if FFMPEG_PATH is None:" in src_main, "")
 
 # ---------------------------------------------------------------------------
-# T3 — sin ffmpeg NO se declara «todo en verde» (honestidad del veredicto)
+# T3 — el veredicto no miente sobre lo que se comprobó
 # ---------------------------------------------------------------------------
-check("T3 el veredicto sin ffmpeg es PARCIAL, no «todo en verde»",
-      "VERDE PARCIAL" in sin and "TODO EN VERDE" not in sin, sin[-400:])
-check("T3b y avisa de qué NO se comprobó",
-      "No se comprobaron voz, audio ni montaje" in sin, "")
+sin_ff = probar_todo.veredicto_verde(52, 300, con_ffmpeg=False)
+con_ff = probar_todo.veredicto_verde(52, 300, con_ffmpeg=True)
+check("T3 sin ffmpeg el veredicto es PARCIAL, nunca «todo en verde»",
+      "VERDE PARCIAL" in sin_ff and "TODO EN VERDE" not in sin_ff, sin_ff)
+check("T3b y dice exactamente qué NO se comprobó",
+      "No se comprobaron voz, audio ni montaje" in sin_ff, "")
+check("T3c sin ffmpeg NO se invita a generar con confianza",
+      "con confianza" not in sin_ff, sin_ff)
+check("T3d con ffmpeg el veredicto de siempre se mantiene",
+      "TODO EN VERDE" in con_ff and "puedes generar con confianza" in con_ff,
+      con_ff)
 
 # ---------------------------------------------------------------------------
-# T4 — con ffmpeg, todo sigue como siempre
+# T4 — el corredor completo, de verdad (camino normal, con ffmpeg)
 # ---------------------------------------------------------------------------
 if tiene_ffmpeg:
-    con = correr_runner(con_ffmpeg=True)
+    r = subprocess.run([sys.executable, str(ROOT / "tests" / "probar_todo.py"),
+                        "v0_51_0"],
+                       cwd=str(ROOT), capture_output=True, text=True,
+                       encoding="utf-8", errors="replace",
+                       env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                       timeout=300)
+    con = (r.stdout or "") + (r.stderr or "")
     check("T4 con ffmpeg no aparece ninguna advertencia",
           "NO ENCUENTRO FFMPEG" not in con and "VERDE PARCIAL" not in con, "")
     check("T4b y el veredicto de confianza es el de siempre",

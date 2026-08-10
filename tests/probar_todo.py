@@ -67,6 +67,36 @@ def _asegurar_ffmpeg() -> str | None:
         return None
 
 
+def aviso_sin_ffmpeg() -> str:
+    """Texto del aviso cuando falta ffmpeg (función aparte para poder
+    comprobarlo en cualquier sistema: en Windows no se puede «esconder»
+    ffmpeg vaciando el PATH, porque el programa lo busca igualmente en
+    C:\\ffmpeg — que es justo lo que debe hacer)."""
+    return ("\n" + "─" * 62 + "\n"
+            "⚠ NO ENCUENTRO FFMPEG — la prueba no puede ser concluyente.\n"
+            "  Las baterías de voz, audio y montaje necesitan ffmpeg para\n"
+            "  crear y medir archivos de prueba; sin él fallarán aunque el\n"
+            "  programa esté perfecto.\n"
+            "  · Windows: descomprime ffmpeg en C:\\ffmpeg (debe existir\n"
+            "    C:\\ffmpeg\\bin\\ffmpeg.exe) — https://www.gyan.dev/ffmpeg/builds/\n"
+            "  · Linux/Mac: apt install ffmpeg  ·  brew install ffmpeg\n"
+            "  Corren igual las baterías que no lo necesitan.\n"
+            + "─" * 62)
+
+
+def veredicto_verde(n: int, segundos: float, con_ffmpeg: bool) -> str:
+    """Veredicto cuando NADA falló. Sin ffmpeg no se declara «todo en verde»:
+    sería mentir sobre lo que de verdad se comprobó (voz, audio y montaje se
+    quedaron sin probar)."""
+    if not con_ffmpeg:
+        return (f"◐ VERDE PARCIAL — {n} baterías en {segundos:.0f}s, pero SIN "
+                "ffmpeg.\n"
+                "  No se comprobaron voz, audio ni montaje. Instala ffmpeg y\n"
+                "  repite la prueba antes de una generación importante.")
+    return (f"✔ TODO EN VERDE — {n} baterías en {segundos:.0f}s.\n"
+            "  El programa está sano: puedes generar con confianza.")
+
+
 def _natural(path: Path):
     """Orden natural: v0.9 antes que v0.10 (y las viejas 'vNN' al final)."""
     nums = [int(n) for n in re.findall(r"\d+", path.stem)]
@@ -133,16 +163,7 @@ def main() -> int:
     if FFMPEG_PATH is None:
         # Sin ffmpeg, dos tercios de las baterías fallarían con un error
         # críptico. Mejor decirlo UNA vez, claro y arriba, que 34 veces abajo.
-        print("\n" + "─" * 62)
-        print("⚠ NO ENCUENTRO FFMPEG — la prueba no puede ser concluyente.")
-        print("  Las baterías de voz, audio y montaje necesitan ffmpeg para")
-        print("  crear y medir archivos de prueba; sin él fallarán aunque el")
-        print("  programa esté perfecto.")
-        print("  · Windows: descomprime ffmpeg en C:\\ffmpeg (debe existir")
-        print("    C:\\ffmpeg\\bin\\ffmpeg.exe) — https://www.gyan.dev/ffmpeg/builds/")
-        print("  · Linux/Mac: apt install ffmpeg  ·  brew install ffmpeg")
-        print("  Corren igual las baterías que no lo necesitan.")
-        print("─" * 62)
+        print(aviso_sin_ffmpeg())
     print()
 
     fallos: list[tuple[Path, str]] = []
@@ -158,16 +179,7 @@ def main() -> int:
     total = time.time() - t0
     print("\n" + "─" * 62)
     if not fallos:
-        if FFMPEG_PATH is None:
-            # Sin ffmpeg no se probaron voz, audio ni montaje: decir «todo en
-            # verde» aquí sería mentir sobre lo que de verdad se comprobó.
-            print(f"◐ VERDE PARCIAL — {len(files)} baterías en {total:.0f}s, "
-                  "pero SIN ffmpeg.")
-            print("  No se comprobaron voz, audio ni montaje. Instala ffmpeg y")
-            print("  repite la prueba antes de una generación importante.")
-            return 0
-        print(f"✔ TODO EN VERDE — {len(files)} baterías en {total:.0f}s.")
-        print("  El programa está sano: puedes generar con confianza.")
+        print(veredicto_verde(len(files), total, FFMPEG_PATH is not None))
         return 0
 
     print(f"✘ {len(fallos)} de {len(files)} baterías FALLARON ({total:.0f}s):\n")

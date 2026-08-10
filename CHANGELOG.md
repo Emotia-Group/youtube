@@ -9,6 +9,25 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.51.2 — 2026-08-10
+Segunda tanda de tu reporte: con ffmpeg ya encontrado, pasaste de **34 fallos
+a 3**. Los tres eran defectos de mis pruebas, no del programa.
+
+- 🎨 DOS PRUEBAS VISUALES DEMASIADO ESTRICTAS (insertos de video y mapas):
+  comprobaban que el fondo «plano» tuviera 2 colores o menos antes de que
+  apareciera el inserto. En tu equipo la compresión de tu versión de ffmpeg
+  deja **4 tonos casi idénticos** — y la prueba fallaba pese a que el inserto
+  aparecía perfectamente (¡de 4 colores a 2 628!). Ahora se mide el **salto de
+  variedad** del cuadro, no un número absoluto: funciona con cualquier ffmpeg.
+- 🪟 LA PRUEBA DEL AVISO DE FFMPEG NO ERA VÁLIDA EN WINDOWS: para simular «no
+  hay ffmpeg» yo vaciaba el PATH, pero en Windows el programa lo busca
+  igualmente en `C:\ffmpeg` — que es exactamente lo que DEBE hacer. Es decir:
+  la prueba fallaba porque el programa se comportaba bien. Ahora el aviso y el
+  veredicto se comprueban sobre las funciones que los generan, así que el
+  resultado es el mismo en Windows, Linux y Mac.
+
+Sin cambios en el programa: solo en la suite de pruebas. 52 baterías en verde.
+
 ## v0.51.1 — 2026-08-10
 **`probar.bat` fallaba 34 de 51 baterías con el programa perfectamente sano.**
 Lo reportaste con capturas y tenías razón en sospechar: el error

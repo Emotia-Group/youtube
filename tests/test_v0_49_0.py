@@ -193,8 +193,12 @@ if ok:
         im = Image.open(f).convert("RGB")
         return len(set(im.getdata()))
     antes, durante = variedad(0.5), variedad(3.0)
+    # Comparación RELATIVA: el fondo «plano» no da 1 color exacto — según la
+    # versión de ffmpeg, la compresión deja un puñado de tonos casi idénticos
+    # (4 en el equipo del creador, 1-2 en otros). Lo que demuestra el inserto
+    # es el SALTO de variedad, no un umbral absoluto.
     check("T3d el inserto de video SE VE tras la mención (el cuadro deja de "
-          "ser plano)", antes <= 2 and durante > 20,
+          "ser plano)", durante > max(20, antes * 5),
           f"colores antes={antes} durante={durante}")
 
 # ---------------------------------------------------------------------------
