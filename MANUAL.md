@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.51.0 -->
+<!-- MANUAL_VERSION: 0.51.1 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -58,15 +58,27 @@ local y se activan al instante).
 > avisa. Eso significa imágenes de relleno o voz silenciosa. Si ves «modo
 > vista previa», revisa las claves antes de dar por bueno un video.
 
-### 2.3 Comprobar que todo está sano
+### 2.3 ffmpeg: la única herramienta externa obligatoria
+ffmpeg es el motor que corta, monta y mezcla el video. **Sin él el programa no
+funciona.**
+
+- **Windows:** descarga `ffmpeg-release-essentials.zip` de
+  [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) y descomprímelo en
+  **`C:\ffmpeg`** (debe quedar `C:\ffmpeg\bin\ffmpeg.exe`). No hace falta
+  tocar el PATH del sistema: el programa lo busca ahí solo.
+- **Linux:** `apt install ffmpeg` · **Mac:** `brew install ffmpeg`.
+
+### 2.4 Comprobar que todo está sano
 Doble clic en **`probar.bat`** (o `./probar.sh`). Corre las ~50 baterías de
 prueba internas en unos 6 minutos.
 - **No cuesta un centavo** (sin claves ni internet) y **no toca tus proyectos**.
 - Te dice **TODO EN VERDE** o exactamente qué falló.
+- Si dice **VERDE PARCIAL — sin ffmpeg**, instálalo (§2.3): no se
+  comprobaron voz, audio ni montaje.
 - Úsalo **después de cada actualización** y **antes de una generación
   importante**.
 
-### 2.4 Actualizar el programa
+### 2.5 Actualizar el programa
 `git pull` y vuelve a abrir `iniciar.bat`. Arriba a la izquierda verás la
 versión; haz clic para leer las **novedades**. Si dice «actualización
 descargada pero NO aplicada», cierra la ventana negra y ábrela otra vez.

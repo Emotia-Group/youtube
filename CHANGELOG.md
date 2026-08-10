@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.51.1 — 2026-08-10
+**`probar.bat` fallaba 34 de 51 baterías con el programa perfectamente sano.**
+Lo reportaste con capturas y tenías razón en sospechar: el error
+«FileNotFoundError: [WinError 2] El sistema no puede encontrar el archivo
+especificado» no venía de ytstudio, sino de mi suite de pruebas.
+
+- 🔍 QUÉ PASABA: en Windows es normal tener ffmpeg en `C:\ffmpeg\bin` **sin**
+  añadirlo al PATH del sistema. El programa se las arregla solo (lo busca ahí
+  y lo añade al PATH de su proceso al empezar una generación) — por eso tus
+  videos salían bien. Pero cada batería corre en su PROPIO proceso y **no
+  pasaba por esa ayuda**: se quedaba sin ffmpeg y fallaban todas las de voz,
+  audio y montaje.
+- ✅ ARREGLADO: ahora el corredor de pruebas localiza ffmpeg UNA vez (con la
+  misma búsqueda que usa el programa) y **hereda esa ruta a las 51 baterías**.
+  En tu equipo deberían pasar todas.
+- 🗣 Y SI DE VERDAD FALTA FFMPEG: en vez de 34 errores crípticos, sale **un
+  solo aviso claro arriba** con dónde ponerlo (`C:\ffmpeg`, con el enlace de
+  descarga) y qué implica.
+- 🙅 HONESTIDAD DEL VEREDICTO: sin ffmpeg ya no dice «TODO EN VERDE — puedes
+  generar con confianza» (sería mentir: no se probaron voz, audio ni montaje).
+  Dice **VERDE PARCIAL** y te pide instalarlo antes de una generación
+  importante.
+- 📖 El manual estrena la sección **2.3 ffmpeg**, la única herramienta externa
+  obligatoria, con instrucciones para Windows, Linux y Mac.
+
+Batería nueva (`tests/test_v0_51_1.py`, 12 comprobaciones que corren el propio
+corredor con y sin ffmpeg visible para verificar ambos caminos).
+
 ## v0.51.0 — 2026-08-10
 **MANUAL DE USO dentro del programa.** Nuevo menú **📖 Manual de uso**, junto
 al log de eventos: la guía completa para configurar y exprimir cada función,
