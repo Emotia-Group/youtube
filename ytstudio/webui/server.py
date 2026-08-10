@@ -73,6 +73,29 @@ def get_version() -> dict:
 SERVER_VERSION = get_version().get("version", "")
 
 
+def manual_version() -> str:
+    """Versión que declara el MANUAL (marca MANUAL_VERSION). Sirve para avisar
+    en la interfaz cuando el manual se quedó atrás respecto al programa — y
+    para que la batería de pruebas lo detecte sola."""
+    path = ROOT / "MANUAL.md"
+    if not path.exists():
+        return ""
+    m = re.search(r"MANUAL_VERSION:\s*([0-9]+\.[0-9]+\.[0-9]+)",
+                  path.read_text(encoding="utf-8"))
+    return m.group(1) if m else ""
+
+
+def api_manual() -> dict:
+    """El manual de uso + la versión que documenta y la del programa, para que
+    la interfaz avise si se quedó desactualizado. Las versiones se comparan sin
+    la «v» inicial: el CHANGELOG las escribe «v0.51.0» y la marca «0.51.0»."""
+    path = ROOT / "MANUAL.md"
+    prog = str((get_version() or {}).get("version", "")).lstrip("v")
+    return {"content": path.read_text(encoding="utf-8") if path.exists() else "",
+            "manual_version": manual_version(),
+            "program_version": prog}
+
+
 def api_changelog() -> dict:
     path = ROOT / "CHANGELOG.md"
     return {"content": path.read_text(encoding="utf-8") if path.exists() else ""}
@@ -1102,6 +1125,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_estimate(m.group(1)))
             elif path == "/api/changelog":
                 self._json(api_changelog())
+            elif path == "/api/manual":
+                self._json(api_manual())
             elif path == "/api/library":
                 self._json(api_library())
             elif path == "/api/elements":

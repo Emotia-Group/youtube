@@ -1,0 +1,359 @@
+# Manual de uso de ytstudio
+
+<!-- MANUAL_VERSION: 0.51.0 -->
+
+Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
+esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
+sección, sigue los pasos y listo.
+
+> **Regla de oro del programa:** todo lo que cuesta dinero se avisa ANTES, se
+> mide MIENTRAS y se registra DESPUÉS. Si algo va a gastar, lo verás en la
+> estimación; si gastó, aparecerá en el reporte de la corrida.
+
+---
+
+## 1. Qué es esto (y qué no es)
+
+ytstudio convierte **tu tema o tu narración grabada** en un video terminado
+para YouTube: guion, escenas, imágenes, voz, música, ambiente, subtítulos,
+montaje, miniatura y metadatos.
+
+**Sí puede:**
+- Partir de un tema escrito, de tu voz grabada o de ambos.
+- Escribir el guion o respetar EXACTAMENTE tu narración palabra por palabra.
+- Generar imágenes y clips de video con IA, y también usar TU material.
+- Poner rótulos, insertos de archivo (fotos, cifras, mapas), música, ambiente
+  y subtítulos sincronizados a tu voz real.
+- Reanudar donde se quedó sin volver a pagar lo ya hecho.
+
+**No puede:**
+- Publicar solo en YouTube (la fase de publicación prepara todo; la subida la
+  haces tú).
+- Inventar hechos con garantía de verdad: **el guion es tuyo o de la IA, y la
+  responsabilidad de verificar los datos es tuya**.
+- Usar caras de personas reales en las imágenes generadas (los generadores lo
+  rechazan). Para eso está el **banco de elementos** con fotos reales.
+- Trabajar sin ffmpeg instalado.
+
+---
+
+## 2. Primeros pasos (una sola vez)
+
+### 2.1 Arrancar
+Doble clic en **`iniciar.bat`**. Se abre el navegador en la interfaz. Para
+cerrarlo, cierra la ventana negra.
+
+### 2.2 Claves de API — ⚙ Configuración → 🔑 Claves
+Pega cada clave y pulsa **💾 Guardar claves** (se guardan en tu archivo `.env`
+local y se activan al instante).
+
+| Clave | Para qué | ¿Imprescindible? |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Concepto, guion, escenas, dirección de arte, metadatos | **Sí.** Sin ella todo sale de muestra |
+| `REPLICATE_API_TOKEN` | Imágenes (FLUX), video IA, música, lipsync | Sí para imágenes de verdad |
+| `OPENAI_API_KEY` | Transcribir tu voz (Whisper) y rótulos con texto legible | Sí si narras tú |
+| `ELEVENLABS_API_KEY` | Voces premium (solo si NO narras tú) | Opcional |
+
+> ⚠ **Si falta una clave, el programa NO falla: degrada a modo muestra** y te
+> avisa. Eso significa imágenes de relleno o voz silenciosa. Si ves «modo
+> vista previa», revisa las claves antes de dar por bueno un video.
+
+### 2.3 Comprobar que todo está sano
+Doble clic en **`probar.bat`** (o `./probar.sh`). Corre las ~50 baterías de
+prueba internas en unos 6 minutos.
+- **No cuesta un centavo** (sin claves ni internet) y **no toca tus proyectos**.
+- Te dice **TODO EN VERDE** o exactamente qué falló.
+- Úsalo **después de cada actualización** y **antes de una generación
+  importante**.
+
+### 2.4 Actualizar el programa
+`git pull` y vuelve a abrir `iniciar.bat`. Arriba a la izquierda verás la
+versión; haz clic para leer las **novedades**. Si dice «actualización
+descargada pero NO aplicada», cierra la ventana negra y ábrela otra vez.
+
+---
+
+## 3. Antes de generar: las decisiones que ahorran dinero
+
+Esta es la sección más rentable del manual. **Cinco minutos aquí te ahorran
+dólares y horas.**
+
+### 3.1 Elige el modo: ¿narras tú o narra la IA?
+
+**Narración propia (recomendado para tu canal).** Subes tu grabación y el
+programa la respeta ÍNTEGRA: las escenas se cortan a la medida de tu voz, los
+subtítulos y rótulos se sincronizan a tu palabra exacta.
+- Sale más barato (no pagas voz IA).
+- Suena a ti, no a robot.
+- **Cuidado:** el programa transcribe tu audio (~$0.16 por 18 min) y corrige
+  tropiezos evidentes. Lee la sección 8.1 antes de tu primera vez.
+
+**Voz IA.** Escribes el tema y el programa escribe y narra. Más rápido, útil
+para probar formatos, pero menos personal.
+
+### 3.2 Prepara tu material (📁 pestaña Material de cada proyecto)
+
+| Tipo | Para qué sirve | Consejo |
+|---|---|---|
+| **Narración** (mp3/wav) | Tu voz, la base del video | Graba con buen volumen; evita cambios bruscos de distancia al micro |
+| **Texto/guion** (txt, md, pdf, docx) | Tu guion o notas de referencia | Si ya tienes guion, súbelo: no se reinventa |
+| **B-roll propio** (imágenes/videos) | Se reparten por el video | Nómbralos `scene_003.jpg`, `03_batalla.mp4`… y van a ESA escena |
+| **Enlace de referencia** (YouTube) | El programa aprende el ritmo y la fórmula | Uno bueno vale más que tres regulares |
+
+### 3.3 Llena el banco de elementos (📚 Biblioteca → 🗄 Banco)
+Es lo que hace que tu video se vea profesional: cuando la narración menciona a
+alguien o algo, aparece un **inserto** sobre el B-roll.
+
+- **El nombre del archivo es la clave**: `elon-musk.jpg` encuentra la mención
+  «Elon Musk» (no importan tildes ni mayúsculas).
+- Categorías: personajes, lugares, entidades, mapas, stickers.
+- Acepta **imágenes y clips cortos** (mp4, webm, mov).
+- **Tu material siempre gana** sobre la búsqueda automática.
+- Usa solo material **de uso libre o propio** (Pixabay, Pexels, Openverse,
+  Wikimedia con licencia libre).
+
+> 💡 **Consejo:** llénalo con los 10-20 nombres que se repiten en tu canal
+> (personajes recurrentes, países, instituciones). Se reutiliza en todos los
+> videos futuros: lo haces una vez y rinde para siempre.
+
+### 3.4 Guarda un estilo de canal (📚 Biblioteca → Canales y estilos)
+Cuando un video te guste, entra a su pestaña **Concepto** y pulsa
+**💾 Guardar estilo**. Captura dirección visual, tono, música, ritmo y
+fórmula narrativa **sin volver a pagar el análisis**. En los siguientes
+proyectos eliges ese estilo y arrancas con la identidad ya puesta.
+
+En cada estilo puedes fijar el **branding de rótulos**: tipografía, color de
+acento, color de texto y **diseño del rótulo** (documental / minimal / bold).
+Hay combos de un clic para empezar.
+
+### 3.5 Revisa la estimación
+Al abrir un proyecto verás **cuánto costará y cuánto tardará**, desglosado por
+fase. El programa además fija un **tope de presupuesto** (estimado × 1.4): si
+la generación intentara pasarse, se detiene sola.
+
+---
+
+## 4. Generar: el paso a paso
+
+Pulsa **▶ Generar video**. Se ejecutan 11 fases en orden. Puedes acotar hasta
+dónde con el desplegable de arriba («Solo el guion», «Hasta el guion
+gráfico»).
+
+| # | Fase | Qué hace | ¿Cuesta? |
+|---|---|---|---|
+| 1 | **Análisis** | Lee tu material, transcribe tu voz, analiza la referencia | Bajo |
+| 2 | **Concepto** | Define estilo visual, tono y dirección musical | Bajo |
+| 3 | **Guion** | Escribe el guion (o adopta el tuyo) | Bajo |
+| 4 | **Escenas** | Divide en escenas, diseña prompts, rótulos, música, sonido, insertos | Medio |
+| 5 | **Voz** | Monta la pista de voz con respiros naturales | Bajo o nulo |
+| 6 | **Imágenes** | Genera imágenes/clips, resuelve insertos y controla calidad | **ALTO** |
+| 7 | **Música** | Banda sonora por actos + cama de ambiente | Bajo |
+| 8 | **Subtítulos** | Subtítulos sincronizados a tu voz real | Nulo |
+| 9 | **Montaje** | Ensambla, anima, superpone y mezcla | Nulo |
+| 10 | **Metadatos** | 3 títulos, 3 descripciones, 3 miniaturas | Bajo |
+| 11 | **Publicación** | Prepara el paquete final | Nulo |
+
+### 4.1 EL momento clave: el punto de control del storyboard
+Al terminar la fase **Escenas**, el programa se detiene y te muestra:
+
+```
+📋 PUNTO DE CONTROL — storyboard listo: 84 escenas · ~18 min
+   Revísalo en 04_scenes/storyboard.md
+   💰 Falta por generar: ~$8.09-$16.91
+   ⚠ Corregir AQUÍ no cuesta nada; corregir después cuesta volver a generar.
+```
+
+**Léelo siempre.** Es el último punto donde cambiar algo es gratis. Revisa el
+`storyboard.md`: la biblia visual, el prompt de cada escena y los rótulos.
+
+Para acotar la corrida a este punto, elige **«Hasta el guion gráfico»** antes
+de pulsar Generar.
+
+---
+
+## 5. Durante la generación: qué vigilar
+
+El panel muestra progreso, porcentaje y tiempo estimado. Abajo, el log en vivo.
+
+**Mensajes normales (no te asustes):**
+- `⏳ OpenAI limita… espero 12s y reintento` — normal, el programa se
+  autorregula.
+- `⏳ Anthropic no responde (429)… espero y reintento` — igual.
+- `🔄 El contenido de N escenas cambió` — rehace solo esas.
+- `🎬 Diseño de escenas (tanda 2/3)` — normal en videos largos.
+
+**Mensajes que SÍ debes leer:**
+- `🛡 Descarté una corrección propuesta…` — el programa evitó borrar algo de
+  tu narración. Bien.
+- `✂ Corregido en tu narración [12.3s, −1.4s]` — quitó un tropiezo. **Fíjate
+  en los segundos**: si ves un número grande, escucha esa parte.
+- `⚠ Sin foto de licencia libre para…` — esos insertos no salieron.
+- `🔊 Detecté habla MUY BAJA en…` — se conserva, pero suena floja.
+
+**Puedes cerrar el navegador**: la generación sigue en la ventana negra. Si
+cierras la ventana negra, se detiene (y podrás reanudar).
+
+---
+
+## 6. Después: revisar y publicar
+
+1. **Mira el video** en la pestaña **Video**.
+2. **Elige metadatos**: 3 títulos, 3 descripciones y 3 miniaturas — clic para
+   seleccionar. La descripción incluye **capítulos automáticos** y los
+   **créditos** del material de archivo (obligatorio por licencia: no los
+   borres).
+3. **Revisa el gasto real** de la corrida al final del panel.
+4. Los archivos están en `projects/<tu-proyecto>/09_final/`.
+
+### 6.1 Corregir sin re-pagar todo
+- **▶ Generar video** — reanuda donde se quedó. Lo hecho no se re-paga.
+- **«Rehacer desde…»** — regenera ESE paso y los siguientes.
+
+| Quiero cambiar… | Rehacer desde | ¿Pierdo lo pagado? |
+|---|---|---|
+| Una imagen concreta | Sube tu B-roll a esa escena | No |
+| Todas las imágenes | Imágenes | Sí, las imágenes |
+| Rótulos, transiciones, música, ambiente | Montaje | No |
+| El texto del guion | Guion | Sí, de ahí en adelante |
+
+> ⚠ **Nunca rehagas desde Concepto/Guion/Escenas para arreglar una imagen.**
+> Eso cambia los prompts, **borra las imágenes ya pagadas** y las vuelve a
+> cobrar.
+
+---
+
+## 7. Ahorrar dinero: la guía práctica
+
+### 7.1 Qué cuesta de verdad (video de ~18 min, 84 escenas)
+
+| Concepto | Costo aproximado |
+|---|---|
+| Inteligencia (guion, escenas, dirección, insertos, control de calidad) | $1-3 |
+| **Imágenes con FLUX 1.1 Pro** | **$3.3-4.2** |
+| Imágenes con gpt-image-1 | $5.8-20.8 ⚠ |
+| Video IA (18 clips Kling) | $4.7-12.6 ⚠ |
+| Transcribir tu voz (Whisper, 18 min) | $0.11-0.16 |
+| Música, ambiente, insertos, mapas, subtítulos | $0-0.2 |
+
+### 7.2 Las cinco reglas del ahorro
+1. **Prueba con modelos baratos.** En ⚙ Configuración → Imágenes elige
+   **FLUX schnell** (~$0.003/img): un video completo de prueba cuesta
+   centavos. Cuando la estructura te guste, cambia a **FLUX 1.1 Pro** y
+   «Rehacer desde Imágenes».
+2. **El video IA es lo más caro.** `max_scenes: 0` lo apaga. Con 18 clips
+   pagas más que por las 83 imágenes. Úsalo solo en videos importantes.
+3. **Para en el punto de control.** Corregir el storyboard es gratis.
+4. **Reutiliza estilos** (📚 Biblioteca): evitas re-analizar referencias.
+5. **Llena el banco de elementos**: material gratis, para siempre, y evita que
+   se ilustre con IA.
+
+### 7.3 Interruptores de gasto en ⚙ Configuración
+| Ajuste | Efecto |
+|---|---|
+| `providers.images.model` | El que más pesa en la factura |
+| `providers.videogen.max_scenes` | 0 = sin video IA (el mayor ahorro) |
+| `providers.images.fact_check` | Control de calidad con visión (centavos, muy recomendable) |
+| `video.elements_ai` | Ilustrar insertos sin foto libre. **Apagado por defecto** |
+| `providers.lipsync` + % de personaje | Se paga por SEGUNDO en pantalla |
+
+---
+
+## 8. Tu narración: lo que hay que saber
+
+### 8.1 El corrector de tropiezos
+El programa detecta y quita falsos arranques, repeticiones y muletillas
+**evidentes**. Cada corrección se anuncia con su duración:
+`✂ Corregido en tu narración [836.0s, −0.9s]: se quitó «no con violencia,»`.
+
+**Cinco vallas protegen tu contenido** (ninguna corrección se aplica si no
+cuadra con el audio real): coherencia texto-tiempo, ritmo de habla posible,
+tope de 20 s por corte, el empalme debe caer en silencio medido, y un tope
+global del 8 % de tu grabación.
+
+- Para **apagarlo del todo**: `audio.fix_narration: false`.
+- Para apagar **solo la revisión con IA** (la más atrevida):
+  `audio.fix_narration_ai: false`.
+
+> 💡 Tras la primera generación, **escucha los primeros 60 segundos** y
+> compara con lo que grabaste. Si algo falta, revisa los avisos `✂` y
+> desactiva la revisión IA.
+
+### 8.2 Consejos de grabación
+- Volumen parejo y constante; el programa avisa si hay habla muy baja.
+- Pausas naturales entre frases: son las que usa para respirar el montaje.
+- Si te equivocas, **para, respira y repite la frase completa** desde el
+  principio: así el corrector la reconoce y la limpia bien.
+- Máximo ~69 minutos por archivo. Si es más largo, divídelo.
+
+---
+
+## 9. Las funciones que quizá no conoces
+
+| Función | Dónde | Para qué |
+|---|---|---|
+| **Insertos documentales** | Automático | Foto real, cifra animada o mapa cuando se menciona algo |
+| **Mapas localizadores** | Automático | Pin animado sobre el lugar narrado |
+| **Cama de ambiente** | Automático | Viento, multitud, sala… según lo que se narra |
+| **Efectos incidentales** | Automático | whoosh, riser, boom, papel, latido |
+| **Rótulos con diseño** | Estilo del canal | Placa, filete y palabra clave en color |
+| **Elenco de personajes** | Pestaña Personajes | Misma cara en todas sus escenas |
+| **Personaje narrador (lipsync)** | Pestaña Personajes | Tu presentador en cámara |
+| **B-roll manual por escena** | Pestaña Escenas | Sustituye la imagen de una escena concreta |
+| **Formatos cortos** | Nuevo proyecto | Shorts, Reels, TikTok, Meta Ads |
+| **Biblioteca de hooks** | Automático en cortos | 970 ganchos virales probados |
+| **Música por actos** | Automático | Varias pistas según la intensidad |
+
+**Para tu propia música y sonidos:**
+`assets/music/` (pistas) · `assets/sfx/` (efectos) ·
+`assets/sfx/ambientes/` (ambientes) · `assets/elements/` (banco).
+Cada carpeta tiene su README con los nombres correctos.
+
+---
+
+## 10. Problemas frecuentes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| «modo vista previa» | Falta una clave | ⚙ Configuración → Claves |
+| Se detuvo con error 429 | Límite del proveedor | Ya reintenta solo; si persiste, baja `parallel_images` |
+| Faltan trozos de mi narración | El corrector cortó de más | Mira los avisos `✂`; apaga `fix_narration_ai`; rehaz desde Análisis |
+| El video costó más de lo estimado | Modelo caro o video IA activo | Revisa §7 |
+| Imágenes que no respetan lo narrado | Prompt ambiguo | Deja `fact_check: true`; corrige el storyboard y rehaz desde Imágenes |
+| Falta un inserto | Sin foto de licencia libre | Añade el archivo al banco y rehaz desde Imágenes |
+| Los subtítulos van desfasados | Proyecto de versión antigua | «Rehacer desde Voz» |
+| No arranca / falta ffmpeg | ffmpeg no instalado | Instálalo (en Windows, en `C:\ffmpeg\bin`) |
+
+**Si algo falla de verdad:** ve a **🧾 Log de eventos → ⬇ Descargar** y
+compárteme ese archivo. Ahí está todo lo necesario para diagnosticarlo.
+
+---
+
+## 11. Qué SÍ y qué NO hacer
+
+**SÍ:**
+- Correr `probar.bat` tras cada actualización.
+- Parar en el punto de control del storyboard.
+- Probar con modelos baratos antes de la versión final.
+- Escuchar el video completo antes de publicar.
+- Conservar los créditos de material de archivo en la descripción.
+- Llenar el banco de elementos poco a poco.
+
+**NO:**
+- No borres carpetas dentro de `projects/` durante una generación.
+- No rehagas desde Concepto/Guion/Escenas para arreglar una imagen.
+- No subas material sin derechos: el programa no puede verificarlo por ti.
+- No edites `config.yaml` a mano si puedes hacerlo desde ⚙ Configuración
+  (tus ajustes viven en `config.local.yaml`, que no se pisa al actualizar).
+- No des por bueno un video sin revisar los avisos ⚠ del panel.
+
+---
+
+## 12. Glosario mínimo
+
+- **B-roll**: las imágenes o videos que se ven mientras hablas.
+- **Storyboard**: el plan de todas las escenas antes de generar nada.
+- **Inserto**: tarjeta que se superpone al B-roll (foto, cifra, mapa).
+- **Rótulo**: el texto en pantalla (nombre, fecha, dato).
+- **Fase**: cada uno de los 11 pasos de la generación.
+- **Reanudar**: seguir donde se quedó sin re-pagar lo hecho.
+- **Tope de presupuesto**: freno automático de gasto por corrida.

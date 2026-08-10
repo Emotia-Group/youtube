@@ -138,6 +138,7 @@
   <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
   <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
   <button class="navbtn" onclick="showLibrary()">📺 Canales y estilos</button>
+  <button class="navbtn" onclick="showManual()">📖 Manual de uso</button>
   <button class="navbtn" onclick="showEvents()">🧾 Log de eventos</button>
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
   <h3 style="padding:0 6px">Proyectos</h3>
@@ -1319,6 +1320,78 @@ async function showChangelog(){
       <button class="btn sec small" onclick="this.closest('div[style*=fixed]')?.remove()||this.parentElement.parentElement.parentElement.remove()">✕ Cerrar</button>
     </div><div style="font-size:13px;line-height:1.5">${html}</div></div>`;
   document.body.appendChild(ov);
+}
+/* ---------- manual de uso ---------- */
+let MANUAL=null;
+function mdInline(s){
+  // negrita, código y enlaces — sobre texto YA escapado
+  return s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+          .replace(/`([^`]+)`/g,'<code style="background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12.5px">$1</code>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+}
+function mdToHtml(md){
+  const out=[];let tbl=null;
+  const flush=()=>{if(tbl){out.push(`<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px">${tbl}</table></div>`);tbl=null}};
+  for(const raw of md.split('\n')){
+    const l=raw.replace(/^\s+$/,'');
+    if(/^<!--/.test(l))continue;
+    if(/^\|/.test(l)){
+      const cells=l.split('|').slice(1,-1).map(c=>c.trim());
+      if(cells.every(c=>/^:?-{2,}:?$/.test(c)))continue;   // separador
+      const tag=tbl===null?'th':'td';
+      const style=tag==='th'
+        ?'text-align:left;padding:6px 8px;border-bottom:2px solid var(--accent);white-space:nowrap'
+        :'padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top';
+      tbl=(tbl||'')+`<tr>${cells.map(c=>`<${tag} style="${style}">${mdInline(esc(c))}</${tag}>`).join('')}</tr>`;
+      continue;
+    }
+    flush();
+    if(/^###\s/.test(l)){out.push(`<h4 id="${slugify(l.slice(4))}" style="margin:16px 0 4px;color:var(--accent)">${mdInline(esc(l.slice(4)))}</h4>`);continue}
+    if(/^##\s/.test(l)){out.push(`<h3 id="${slugify(l.slice(3))}" style="margin:26px 0 8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)">${mdInline(esc(l.slice(3)))}</h3>`);continue}
+    if(/^#\s/.test(l)){out.push(`<h2 style="margin:0 0 8px">${mdInline(esc(l.slice(2)))}</h2>`);continue}
+    if(/^---+$/.test(l))continue;
+    if(/^>\s?/.test(l)){out.push(`<div style="border-left:3px solid var(--accent);background:var(--panel2);padding:8px 12px;margin:8px 0;border-radius:0 8px 8px 0">${mdInline(esc(l.replace(/^>\s?/,'')))}</div>`);continue}
+    if(/^\s*[-*]\s/.test(l)){out.push(`<div style="margin:3px 0 3px 16px">• ${mdInline(esc(l.replace(/^\s*[-*]\s/,'')))}</div>`);continue}
+    if(/^\d+\.\s/.test(l)){out.push(`<div style="margin:3px 0 3px 16px">${mdInline(esc(l))}</div>`);continue}
+    if(/^```/.test(l)){out.push(l.length>3?'<pre style="background:var(--panel2);padding:10px;border-radius:8px;overflow-x:auto;font-size:12.5px">':'</pre>');continue}
+    out.push(l.trim()?`<p style="margin:6px 0">${mdInline(esc(l))}</p>`:'');
+  }
+  flush();
+  return out.join('');
+}
+function slugify(s){return 'm-'+s.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g,'-').replace(/^-|-$/g,'')}
+async function showManual(){
+  view='manual';current=null;stopPoll();refreshList();
+  if(!MANUAL){try{MANUAL=await api('/api/manual')}catch(e){toast('⚠ '+e.message);return}}
+  const stale=MANUAL.manual_version&&MANUAL.program_version&&MANUAL.manual_version!==MANUAL.program_version;
+  const toc=MANUAL.content.split('\n').filter(l=>/^##\s/.test(l))
+    .map(l=>l.slice(3).trim())
+    .map(t=>`<a href="#${slugify(t)}" onclick="event.preventDefault();document.getElementById('${slugify(t)}')?.scrollIntoView({behavior:'smooth'})" style="display:block;padding:3px 0;font-size:12.5px">${esc(t)}</a>`).join('');
+  $('#main').innerHTML=`<div style="max-width:900px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h1 style="margin:0">📖 Manual de uso</h1>
+      <div class="row" style="gap:6px">
+        <input id="man-q" placeholder="🔎 Buscar en el manual…" oninput="filterManual(this.value)" style="width:220px">
+        <a class="btn sec small" href="/api/manual" download="MANUAL.json" title="Descargar el texto">⬇</a>
+      </div>
+    </div>
+    ${stale?`<div class="banner">⚠ Este manual documenta la versión <b>${esc(MANUAL.manual_version)}</b> y el programa está en <b>${esc(MANUAL.program_version)}</b>. Puede faltarle alguna novedad reciente — revisa el registro de cambios.</div>`
+           :`<p class="muted" style="font-size:12px">Actualizado para la versión <b>${esc(MANUAL.manual_version||'actual')}</b> del programa.</p>`}
+    <div class="row" style="align-items:flex-start;gap:16px">
+      <div class="card" style="flex:1;font-size:13.5px;line-height:1.6" id="man-body">${mdToHtml(MANUAL.content)}</div>
+      <div class="card" style="width:210px;position:sticky;top:14px;max-height:80vh;overflow:auto" id="man-toc">
+        <b style="font-size:12px">Contenido</b>${toc}</div>
+    </div></div>`;
+}
+function filterManual(q){
+  const body=$('#man-body');if(!body)return;
+  const t=(q||'').trim().toLowerCase();
+  if(!t){body.innerHTML=mdToHtml(MANUAL.content);$('#man-toc').style.display='';return}
+  const hits=MANUAL.content.split('\n').filter(l=>l.toLowerCase().includes(t)&&l.trim()&&!/^<!--/.test(l));
+  $('#man-toc').style.display='none';
+  body.innerHTML=hits.length
+    ?`<p class="muted" style="font-size:12px">${hits.length} línea(s) con «${esc(q)}»:</p>`+mdToHtml(hits.join('\n'))
+    :`<p class="muted">Sin resultados para «${esc(q)}». Prueba con otra palabra (por ejemplo: «costo», «narración», «banco», «rehacer»).</p>`;
 }
 let EVFILTER='all';
 async function showEvents(){

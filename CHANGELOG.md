@@ -9,6 +9,35 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.51.0 — 2026-08-10
+**MANUAL DE USO dentro del programa.** Nuevo menú **📖 Manual de uso**, junto
+al log de eventos: la guía completa para configurar y exprimir cada función,
+escrita en claro y pensada para consultarse mientras trabajas.
+
+- 📖 QUÉ TRAE, EN 12 SECCIONES: primeros pasos y claves de API · las
+  decisiones ANTES de generar que ahorran dinero · las 11 fases explicadas ·
+  el punto de control del storyboard · qué vigilar DURANTE · qué hacer
+  DESPUÉS (y cómo corregir sin re-pagar) · la guía de ahorro con costos
+  REALES · todo sobre tu narración · las funciones que quizá no conocías ·
+  problemas frecuentes · qué SÍ y qué NO hacer · glosario.
+- 🔎 CÓMODO DE USAR: índice lateral con salto directo a cada sección,
+  buscador («costo», «rehacer», «banco»…) y tablas de consulta rápida.
+- 🔄 NO PUEDE QUEDARSE ATRÁS: el manual declara qué versión documenta. Si el
+  programa avanza y el manual no, **la interfaz te lo avisa** con un aviso
+  visible y **`probar.bat` se pone en rojo** hasta que lo actualice. Además la
+  batería comprueba que documenta las 11 fases, las 4 claves, las funciones
+  principales y que **ningún ajuste que menciona es inventado** — si cambio un
+  nombre de configuración y olvido el manual, la prueba lo caza.
+
+Batería nueva (`tests/test_v0_51_0.py`, 24 comprobaciones).
+
+### 🛟 Nota de mantenimiento
+Durante esta sesión la rama de trabajo retrocedió sola a la v0.31.0 y se
+perdieron de vista las versiones 0.32.0 a 0.50.0. Estaban intactas en el
+historial y quedaron **restauradas por completo** (código, configuración,
+changelog y las 50 baterías). Lo detectó justamente la batería del manual, al
+comparar la versión declarada con la del programa.
+
 ## v0.50.0 — 2026-08-09
 **Mapas localizadores animados** (Fase 4 de las 4 — el plan de calidad
 audiovisual queda completo). Cuando la narración sitúa la historia («cruzó el
