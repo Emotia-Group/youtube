@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.51.2 -->
+<!-- MANUAL_VERSION: 0.51.3 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -80,8 +80,19 @@ prueba internas en unos 6 minutos.
 
 ### 2.5 Actualizar el programa
 `git pull` y vuelve a abrir `iniciar.bat`. Arriba a la izquierda verás la
-versión; haz clic para leer las **novedades**. Si dice «actualización
-descargada pero NO aplicada», cierra la ventana negra y ábrela otra vez.
+versión; haz clic para leer las **novedades**.
+
+Dos avisos que pueden aparecer ahí, y qué significan:
+
+| Aviso | Qué significa | Qué hacer |
+|---|---|---|
+| **⚠ Actualización descargada pero NO aplicada** | Bajaste una versión nueva pero el programa sigue corriendo la vieja | Cierra la ventana negra y abre `iniciar.bat` otra vez |
+| **⚠ N archivo(s) del programa modificados** | Hay archivos del programa distintos a los del repositorio (pasa el ratón para ver cuáles) | Si no los tocaste tú, un `git checkout .` los restaura. Un `git pull` puede fallar mientras difieran |
+
+> 💡 **Tu material propio NO cuenta como «modificado»**: la música, los
+> efectos, los ambientes, el banco de elementos y tus proyectos viven en tu
+> equipo y el programa los ignora a propósito. Si el aviso aparece, es por
+> archivos del programa, no por tu contenido.
 
 ---
 

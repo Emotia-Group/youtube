@@ -9,6 +9,29 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.51.3 — 2026-08-11
+**«⚠ hay cambios locales sin actualizar» te asustaba sin motivo.** Tenías la
+última versión recién descargada y el aviso seguía ahí. No era tuyo el error:
+era un descuido mío.
+
+- 🗄 TU MATERIAL PROPIO YA NO CUENTA COMO «CAMBIO»: `assets/music/` estaba
+  protegido, pero **`assets/elements/` (el banco) y `assets/sfx/` (efectos y
+  ambientes) no lo estaban** — y son justo las carpetas donde el programa te
+  pide poner tus archivos. Cada foto o sonido tuyo aparecía como una
+  modificación del repositorio. Ya se ignoran; los README y las carpetas
+  siguen viajando con el programa para que una instalación nueva funcione.
+- 🏷 EL AVISO AHORA DICE QUÉ PASA: en vez de «hay cambios locales sin
+  actualizar» (que sonaba a «estás desactualizado»), dice **«⚠ N archivo(s)
+  del programa modificados»** y, al pasar el ratón, **los nombra** y explica
+  que un `git pull` puede fallar mientras difieran.
+- 🐛 De paso: el primer nombre de la lista salía sin su primera letra
+  (`.gitignore` → `gitignore`) por limpiar los espacios de la salida de git.
+- 📖 El manual estrena una tabla en §2.5 con los dos avisos de versión, qué
+  significan y qué hacer con cada uno.
+
+Batería nueva (`tests/test_v0_51_3.py`, 20 comprobaciones — le pregunta a git
+de verdad si ignora tu material, y verifica que los README siguen versionados).
+
 ## v0.51.2 — 2026-08-10
 Segunda tanda de tu reporte: con ffmpeg ya encontrado, pasaste de **34 fallos
 a 3**. Los tres eran defectos de mis pruebas, no del programa.

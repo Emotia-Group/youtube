@@ -1300,7 +1300,10 @@ function renderVersion(){
   el.innerHTML=(stale?`<div style="background:#7a2e2e;color:#ffd7d7;padding:6px 8px;border-radius:8px;margin-bottom:6px;font-size:12px"><b>⚠ Actualización descargada (${esc(v.version)}) pero NO aplicada.</b><br>Cierra la ventana de iniciar.bat y ábrela de nuevo.</div>`:'')
     +`Versión: <b>${esc((stale?CAT.server_version:v.version)||v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
     +`<span class="muted" style="font-size:11px"> · novedades 📋</span>`
-    +(v.modified?'<br>⚠ hay cambios locales sin actualizar':'');
+    // Solo si hay archivos DEL PROGRAMA tocados, y se NOMBRAN: el aviso
+    // anterior era vago y sonaba a «estás desactualizado» sin decir de qué
+    // hablaba (saltaba incluso por el material propio dentro de assets/).
+    +(v.modified?`<br><span title="${esc((v.modified_files||[]).join('\n'))}\n\nUn «git pull» puede fallar mientras estos archivos difieran del repositorio.">⚠ ${v.modified_count||''} archivo(s) del programa modificados <span class="muted" style="font-size:11px">(pasa el ratón)</span></span>`:'');
 }
 async function showChangelog(){
   let md='';

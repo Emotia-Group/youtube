@@ -35,6 +35,17 @@ from ytstudio.project import (DIRS, PROJECTS_DIR, Project, read_json_tolerant,
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+def archivos_modificados(porcelain: str) -> list[str]:
+    """Rutas de `git status --porcelain`, completas.
+
+    Cada línea trae 2 columnas de estado + un espacio antes de la ruta. OJO:
+    NO se puede limpiar el bloque entero con .strip() antes de partirlo — se
+    come el espacio inicial de la primera línea y con él la primera letra del
+    archivo («.gitignore» salía como «gitignore»)."""
+    return [ln[3:].strip() for ln in porcelain.splitlines()
+            if len(ln) > 3 and ln[3:].strip()]
+
+
 def get_version() -> dict:
     """Identifica exactamente qué código está corriendo este servidor —
     para poder verificar desde la propia UI si un 'git pull' surtió efecto.
@@ -56,13 +67,18 @@ def get_version() -> dict:
             cwd=ROOT, capture_output=True, text=True, timeout=3, check=True,
         ).stdout.strip()
         commit, date = out.split("|", 1)
+        # QUÉ archivos, no solo «hay algo»: el aviso anterior era vago (sonaba
+        # a «tu programa está desactualizado») y además saltaba por el
+        # material propio del creador dentro de assets/. Ahora se nombran.
         dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
-                               capture_output=True, text=True, timeout=3).stdout.strip()
+                               capture_output=True, text=True, timeout=3).stdout
+        archivos = archivos_modificados(dirty)
         return {"version": version, "commit": commit, "date": date,
-                "modified": bool(dirty)}
+                "modified": bool(archivos), "modified_files": archivos[:12],
+                "modified_count": len(archivos)}
     except Exception:
         return {"version": version, "commit": "desconocido", "date": "",
-                "modified": False}
+                "modified": False, "modified_files": [], "modified_count": 0}
 
 
 # Versión del CÓDIGO CARGADO en este proceso (capturada al arrancar). Tras un

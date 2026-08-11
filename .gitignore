@@ -5,8 +5,22 @@ projects/*
 !projects/.gitkeep
 data/
 config.local.yaml
+# TU MATERIAL PROPIO dentro de assets/ (música, efectos, ambientes y banco de
+# elementos): vive en tu equipo, nunca se sube al repositorio. Sin esto, cada
+# archivo tuyo aparecía como «cambio local» y la interfaz avisaba de algo que
+# en realidad era normal.
 assets/music/*
 !assets/music/README.md
+assets/sfx/*
+!assets/sfx/README.md
+!assets/sfx/ambientes/
+assets/sfx/ambientes/*
+!assets/sfx/ambientes/.gitkeep
+assets/elements/*
+!assets/elements/README.md
+!assets/elements/*/
+assets/elements/*/*
+!assets/elements/*/.gitkeep
 client_secrets.json
 token.json
 .venv/
