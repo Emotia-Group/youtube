@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.51.3 -->
+<!-- MANUAL_VERSION: 0.52.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -314,6 +314,8 @@ global del 8 % de tu grabación.
 
 | Función | Dónde | Para qué |
 |---|---|---|
+| **Encuadre documental** | Automático | Las escenas delicadas (un animal sin vida, una batalla, una herida) salen con registro clínico y sobrio a la PRIMERA, sin que el filtro del generador las rechace |
+| **Auditoría de fidelidad** | Automático, gratis | Antes de generar, avisa si un prompt se dejó fuera un hecho de tu narración (la cantidad exacta o el estado sin vida) |
 | **Insertos documentales** | Automático | Foto real, cifra animada o mapa cuando se menciona algo |
 | **Mapas localizadores** | Automático | Pin animado sobre el lugar narrado |
 | **Cama de ambiente** | Automático | Viento, multitud, sala… según lo que se narra |

@@ -7,6 +7,7 @@ import shutil
 import threading
 from pathlib import Path
 
+from ytstudio import prompt_safety as ps
 from ytstudio.phases.scenes import load_scenes, save_scenes
 from ytstudio.providers import get_images, get_llm, get_videogen
 from ytstudio.utils.media import run_ffmpeg
@@ -90,28 +91,9 @@ def _is_content_error(e: Exception) -> bool:
                                 "e005", "moderat"))
 
 
-# Palabras que suelen disparar el filtro de seguridad en contenido histórico
-_SOFTEN = {
-    "blood": "", "bloody": "", "gore": "", "gory": "", "corpse": "statue",
-    "dead body": "fallen figure", "death": "history", "dead": "ancient",
-    "kill": "defeat", "killing": "conflict", "slaughter": "clash",
-    "massacre": "great battle", "naked": "robed", "nude": "clothed",
-    "violence": "drama", "violent": "intense", "wound": "mark",
-    "wounded": "weary", "severed": "broken",
-}
-
-
-def _soften_prompt(prompt: str) -> str:
-    """Suaviza un prompt marcado como sensible: reemplaza términos crudos por
-    equivalentes tolerables y añade señales de contenido apto, sin perder el
-    tema histórico/documental."""
-    import re
-    out = prompt
-    for bad, good in _SOFTEN.items():
-        out = re.sub(rf"\b{re.escape(bad)}\b", good, out, flags=re.I)
-    out = re.sub(r"\s{2,}", " ", out).strip(" ,")
-    return ("tasteful, safe-for-work, non-graphic historical documentary "
-            "illustration, no gore, no nudity, artistic and respectful. " + out)
+# El suavizado de prompts rechazados vive en ytstudio/prompt_safety.py:
+# el que había aquí sustituía «dead»→«ancient» y «wound»→«mark», es decir,
+# deshacía la fidelidad factual que el director acababa de fijar.
 
 
 def _neighbor_blur(out: Path, broll_dir: Path, sid: int, cfg: dict) -> bool:
@@ -1197,6 +1179,8 @@ def run(project, cfg) -> None:
     lang = lang_name(cfg)
     nsfw_scenes: list[int] = []       # quedaron con respaldo local sin costo
     safe_scenes: list[int] = []       # quedaron con plano atmosférico seguro
+    encuadradas: list[int] = []       # salieron con registro documental
+    suavizadas: list[int] = []        # necesitaron el segundo intento
 
     # ELENCO: referencias de identidad por personaje, resueltas EN SERIE antes
     # del pool (genera la referencia del personaje sin fotos una sola vez).
@@ -1285,6 +1269,15 @@ def run(project, cfg) -> None:
         degradado). La usan la imagen principal y la segunda mitad de las
         escenas con pantalla dividida."""
         prompt = _texted(scene, prompt)
+        # ENCUADRE DOCUMENTAL DESDE EL PRIMER INTENTO: si la escena es
+        # sensible (marcada por el director o detectada aquí), el registro
+        # clínico va delante YA — antes, el primer intento salía en crudo,
+        # lo rechazaba el filtro y solo entonces se suavizaba: tiempo
+        # perdido, a veces dinero, y una imagen peor.
+        prompt, _categoria = ps.encuadrar(prompt, scene.get("sensibilidad", ""),
+                                          scene.get("narration", ""))
+        if _categoria != "ninguna":
+            encuadradas.append(scene["id"])
         refs = _scene_refs(scene)
         # Texto legible SIN personajes del elenco → mejor tipografía
         if scene.get("image_text") and text_images is not None and not refs:
@@ -1314,9 +1307,13 @@ def run(project, cfg) -> None:
         except Exception as e:
             if not _is_content_error(e):
                 raise  # infraestructura → detiene la fase (reanudable)
-        # Rechazo de contenido: reintento con prompt suavizado
+        # Rechazo de contenido: reintento suavizado que CONSERVA los hechos
+        # (especie, estado sin vida, número, ubicación) y quita solo lo
+        # gratuito — el suavizado anterior convertía «dead goat» en «ancient
+        # goat» y deshacía la fidelidad factual.
         try:
-            images.generate(_soften_prompt(prompt), img)
+            images.generate(ps.suavizar(prompt), img)
+            suavizadas.append(scene["id"])
             return
         except Exception as e:
             if not _is_content_error(e):
@@ -1369,6 +1366,16 @@ def run(project, cfg) -> None:
         if (s.get("layout") == "dividida"
                 and (broll_dir / f"scene_{s['id']:03d}_b.jpg").exists()):
             s["broll_image_b"] = f"scene_{s['id']:03d}_b.jpg"
+    if encuadradas:
+        notify(f"🎞 {len(set(encuadradas))} escena(s) de contenido delicado "
+               "salieron con registro documental desde el primer intento "
+               "(clínico y sobrio, con los hechos intactos).")
+    if suavizadas:
+        project.add_warning(
+            f"Las escenas {', '.join(map(str, sorted(set(suavizadas))))} "
+            "necesitaron un segundo intento con el prompt en registro más "
+            "clínico. Los hechos (especie, estado, cantidad, ubicación) se "
+            "conservan; revísalas por si el tono cambió.")
     if safe_scenes:
         project.add_warning(
             "El generador marcó como sensible el prompt de "

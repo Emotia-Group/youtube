@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 
 from ytstudio.phases.script import load_script
+from ytstudio.prompt_safety import SENSIBILIDADES, auditar_fidelidad
 from ytstudio.providers import get_llm
 
 # Campos creativos por escena (dirección de arte + banda sonora):
@@ -41,6 +42,9 @@ _CREATIVE_PROPS = {
     # Texto LEGIBLE dentro de la imagen (casi siempre vacío): cuando la escena
     # lo define, esa imagen se genera con el modelo de mejor tipografía.
     "image_text": {"type": "string"},
+    # SENSIBILIDAD del contenido: el registro documental correspondiente se
+    # antepone al prompt DESDE EL PRIMER INTENTO (ver ytstudio/prompt_safety).
+    "sensibilidad": {"type": "string", "enum": list(SENSIBILIDADES)},
 }
 
 SCENES_SCHEMA = {
@@ -154,6 +158,19 @@ ESA escena afirma y codifícalos de forma literal e inequívoca:
   Con grupos grandes (≥6 sujetos), además del número describe la escena de
   conjunto para que el estado se lea igual en TODOS («all of them dead,
   none standing»).
+
+CONTENIDO SENSIBLE (campo 'sensibilidad'): marca la escena cuando lo que hay
+que mostrar podría chocar con los filtros de los generadores de imágenes:
+muerte_animal · restos_humanos · herida_lesion · violencia_historica ·
+medico_anatomico · arte_desnudo · armas_conflicto · sustancias. En el resto,
+'ninguna'.
+- Marcarla NO censura la escena: el programa antepone el registro documental
+  adecuado (clínico, sobrio, sin sangre) para que la imagen SALGA A LA
+  PRIMERA en vez de ser rechazada. Los HECHOS (especie, estado sin vida,
+  cantidad, ubicación) se mantienen intactos: no los suavices tú.
+- Escribe el prompt en ese mismo registro: muestra el SUJETO y la ESCENA, no
+  el detalle morboso. Nada de sangre, vísceras, primeros planos de heridas ni
+  sufrimiento — ni aportan al documental ni pasan los filtros.
 - Si dudas entre ser más literal o más "artístico", elige literal: la
   fidelidad a lo narrado manda sobre la elegancia visual.
 
@@ -625,6 +642,13 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
         if it:
             s["image_text"] = it
 
+        # Sensibilidad del contenido (para el encuadre documental preventivo)
+        sens = (s.get("sensibilidad") or "").strip()
+        if sens in SENSIBILIDADES and sens != "ninguna":
+            s["sensibilidad"] = sens
+        else:
+            s.pop("sensibilidad", None)
+
         # Sticker: imitación visual nativa, SOLO formatos cortos y con texto
         st = s.pop("sticker_type", None)
         st_text = (s.pop("sticker_text", "") or "").strip()[:80]
@@ -988,6 +1012,32 @@ def _archive_pass(llm, project, scenes: list[dict], lang: str, cfg: dict,
                "(fotos con licencia libre, cifras y fechas animadas).")
 
 
+def _auditar_prompts(project, scenes: list[dict]) -> None:
+    """Comprobación GRATUITA (sin modelo) de que los prompts no se dejaron por
+    el camino los hechos que la narración afirma: la CANTIDAD exacta y el
+    ESTADO sin vida — los dos que fallaron en los videos reales del creador.
+
+    Hasta ahora esto solo lo cazaba el control de calidad con visión, es
+    decir, DESPUÉS de pagar la imagen. Aquí se detecta antes de gastar nada."""
+    from ytstudio.progress import notify
+    fallos: list[str] = []
+    for s in scenes:
+        faltan = auditar_fidelidad(s.get("narration") or "",
+                                   s.get("broll_prompt") or "")
+        if faltan:
+            fallos.append(f"escena {s['id']}: falta {', '.join(faltan)}")
+    if not fallos:
+        return
+    project.add_warning(
+        f"🔍 Fidelidad de los prompts: {len(fallos)} escena(s) podrían no "
+        "reflejar un hecho de su narración — " + " · ".join(fallos[:6])
+        + (" · y más" if len(fallos) > 6 else "")
+        + ". El control de calidad con visión las revisará; si te importa, "
+        "corrígelas en el storyboard antes de generar (ahí es gratis).")
+    notify(f"🔍 Auditoría de fidelidad: {len(fallos)} escena(s) con un hecho "
+           "posiblemente ausente del prompt (revisa el aviso del panel).")
+
+
 def run(project, cfg) -> None:
     llm = get_llm(cfg)
     concept = project.get("concept")
@@ -1016,6 +1066,7 @@ def run(project, cfg) -> None:
                             short_form=short_form,
                             template_rules=tpl_rules)
         _normalize_creative(scenes, short_form=short_form)
+        _auditar_prompts(project, scenes)
         _archive_pass(llm, project, scenes, lang, cfg, short_form)
         _assign_shots(project, scenes, cfg)
         _write_outputs(project, scenes)
@@ -1084,6 +1135,7 @@ def run(project, cfg) -> None:
                         short_form=short_form,
                         template_rules=tpl_rules)
     _normalize_creative(scenes, short_form=short_form)
+    _auditar_prompts(project, scenes)
     _archive_pass(llm, project, scenes, lang, cfg, short_form)
     _assign_shots(project, scenes, cfg)
     _write_outputs(project, scenes)

@@ -9,6 +9,46 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.52.0 — 2026-08-11
+Preguntaste si la fidelidad factual estaba «al 100%». **No lo estaba**, y al
+auditarla encontré un fallo que trabajaba EN CONTRA de ella.
+
+- 🐛 EL SUAVIZADO DESHACÍA LA FIDELIDAD (el hallazgo grave): cuando un
+  generador rechazaba una imagen por su contenido, el reintento sustituía
+  «dead»→«ancient», «corpse»→«statue» y «wound»→«mark». Es decir, **borraba
+  justo los hechos** que la dirección de arte acababa de fijar: un cabrito
+  muerto se convertía en «un cabrito antiguo». Ahora el suavizado quita solo
+  lo GRATUITO (sangre, vísceras, gore) y **conserva especie, estado sin vida,
+  cantidad y ubicación**, pasando a registro clínico («lesion», no «mancha»).
+- 🎞 EL ENCUADRE DOCUMENTAL YA VA DESDE EL PRIMER INTENTO (lo que pediste):
+  el director marca cada escena delicada (animal sin vida, restos, herida,
+  violencia histórica, anatomía, armas, desnudo artístico, sustancias) y el
+  prompt sale con el registro que corresponde — clínico, sobrio, sin sangre,
+  con el contexto real de documental divulgativo. Antes el primer intento
+  salía en crudo, el filtro lo rechazaba y solo después se suavizaba: tiempo
+  perdido, a veces dinero, y una imagen peor. Si el director no la marca, un
+  detector automático (en español e inglés, con plurales) la marca igual.
+  · **Nota técnica:** el encuadre describe la imagen que SÍ es admisible; no
+    le declara al modelo que «esto no viola sus políticas». Esas fórmulas no
+    funcionan —los filtros no leen declaraciones— y suelen empeorar el
+    resultado. Pedir bien es lo que de verdad evita el rechazo.
+- 🔍 AUDITORÍA DE FIDELIDAD GRATIS, ANTES DE PAGAR: al cerrar el storyboard se
+  comprueba sin gastar un centavo que cada prompt refleja los hechos que su
+  narración afirma — **la cantidad exacta** («tres orificios») y **el estado
+  sin vida**. Si falta alguno, te lo dice con el número de escena para que lo
+  corrijas donde es gratis. Hasta ahora eso solo lo cazaba el control con
+  visión, es decir, con la imagen ya pagada.
+- 📊 El log te dice cuántas escenas salieron encuadradas y cuáles necesitaron
+  el segundo intento, por si quieres revisar su tono.
+
+**Respuesta honesta a tu pregunta:** con esto la fidelidad tiene tres capas
+(reglas al escribir el prompt → auditoría gratuita → control con visión) en
+vez de una y media. Lo que sigue sin cubrirse: el control con visión revisa la
+imagen fija de cada escena, no el movimiento de los clips de video IA, y
+corrige una sola vez.
+
+Batería nueva (`tests/test_v0_52_0.py`, 38 comprobaciones).
+
 ## v0.51.3 — 2026-08-11
 **«⚠ hay cambios locales sin actualizar» te asustaba sin motivo.** Tenías la
 última versión recién descargada y el aviso seguía ahí. No era tuyo el error:
