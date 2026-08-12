@@ -42,6 +42,9 @@ _CREATIVE_PROPS = {
     # Texto LEGIBLE dentro de la imagen (casi siempre vacío): cuando la escena
     # lo define, esa imagen se genera con el modelo de mejor tipografía.
     "image_text": {"type": "string"},
+    # Idioma/escritura de ESE texto cuando NO es el del video: un papiro en
+    # arameo dentro de un documental en español debe leerse en arameo.
+    "image_text_lang": {"type": "string"},
     # SENSIBILIDAD del contenido: el registro documental correspondiente se
     # antepone al prompt DESDE EL PRIMER INTENTO (ver ytstudio/prompt_safety).
     "sensibilidad": {"type": "string", "enum": list(SENSIBILIDADES)},
@@ -182,9 +185,22 @@ TEXTO DENTRO DE LA IMAGEN (image_text): por defecto NINGUNO.
   plano).
 - SOLO cuando la narración depende de que se LEA un texto (un titular, una
   palabra clave, un letrero), escribe en image_text el texto EXACTO que debe
-  verse (máx. 6 palabras) EN EL IDIOMA DE LA NARRACIÓN — jamás en inglés si
-  el video no es en inglés. Máximo 2-3 escenas por video: el programa genera
+  verse (máx. 6 palabras). Máximo 2-3 escenas por video: el programa genera
   esas imágenes con el modelo de mejor tipografía disponible.
+- EL IDIOMA LO MANDA LA ESCENA, no la narración (campo image_text_lang):
+  · Por defecto, el idioma del video (un titular de prensa, un rótulo
+    moderno, un cartel del presente) — jamás en inglés si el video no lo es.
+  · Pero si lo que se muestra es un objeto REAL de otra lengua o época, el
+    texto va EN ESA LENGUA y su escritura: un papiro en arameo, una
+    inscripción romana en latín, una estela egipcia en jeroglíficos, un
+    letrero de Tokio en japonés, un manuscrito árabe en árabe. Poner ahí el
+    idioma de la narración sería un error histórico visible en pantalla.
+  · image_text_lang nombra ese idioma/escritura en inglés para el generador
+    ("Aramaic script", "Latin", "Egyptian hieroglyphs", "Japanese",
+    "Arabic"). Déjalo vacío para usar el idioma del video.
+  · Si el texto original NO se puede reproducir con fidelidad (no conoces la
+    grafía exacta), es mejor NO poner image_text y describir el objeto con
+    escritura ilegible que inventar letras falsas.
 
 TRANSICIÓN (transition): cómo ENTRA la escena desde la anterior.
 - 'corte': corte seco, sin transición (por defecto). Da ritmo y es lo más
@@ -639,8 +655,13 @@ def _normalize_creative(scenes: list[dict], short_form: bool = False) -> None:
 
         # Texto legible dentro de la imagen: solo si el director lo definió
         it = (s.pop("image_text", "") or "").strip()[:60]
+        itl = (s.pop("image_text_lang", "") or "").strip()[:40]
         if it:
             s["image_text"] = it
+            # El idioma solo se guarda si el texto existe; vacío = idioma del
+            # video (el caso normal), relleno = lengua propia de la escena.
+            if itl:
+                s["image_text_lang"] = itl
 
         # Sensibilidad del contenido (para el encuadre documental preventivo)
         sens = (s.get("sensibilidad") or "").strip()

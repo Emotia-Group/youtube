@@ -464,6 +464,35 @@ _QA_SCHEMA = {
     "required": ["reviews"], "additionalProperties": False}
 
 
+def _qa_frame(scene: dict, broll_dir: Path) -> Path | None:
+    """Qué imagen se revisa de esta escena.
+
+    Para las escenas de IMAGEN, la propia imagen. Para las de CLIP DE VIDEO,
+    un fotograma del INTERIOR del clip: la imagen inicial ya se verificó, pero
+    el generador de video se aleja de ella al animar — un animal que la
+    narración da por muerto puede acabar moviéndose. Ese fotograma se guarda
+    para no re-extraerlo al reanudar."""
+    still = broll_dir / f"scene_{scene['id']:03d}.jpg"
+    clip_name = scene.get("broll_video")
+    if not clip_name:
+        return still if still.exists() else None
+    clip = broll_dir / clip_name
+    if not clip.exists():
+        return still if still.exists() else None
+    mid = broll_dir / "qa" / f"scene_{scene['id']:03d}_mid.jpg"
+    if mid.exists():
+        return mid
+    mid.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from ytstudio.utils.media import probe_duration
+        t = max(0.1, probe_duration(clip) * 0.6)
+        run_ffmpeg(["-ss", f"{t:.2f}", "-i", str(clip), "-frames:v", "1",
+                    "-q:v", "3", str(mid)], f"fotograma QA escena {scene['id']}")
+        return mid if mid.exists() else (still if still.exists() else None)
+    except Exception:
+        return still if still.exists() else None
+
+
 def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
                 project) -> dict[int, dict] | None:
     """Pasa las imágenes por visión en tandas y devuelve {id: veredicto}.
@@ -487,11 +516,17 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
         chunk = targets[start:start + 6]
         images, manifest = [], []
         for s in chunk:
-            p = broll_dir / f"scene_{s['id']:03d}.jpg"
-            if not p.exists():
+            p = _qa_frame(s, broll_dir)
+            if p is None or not p.exists():
                 continue
             images.append(p)
-            manifest.append(f"- escena {s['id']}: narración «"
+            # Los CLIPS se revisan por un fotograma de su INTERIOR: el
+            # generador de video puede alejarse de la imagen inicial (que sí
+            # se verificó) y, por ejemplo, poner en movimiento a un animal
+            # que la narración da por muerto.
+            marca = " [FOTOGRAMA INTERIOR DE UN CLIP EN MOVIMIENTO]" \
+                if s.get("broll_video") else ""
+            manifest.append(f"- escena {s['id']}{marca}: narración «"
                             f"{(s.get('narration') or '')[:280]}»")
         if not images:
             continue
@@ -504,6 +539,10 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
             "humana donde el sujeto es un animal, otra cantidad o "
             "disposición que la narrada, una herida en otra parte del "
             "cuerpo). Ante la duda, fiel=true.\n"
+            "- En los marcados como FOTOGRAMA INTERIOR DE UN CLIP: revisa "
+            "además que el MOVIMIENTO no contradiga lo narrado (un sujeto que "
+            "la narración da por muerto no puede aparecer moviéndose, de pie "
+            "o con los ojos abiertos).\n"
             "- problema: una frase concreta con el hecho contradicho (vacía "
             "si fiel).\n"
             "- prompt_corregido: SOLO si fiel=false — el prompt completo EN "
@@ -710,14 +749,22 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
 
 def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
                     broll_dir: Path, gen_one, skip: set[int]) -> None:
-    """El director REVISA con visión cada imagen generada contra los hechos
-    de su narración y regenera UNA VEZ las que los contradicen (el fallo
-    reportado por el usuario: ovejas vivas narradas muertas, 4 orificios en
-    cuadrado donde el guion dice 3 en triángulo, anatomía equivocada).
-    Cost-aware: desactivable (providers.images.fact_check), una sola
-    regeneración por escena, y avisa honesto de lo que no pudo arreglar."""
+    """El director REVISA con visión lo que se ve en cada escena contra los
+    hechos de su narración, y corrige lo que los contradice.
+
+    Tres cosas que lo hacen fiable sin dispararse de precio:
+    - Los CLIPS de video se revisan por un fotograma de su interior, no por la
+      imagen que los originó: el generador puede animar a un sujeto que la
+      narración da por muerto.
+    - Un clip infiel NO se re-genera (cuesta 10 veces más que una imagen): la
+      escena baja a su imagen fija, que ya está verificada y no cuesta nada.
+    - Se corrige en RONDAS (`fact_check_retries`, 2 por defecto): cada ronda
+      revisa solo lo regenerado, así el gasto crece con los fallos reales y
+      no con el tamaño del video.
+    """
     from ytstudio.progress import notify
-    if not cfg.get("providers", {}).get("images", {}).get("fact_check", True):
+    img_cfg = cfg.get("providers", {}).get("images", {})
+    if not img_cfg.get("fact_check", True):
         return
     if getattr(llm, "is_mock", False):
         return
@@ -726,69 +773,107 @@ def _verify_factual(project, llm, cfg, ai_scenes: list[dict],
                and (broll_dir / f"scene_{s['id']:03d}.jpg").exists()]
     if not targets:
         return
+    rondas = max(1, min(4, int(img_cfg.get("fact_check_retries", 2))))
     notify(f"👁 Control de calidad factual: el director compara "
-           f"{len(targets)} imagen(es) con los hechos de su narración…")
-    verdicts = _qa_batches(llm, cfg, targets, broll_dir, project)
-    if verdicts is None:
-        return  # la revisión falló (ya avisó): no se afirma nada
-    bad = []
-    for s in targets:
-        v = verdicts.get(s["id"])
-        if not v or v.get("fiel", True):
-            continue
-        fixed = (v.get("prompt_corregido") or "").strip()
-        if not fixed:
-            continue
-        bad.append((s, v.get("problema", ""), fixed))
-    if not bad:
-        notify("👁 Control factual: todas las imágenes respetan lo narrado.")
-        return
-    notify(f"🔁 {len(bad)} imagen(es) contradicen su narración "
-           f"({', '.join(str(s['id']) for s, _, _ in bad)}): se regeneran "
-           "con el prompt corregido (un solo reintento).")
-    redone: list[dict] = []
-    for s, problema, fixed in bad:
-        img = broll_dir / f"scene_{s['id']:03d}.jpg"
-        try:
-            img.unlink(missing_ok=True)
-            gen_one(s, fixed, img)
-            s["broll_prompt"] = fixed
-            redone.append(s)
-            project.add_warning(
-                f"🖼 Escena {s['id']}: la imagen contradecía la narración "
-                f"({problema}) — se regeneró con el prompt corregido.")
-        except Exception as e:
-            project.add_warning(
-                f"🖼 Escena {s['id']}: la imagen contradice la narración "
-                f"({problema}) y no se pudo regenerar ({e}). Revísala en el "
-                "Storyboard o sube tu propio B-roll.")
-    # La firma de caché usa el prompt: se actualiza para que al reanudar NO
-    # se vuelva a regenerar (y cobrar) el material corregido.
-    if redone:
-        import hashlib
-        import json as _json
+           f"{len(targets)} escena(s) con los hechos de su narración…")
+
+    import hashlib
+    import json as _json
+
+    def _firmar(scenes: list[dict]) -> None:
+        """Actualiza la caché para que al reanudar NO se re-cobre lo ya
+        corregido."""
         sig_path = broll_dir / "prompts.json"
         try:
             sigs = _json.loads(sig_path.read_text(encoding="utf-8"))
         except Exception:
             sigs = {}
-        for s in redone:
+        for s in scenes:
             src = ((s.get("broll_prompt") or "") + "|chars:"
                    + ",".join(s.get("characters") or []))
             sigs[str(s["id"])] = hashlib.md5(src.encode("utf-8")).hexdigest()
         sig_path.write_text(_json.dumps(sigs, indent=0), encoding="utf-8")
-        # Segunda mirada SOLO a las regeneradas: si alguna sigue infiel, se
-        # avisa con claridad (no se vuelve a cobrar otra regeneración).
-        second = _qa_batches(llm, cfg, redone, broll_dir, project) or {}
-        still = [s["id"] for s in redone
-                 if second.get(s["id"]) and not second[s["id"]].get("fiel", True)]
-        if still:
-            project.add_warning(
-                "A pesar de la regeneración, la(s) escena(s) "
-                + ", ".join(map(str, still)) + " pueden seguir sin respetar "
-                "un hecho de la narración (los generadores fallan contando "
-                "o con anatomías poco comunes). Revísalas en el Storyboard; "
-                "puedes editar el prompt a mano o subir tu B-roll.")
+
+    pendientes = targets
+    degradados: list[int] = []
+    agotado = False          # se acabaron las rondas con algo aún sin verificar
+    for ronda in range(1, rondas + 1):
+        verdicts = _qa_batches(llm, cfg, pendientes, broll_dir, project)
+        if verdicts is None:
+            return  # la revisión falló (ya avisó): no se afirma nada
+        bad = []
+        for s in pendientes:
+            v = verdicts.get(s["id"])
+            if not v or v.get("fiel", True):
+                continue
+            bad.append((s, v.get("problema", ""),
+                        (v.get("prompt_corregido") or "").strip()))
+        if not bad:
+            if ronda == 1:
+                notify("👁 Control factual: todo lo que se ve respeta lo "
+                       "narrado.")
+            else:
+                notify(f"👁 Control factual: corregido en {ronda - 1} ronda(s).")
+            return
+
+        # CLIPS infieles → bajan a su imagen fija (verificada y GRATIS)
+        rehacer = []
+        for s, problema, fixed in bad:
+            if s.get("broll_video"):
+                s.pop("broll_video", None)
+                (broll_dir / "qa" /
+                 f"scene_{s['id']:03d}_mid.jpg").unlink(missing_ok=True)
+                degradados.append(s["id"])
+                project.add_warning(
+                    f"🎥 Escena {s['id']}: el CLIP de video se apartaba de lo "
+                    f"narrado ({problema}). Se queda con su imagen fija "
+                    "animada, que sí lo respeta — no se paga otro clip.")
+            elif fixed:
+                rehacer.append((s, problema, fixed))
+
+        if not rehacer:
+            break
+        notify(f"🔁 Ronda {ronda}/{rondas}: {len(rehacer)} imagen(es) "
+               f"contradicen su narración "
+               f"({', '.join(str(s['id']) for s, _, _ in rehacer)}): se "
+               "regeneran con el prompt corregido.")
+        redone: list[dict] = []
+        for s, problema, fixed in rehacer:
+            img = broll_dir / f"scene_{s['id']:03d}.jpg"
+            try:
+                img.unlink(missing_ok=True)
+                gen_one(s, fixed, img)
+                s["broll_prompt"] = fixed
+                redone.append(s)
+                project.add_warning(
+                    f"🖼 Escena {s['id']}: la imagen contradecía la narración "
+                    f"({problema}) — se regeneró con el prompt corregido "
+                    f"(ronda {ronda}).")
+            except Exception as e:
+                project.add_warning(
+                    f"🖼 Escena {s['id']}: la imagen contradice la narración "
+                    f"({problema}) y no se pudo regenerar ({e}). Revísala en "
+                    "el Storyboard o sube tu propio B-roll.")
+        if not redone:
+            break
+        _firmar(redone)
+        pendientes = redone          # la siguiente ronda solo mira lo nuevo
+    else:
+        # El bucle terminó SIN break: se agotaron las rondas y lo último que
+        # se regeneró se quedó sin una mirada que lo confirme.
+        agotado = True
+
+    if agotado and pendientes:
+        project.add_warning(
+            "Tras " + str(rondas) + " ronda(s) de corrección, la(s) escena(s) "
+            + ", ".join(str(s["id"]) for s in pendientes) + " pueden seguir "
+            "sin respetar un hecho de la narración (los generadores fallan "
+            "contando o con anatomías poco comunes). Revísalas en el "
+            "Storyboard: puedes editar el prompt a mano o subir tu B-roll.")
+    if degradados:
+        notify(f"🎥 {len(set(degradados))} clip(s) de video bajaron a imagen "
+               "fija por no respetar lo narrado (sin costo adicional).")
+
 
 
 _REFRAME_MISMATCH = 1.45  # 1:1 sobre 16:9 da 1.78 (reencuadrar); 4:3 da 1.33 (ok)
@@ -1241,14 +1326,22 @@ def run(project, cfg) -> None:
                 "⚙ Configuración para tipografía de verdad.")
 
     def _texted(scene: dict, prompt: str) -> str:
-        """Si la escena define image_text, el prompt exige ESE texto exacto,
-        en el idioma del guion — sin esto, los generadores inventan letras y
-        siempre en inglés."""
+        """Si la escena define image_text, el prompt exige ESE texto exacto.
+
+        EL IDIOMA LO MANDA LA ESCENA: por defecto el del video, pero un papiro
+        en arameo dentro de un documental en español debe leerse EN ARAMEO —
+        forzar el idioma de la narración sería un error histórico visible en
+        pantalla. El director lo indica en image_text_lang."""
         txt = (scene.get("image_text") or "").strip()
         if not txt:
             return prompt
+        idioma = (scene.get("image_text_lang") or "").strip() or lang
+        propio = idioma.strip().lower() != lang.strip().lower()
+        detalle = (f'in {idioma} script, historically accurate lettering for '
+                   'that language, NOT translated and NOT transliterated'
+                   if propio else f'written in {idioma}')
         return (f'{prompt}. The only legible text in the image is exactly '
-                f'"{txt}" (written in {lang}), spelled correctly, integrated '
+                f'"{txt}" ({detalle}), spelled correctly, integrated '
                 "naturally into the scene (headline, sign or document), "
                 "clean professional typography. No other text or letters "
                 "anywhere.")

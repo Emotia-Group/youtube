@@ -9,6 +9,41 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.53.0 — 2026-08-11
+Cierra los **tres huecos** que declaré en la v0.52.0 y añade el idioma del
+texto en pantalla que pediste.
+
+- 🎥 LA VISIÓN YA MIRA DENTRO DE LOS CLIPS: hasta ahora el control factual
+  revisaba la imagen fija de cada escena, pero un clip de video IA **se aleja
+  de ella al animarla** — un animal que tu narración da por muerto podía
+  acabar moviéndose. Ahora las escenas de video se revisan por un fotograma
+  del INTERIOR del clip, y al revisor se le pide expresamente comprobar que
+  el movimiento no contradiga lo narrado.
+- 💰 Y SI UN CLIP FALLA, NO SE RE-PAGA: un clip cuesta 10 veces más que una
+  imagen ($0.13-0.35 contra $0.04). En vez de regenerarlo, la escena **baja a
+  su imagen fija animada**, que ya está verificada y no cuesta nada. Te queda
+  el aviso explicando por qué.
+- 🔁 CORRECCIÓN EN RONDAS (`fact_check_retries`, 2 por defecto): antes se
+  corregía una sola vez y, si la segunda imagen seguía mal, se quedaba así.
+  Cada ronda revisa **solo lo regenerado en la anterior**, así el gasto crece
+  con los fallos reales y no con el tamaño del video. Con `1` vuelves al
+  comportamiento anterior.
+- 🔍 LA AUDITORÍA GRATUITA YA COMPRUEBA LA UBICACIÓN: además de la cantidad y
+  el estado sin vida, ahora avisa si la narración sitúa una herida o marca en
+  una parte concreta (cuello, pecho, lomo, pata…) y el prompt la pone en otra
+  — o no la menciona. Con sinónimos en inglés, y sin falsos avisos cuando la
+  palabra no es anatómica («la cabeza del imperio»).
+- 🏺 EL TEXTO EN PANTALLA RESPETA LA LENGUA DE LA ESCENA: un papiro en arameo
+  dentro de un documental en español debe leerse **en arameo**, no en
+  español. El director indica esa lengua por escena (`image_text_lang`) y el
+  prompt exige su grafía real, **sin traducir ni transliterar**. Si no la
+  indica, manda el idioma del video, como hasta ahora. Y si no conoce la
+  grafía exacta, se le pide describir el objeto con escritura ilegible en vez
+  de inventar letras falsas.
+
+Batería nueva (`tests/test_v0_53_0.py`, 26 comprobaciones, con clips reales de
+ffmpeg y rondas de corrección simuladas).
+
 ## v0.52.0 — 2026-08-11
 Preguntaste si la fidelidad factual estaba «al 100%». **No lo estaba**, y al
 auditarla encontré un fallo que trabajaba EN CONTRA de ella.

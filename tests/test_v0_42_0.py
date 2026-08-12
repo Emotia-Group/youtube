@@ -358,9 +358,14 @@ except Exception as e:
     check("T13b schemas válidos para salida estructurada", False, str(e))
 check("T13c regla de CANTIDAD Y GEOMETRÍA",
       "CANTIDAD Y GEOMETRÍA" in sc.CREATIVE_RULES, "")
+# La regla del idioma cambió en la v0.53.0: antes se forzaba SIEMPRE el
+# idioma de la narración, y eso era un error (un papiro en arameo dentro de un
+# documental en español debe leerse en arameo). Lo que se sigue garantizando:
+# que NUNCA salga en inglés por defecto en un video que no lo es.
 check("T13d regla de TEXTO DENTRO DE LA IMAGEN",
       "TEXTO DENTRO DE LA IMAGEN" in sc.CREATIVE_RULES
-      and "IDIOMA DE LA NARRACIÓN" in sc.CREATIVE_RULES, "")
+      and "EL IDIOMA LO MANDA LA ESCENA" in sc.CREATIVE_RULES
+      and "jamás en inglés" in sc.CREATIVE_RULES, "")
 
 test_scenes = [
     {"id": 1, "narration": "hola mundo esta es una escena", "broll_type": "image",
@@ -506,7 +511,12 @@ qa_llm = FakeLLM({"broll_qa": [
          "prompt_corregido": "x"}]},
 ]})
 regen = []
-br._verify_factual(p4, qa_llm, {"providers": {"images": {}}},
+# fact_check_retries=1 fija el contrato que ESTA batería vigila (v0.42.0: UNA
+# corrección por escena). Desde la v0.53.0 el valor por defecto es 2 rondas y
+# eso lo cubre test_v0_53_0; aquí interesa que se regenere SOLO la escena
+# infiel, con su prompt corregido, y que el aviso final sea honesto.
+br._verify_factual(p4, qa_llm,
+                   {"providers": {"images": {"fact_check_retries": 1}}},
                    [scene_ok, scene_bad], broll_dir,
                    lambda s, pr, img: (regen.append(pr),
                                        write_jpg(img, (200, 200, 40))),

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.52.0 -->
+<!-- MANUAL_VERSION: 0.53.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -276,6 +276,7 @@ cierras la ventana negra, se detiene (y podrás reanudar).
 | `providers.images.model` | El que más pesa en la factura |
 | `providers.videogen.max_scenes` | 0 = sin video IA (el mayor ahorro) |
 | `providers.images.fact_check` | Control de calidad con visión (centavos, muy recomendable) |
+| `providers.images.fact_check_retries` | Rondas de corrección (2 por defecto). Cada ronda revisa SOLO lo regenerado; un clip de video infiel nunca se re-paga: baja a su imagen fija |
 | `video.elements_ai` | Ilustrar insertos sin foto libre. **Apagado por defecto** |
 | `providers.lipsync` + % de personaje | Se paga por SEGUNDO en pantalla |
 
@@ -315,6 +316,7 @@ global del 8 % de tu grabación.
 | Función | Dónde | Para qué |
 |---|---|---|
 | **Encuadre documental** | Automático | Las escenas delicadas (un animal sin vida, una batalla, una herida) salen con registro clínico y sobrio a la PRIMERA, sin que el filtro del generador las rechace |
+| **Texto en su lengua** | Automático | Si la escena muestra un papiro en arameo o una inscripción en latín, el texto se ve EN ESA lengua, no en la de tu narración |
 | **Auditoría de fidelidad** | Automático, gratis | Antes de generar, avisa si un prompt se dejó fuera un hecho de tu narración (la cantidad exacta o el estado sin vida) |
 | **Insertos documentales** | Automático | Foto real, cifra animada o mapa cuando se menciona algo |
 | **Mapas localizadores** | Automático | Pin animado sobre el lugar narrado |

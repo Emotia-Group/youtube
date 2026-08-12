@@ -61,6 +61,10 @@ providers:
     size: 1536x1024          # gpt-image-1 horizontal (16:9); solo aplica a openai
     safety_tolerance: 6      # FLUX 1(estricto)-6(permisivo): evita falsos NSFW
                              # en contenido histórico/bélico (solo aplica a FLUX)
+    fact_check_retries: 2    # rondas de corrección del control factual: cada
+                             # ronda revisa SOLO lo regenerado en la anterior,
+                             # así el gasto crece con los fallos reales. 1 =
+                             # una sola corrección (como hasta v0.52.0)
     fact_check: true         # CONTROL DE CALIDAD FACTUAL con visión: el director
                              # compara cada imagen generada con los hechos de su
                              # narración (vivo/muerto, especie, cantidades,

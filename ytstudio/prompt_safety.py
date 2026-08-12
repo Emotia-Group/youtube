@@ -224,6 +224,33 @@ _MUERTE_ES = ("muerto", "muerta", "muertos", "muertas", "sin vida", "cadaver",
 _MUERTE_EN = ("dead", "lifeless", "carcass", "carcasses", "deceased",
               "motionless", "remains")
 
+# UBICACIÓN EXACTA: si la narración sitúa una marca o herida en una parte
+# concreta del cuerpo, el prompt tiene que decirlo — «una herida en el cuello»
+# dibujada en el costado contradice lo narrado igual que un número equivocado.
+_PARTES: dict[str, tuple[str, ...]] = {
+    "cuello": ("neck", "throat"),
+    "garganta": ("throat", "neck"),
+    "pecho": ("chest", "breast"),
+    "torax": ("chest", "thorax"),
+    "espalda": ("back",),
+    "lomo": ("back", "loin"),
+    "cabeza": ("head", "skull"),
+    "craneo": ("skull", "head"),
+    "vientre": ("belly", "abdomen"),
+    "abdomen": ("abdomen", "belly"),
+    "costado": ("side", "flank"),
+    "flanco": ("flank", "side"),
+    "pata": ("leg", "paw", "hoof"),
+    "patas": ("legs", "paws", "hooves"),
+    "pierna": ("leg",),
+    "brazo": ("arm",),
+    "hombro": ("shoulder",),
+    "oreja": ("ear",),
+    "ojo": ("eye",),
+    "ubre": ("udder",),
+    "cola": ("tail",),
+}
+
 
 def _numeros_narrados(narracion: str) -> set[int]:
     """Cantidades CONCRETAS y pequeñas que afirma la narración (las que un
@@ -258,4 +285,17 @@ def auditar_fidelidad(narracion: str, prompt: str) -> list[str]:
     if any(m in _norm(narracion) for m in _MUERTE_ES) \
             and not any(m in p for m in _MUERTE_EN):
         faltan.append("el estado SIN VIDA que afirma la narración")
+
+    # Ubicación exacta: solo se exige cuando la narración habla de una marca,
+    # herida u orificio EN esa parte (mencionar «la cabeza del imperio» no es
+    # una ubicación anatómica).
+    n = _norm(narracion)
+    if any(w in n for w in ("herida", "heridas", "orificio", "orificios",
+                            "marca", "marcas", "mordedura", "corte", "lesion",
+                            "perforacion", "punzada")):
+        for parte, equivalentes in _PARTES.items():
+            if re.search(rf"\b{parte}\b", n) and not any(
+                    re.search(rf"\b{e}\b", p) for e in equivalentes):
+                faltan.append(f"la ubicación «{parte}» que afirma la narración")
+                break   # una basta para avisar; no se satura al creador
     return faltan
