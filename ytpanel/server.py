@@ -25,7 +25,8 @@ from pathlib import Path
 
 import base64
 
-from ytpanel import config, db, demo, google_api, jobs, sync, vault
+from ytpanel import (alerts, config, db, demo, google_api, jobs, reports, sync,
+                     vault)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -68,6 +69,7 @@ def _estado(conn) -> dict:
         "sync": {"running": SYNC["running"],
                  "lines": SYNC["lines"][-12:], "started": SYNC["started"]},
         "cola": db.cola_resumen(conn) | {"running": COLA["running"]},
+        "alertas": alerts.resumen(alerts.revisar(conn)),
     }
 
 
@@ -157,6 +159,36 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _csv(self, contenido: bytes, nombre: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition",
+                         f'attachment; filename="{nombre}"')
+        self.send_header("Content-Length", str(len(contenido)))
+        self.end_headers()
+        self.wfile.write(contenido)
+
+    def _canales(self, query: dict, conn) -> list[str]:
+        """El parámetro `canales` (ids separados por comas) o, si no viene,
+        TODOS los del panel. Se filtra contra los existentes: un id inventado
+        en la URL no debe llegar a la consulta."""
+        validos = {c["channel_id"] for c in db.list_channels(conn)}
+        crudo = (query.get("canales") or [""])[0]
+        if not crudo:
+            return sorted(validos)
+        pedidos = [c for c in crudo.split(",") if c in validos]
+        if not pedidos:
+            raise ApiError(400, "Ninguno de esos canales existe en el panel.")
+        return pedidos
+
+    @staticmethod
+    def _dias(query: dict, por_defecto: int = 28) -> int:
+        try:
+            return min(730, max(1, int((query.get("days")
+                                        or [por_defecto])[0])))
+        except ValueError:
+            raise ApiError(400, "El parámetro «days» debe ser un número.")
+
     def _redirect(self, where: str) -> None:
         self.send_response(302)
         self.send_header("Location", where)
@@ -227,6 +259,9 @@ class Handler(BaseHTTPRequestHandler):
                              path)
             if m:
                 return self._playlist_items(m.group(1), m.group(2))
+            if path.startswith("/api/reportes/") or path == "/api/alertas" \
+                    or path.startswith("/api/export/"):
+                return self._reportes(path, query)
             if path == "/api/oauth/start":
                 return self._oauth_start()
             if path == "/oauth/callback":
@@ -296,6 +331,52 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             traceback.print_exc()
             self._json({"error": "Error interno del panel."}, 500)
+
+    # --- Reportes, alertas y descargas (solo leen la base: cero cuota) --
+
+    def _reportes(self, path: str, query: dict) -> None:
+        conn = db.connect()
+        try:
+            if path == "/api/alertas":
+                lista = alerts.revisar(conn)
+                return self._json({"alertas": lista,
+                                   "resumen": alerts.resumen(lista)})
+            canales = self._canales(query, conn)
+            dias = self._dias(query)
+            hoy = time.strftime("%Y-%m-%d")
+            if path == "/api/reportes/comparativa":
+                metrica = (query.get("metrica") or ["views"])[0]
+                try:
+                    return self._json(reports.comparativa(
+                        conn, canales, dias, metrica))
+                except ValueError as e:
+                    raise ApiError(400, str(e))
+            if path == "/api/reportes/pivote":
+                agrupacion = (query.get("agrupacion") or ["canal"])[0]
+                try:
+                    return self._json(reports.pivote(
+                        conn, canales, dias, agrupacion))
+                except ValueError as e:
+                    raise ApiError(400, str(e))
+            if path == "/api/reportes/videos":
+                return self._json({"videos": reports.top_videos(
+                    conn, canales, 50)})
+            if path == "/api/export/pivote.csv":
+                agrupacion = (query.get("agrupacion") or ["canal"])[0]
+                try:
+                    datos = reports.csv_pivote(conn, canales, dias, agrupacion)
+                except ValueError as e:
+                    raise ApiError(400, str(e))
+                return self._csv(datos, f"resumen_{agrupacion}_{hoy}.csv")
+            if path == "/api/export/videos.csv":
+                return self._csv(reports.csv_videos(conn, canales),
+                                 f"videos_{hoy}.csv")
+            if path == "/api/export/diario.csv":
+                return self._csv(reports.csv_diario(conn, canales, dias),
+                                 f"detalle_diario_{dias}d_{hoy}.csv")
+            raise ApiError(404, "No encontrado.")
+        finally:
+            conn.close()
 
     # --- Edición (todo termina en la cola; nada escribe directo) --------
 

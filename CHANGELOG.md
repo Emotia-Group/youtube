@@ -9,6 +9,53 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.56.0 — 2026-08-13
+La Torre de Control aprende a **reportar** (Fase 3, la última del plan): el
+panel deja de esperar a que tú revises 20 canales y te dice qué mirar hoy.
+Todo se calcula sobre el histórico ya guardado: **cero cuota**.
+
+- 🔔 ALERTAS QUE TE BUSCAN A TI: en la portada, encima de las tarjetas. Ocho
+  reglas sobre tus propios datos — autorización caída, canal sin sincronizar,
+  caída de vistas o de ingresos (7 días contra los 7 anteriores), canal
+  apagado sin publicar, ediciones fallidas en la cola — y también las buenas:
+  vistas disparadas y **un video que va N veces sobre la mediana del canal**,
+  que es una oportunidad con fecha de caducidad. Cada alerta explica el
+  porqué y QUÉ HACER; los umbrales se ajustan en `panel.alertas`. El color
+  nunca es la única señal: siempre hay icono y palabra.
+- 📊 COMPARATIVA ENTRE CANALES: todos tus canales en un gráfico, con la
+  métrica que elijas (vistas, horas, suscriptores netos, ingresos, me gusta,
+  comentarios) y hasta un año de historia. Tres decisiones deliberadas:
+  **nunca dos ejes** (dos escalas hacen que cualquier par de líneas parezca
+  relacionado), **hueco donde no hay dato** en vez de una línea plana en cero
+  que mentiría, y pasados 8 canales se pintan los 7 mayores con el resto
+  sumado en «Otros» — con veinte líneas el gráfico deja de leerse y los
+  colores dejan de distinguirse para quien no ve bien el color.
+- 🧮 TABLA DINÁMICA: los mismos datos por canal, día, semana o mes, ordenable
+  por cualquier columna y con totales de la red al pie. Incluye **RPM**
+  (ingresos por cada mil vistas), que es la métrica para comparar canales de
+  tamaños distintos: dice cuánto RINDE la audiencia, no cuánta hay. Un «—» es
+  sin datos, no cero.
+- 🏆 MEJORES VIDEOS DE LA RED: ranking de todos los canales juntos, con tasa
+  de interacción para que no gane siempre el más visto. Dice en la propia
+  tabla que sus contadores son acumulados desde la publicación, no del
+  periodo elegido — es lo que entrega la API y callarlo sería engañoso.
+- ⬇ EXPORTAR A EXCEL: resumen agrupado, ranking de videos y **detalle día a
+  día** (la materia prima para tus propias tablas dinámicas). Se abren de un
+  doble clic: separador «;», decimales con coma y UTF-8 con BOM, que es lo
+  que espera el Excel en español.
+- 🕗 PARA LA RUTINA: `ytpanel alertas` las imprime en la terminal y solo
+  devuelve error si hay algo CRÍTICO (así el programador de tareas no da la
+  lata por una buena noticia), y `ytpanel exportar --que diario --dias 90`
+  escribe el CSV sin abrir el panel.
+- 🛠 Los bloques anidados de configuración ahora se FUSIONAN con los valores
+  por defecto: cambiar un umbral de alerta ya no deja los otros seis en cero
+  sin que nadie lo note.
+
+Batería nueva (`tests/test_v0_56_0.py`): alineación de series con huecos,
+folding a «Otros», agregación por semana y mes, RPM y distinción entre «sin
+datos» y cero, CSV con BOM y decimales con coma, y cada regla de alerta con
+su caso que dispara y su caso que NO dispara.
+
 ## v0.55.1 — 2026-08-13
 - ⬇ NUEVO `pull.bat`: traer la última versión en segundos, sin esperar a que
   pip revise las dependencias (que es lo que hace lento a `actualizar.bat`).

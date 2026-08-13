@@ -21,6 +21,12 @@
     --wash: rgba(168,55,43,0.07);
     --serie-vistas: #2a78d6;      /* paleta de datos validada (slot azul) */
     --serie-ingresos: #008300;    /* slot verde (igual en ambos temas) */
+    /* Paleta categórica en ORDEN FIJO: el color sigue al canal, nunca a su
+       posición en el ranking, y el orden está elegido para que dos series
+       vecinas se distingan incluso con daltonismo. Pasados 8 canales no se
+       inventan colores: el resto se suma en «Otros». */
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
     --delta-buena: #006300;
     --critico: #d03b3b;
     --aviso: #b07d10;
@@ -48,6 +54,10 @@
       --aviso: #d9a544;
       --bueno: #0ca30c;
       --chip-bg: #262624;
+      /* Mismos ocho tonos, re-escalonados para el fondo oscuro (no es una
+         inversión automática: cada paso se eligió contra este fondo). */
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
     }
   }
   :root[data-theme="dark"] {
@@ -70,6 +80,8 @@
     --aviso: #d9a544;
     --bueno: #0ca30c;
     --chip-bg: #262624;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
   }
 
   * { box-sizing: border-box; }
@@ -196,6 +208,9 @@
   .panel h2 .nota { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
   .chart { position: relative; }
   .chart svg { display: block; width: 100%; height: 190px; }
+  /* El gráfico multicanal SÍ lleva texto dentro del SVG (eje y etiquetas de
+     línea), así que no puede estirarse en horizontal: escala uniforme. */
+  .chart.multi svg { height: auto; }
   .sin-datos { color: var(--muted); font-size: 13px; padding: 12px 0; }
 
   .tabla-scroll { overflow-x: auto; }
@@ -297,6 +312,77 @@
   td .btn.mini + .btn.mini { margin-left: 6px; }
   #tabla-videos:not(.lote) .chk { display: none; }
   #tabla-videos .chk { width: 26px; }
+
+  /* ── Alertas (fase 3) ── */
+  .alertas { display: flex; flex-direction: column; gap: 8px; margin: 22px 0 6px; }
+  .alerta {
+    display: flex; gap: 11px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--muted); border-radius: 9px; padding: 10px 14px;
+  }
+  .alerta.critica { border-left-color: var(--critico); }
+  .alerta.aviso   { border-left-color: var(--aviso); }
+  .alerta.buena   { border-left-color: var(--bueno); }
+  .alerta .ico { font-size: 15px; line-height: 1.4; }
+  .alerta.critica .ico { color: var(--critico); }
+  .alerta.aviso .ico   { color: var(--aviso); }
+  .alerta.buena .ico   { color: var(--bueno); }
+  .alerta .cuerpo { flex: 1; min-width: 0; }
+  .alerta .tit { font-weight: 650; font-size: 14px; }
+  .alerta .sev {
+    font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+    font-weight: 700; margin-right: 7px;
+  }
+  .alerta.critica .sev { color: var(--critico); }
+  .alerta.aviso .sev   { color: var(--aviso); }
+  .alerta.buena .sev   { color: var(--delta-buena); }
+  .alerta .det { font-size: 13px; color: var(--ink-2); }
+  .alerta .acc { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .alertas-ok {
+    font-size: 13.5px; color: var(--ink-2); background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--bueno);
+    border-radius: 9px; padding: 10px 14px; margin: 22px 0 6px;
+  }
+  .alertas-mas { font-size: 12.5px; }
+
+  /* ── Reportes (fase 3) ── */
+  .controles {
+    display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .controles .campo label {
+    display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .controles select {
+    background: var(--surface); color: var(--ink); font: inherit;
+    border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px;
+  }
+  .chips-canales { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip-canal {
+    font-size: 12.5px; padding: 3px 10px; border-radius: 99px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip-canal[aria-pressed="true"] { color: var(--ink); background: var(--wash); }
+  .chip-canal .punto {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--baseline);
+    flex: none;
+  }
+  .leyenda {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
+    font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  .leyenda .item { display: inline-flex; align-items: center; gap: 7px; }
+  .leyenda .muestra { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .leyenda .tot { color: var(--muted); }
+  th.orden { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.orden:hover { color: var(--ink); }
+  th.orden .flecha { color: var(--accent); }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--baseline); }
+  .exportes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .exportes a { font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -306,6 +392,7 @@
     <span class="marca">🎛️ Torre de Control<span class="v" id="version"></span></span>
     <span class="estado-chips" id="estado-chips"></span>
     <span class="crece"></span>
+    <button class="btn" id="btn-reportes">📊 Reportes</button>
     <button class="btn" id="btn-sync" aria-label="Sincronizar todos los canales">⟳ Sincronizar</button>
     <button class="btn primario" id="btn-conectar">＋ Conectar canal</button>
   </div>
@@ -415,6 +502,140 @@ function lineChart(el, serie, { key, color, alto = 190, fmt = fInt, ejes = true 
   });
 }
 
+/* ── Gráfico multicanal (una métrica, varias series) ──
+   Reglas: una sola escala (jamás dos ejes), color fijo por serie según su
+   posición en la paleta, leyenda siempre presente y huecos donde no hay
+   dato — un día sin datos no es un día con cero vistas. */
+const COLORES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)",
+                 "var(--s5)", "var(--s6)", "var(--s7)", "var(--s8)"];
+
+/* El color sigue al CANAL, no a su puesto en el ranking: si asignáramos por
+   tamaño, cambiar de métrica o de periodo repintaría todo el gráfico y la
+   leyenda dejaría de servir como memoria. Se reparten por el orden estable
+   del panel, y «Otros» se queda siempre con el último tono. */
+function coloresPara(series) {
+  const orden = (OVERVIEW ? OVERVIEW.channels : []).map(c => c.channel_id);
+  const reales = series.filter(s => s.channel_id !== "__otros__")
+    .map(s => s.channel_id)
+    .sort((a, b) => orden.indexOf(a) - orden.indexOf(b));
+  const mapa = {};
+  reales.forEach((cid, i) => { mapa[cid] = COLORES[i % (COLORES.length - 1)]; });
+  mapa["__otros__"] = COLORES[COLORES.length - 1];
+  return mapa;
+}
+
+function chartMulti(el, datos, fmt) {
+  const { fechas, series } = datos;
+  const conDatos = series.filter(s => s.valores.some(v => v !== null));
+  el.classList.add("multi");
+  if (!fechas.length || !conDatos.length) {
+    el.innerHTML = '<p class="sin-datos">No hay datos en este periodo.</p>';
+    return;
+  }
+  const color = coloresPara(conDatos);
+  const COL = conDatos.map(s => color[s.channel_id]);
+  const W = 900, H = 280, padL = 58, padT = 14, padB = 40;
+  const padR = conDatos.length <= 4 ? 112 : 24;
+  const alto = H - padT - padB, ancho = W - padL - padR;
+  const todos = conDatos.flatMap(s => s.valores.filter(v => v !== null));
+  const maxY = Math.max(...todos, 1) * 1.08;
+  const x = i => padL + (fechas.length === 1 ? ancho / 2
+    : i / (fechas.length - 1) * ancho);
+  const y = v => H - padB - (v / maxY) * alto;
+
+  let grid = "";
+  for (let i = 1; i <= 3; i++) {
+    const gy = (padT + alto * (1 - i / 3)).toFixed(1);
+    grid += `<line x1="${padL}" x2="${W - padR}" y1="${gy}" y2="${gy}"
+             style="stroke:var(--grid)" stroke-width="1"/>
+             <text x="${padL - 8}" y="${+gy + 3.5}" text-anchor="end"
+             style="fill:var(--muted);font-size:10px">${fmt(maxY * i / 3, true)}</text>`;
+  }
+
+  // Etiqueta al final de la línea cuando son pocas series (más directo que
+  // ir y volver a la leyenda), separadas para que no se pisen entre sí.
+  const etiquetas = [];
+  if (conDatos.length <= 4) {
+    conDatos.forEach((s, i) => {
+      let ult = -1;
+      s.valores.forEach((v, j) => { if (v !== null) ult = j; });
+      if (ult >= 0) etiquetas.push({ i, x: x(ult), y: y(s.valores[ult]),
+                                     texto: s.titulo });
+    });
+    etiquetas.sort((a, b) => a.y - b.y);
+    for (let k = 1; k < etiquetas.length; k++) {
+      if (etiquetas[k].y - etiquetas[k - 1].y < 14)
+        etiquetas[k].y = etiquetas[k - 1].y + 14;
+    }
+  }
+
+  const lineas = conDatos.map((s, i) => {
+    let d = "", abierto = false;
+    s.valores.forEach((v, j) => {
+      if (v === null) { abierto = false; return; }
+      d += (abierto ? "L" : "M") + x(j).toFixed(1) + " " + y(v).toFixed(1) + " ";
+      abierto = true;
+    });
+    return `<path d="${d.trim()}" style="stroke:${COL[i]}" stroke-width="2"
+             fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+            <circle class="pt" data-s="${i}" r="3.6" style="fill:${COL[i]}"
+             visibility="hidden"/>`;
+  }).join("");
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}"
+      role="img" aria-label="Comparativa entre canales">
+    ${grid}
+    <line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"
+      style="stroke:var(--baseline)" stroke-width="1"/>
+    <line id="cruz" x1="0" x2="0" y1="${padT}" y2="${H - padB}"
+      style="stroke:var(--baseline)" stroke-width="1" stroke-dasharray="3 3"
+      visibility="hidden"/>
+    ${lineas}
+    ${etiquetas.map(e => `<text x="${(W - padR + 7).toFixed(1)}" y="${(e.y + 3.5).toFixed(1)}"
+        style="fill:${COL[e.i]};font-size:10.5px;font-weight:600">${esc(e.texto.slice(0, 15))}</text>`).join("")}
+    <text x="${padL}" y="${H - 14}" style="fill:var(--muted);font-size:10px">${fFecha(fechas[0])}</text>
+    <text x="${W - padR}" y="${H - 14}" text-anchor="end"
+      style="fill:var(--muted);font-size:10px">${fFecha(fechas[fechas.length - 1])}</text>
+  </svg>
+  <div class="leyenda">${conDatos.map((s, i) => `<span class="item">
+      <span class="muestra" style="background:${COL[i]}"></span>
+      ${esc(s.titulo)} <span class="tot">${s.total === null ? "sin datos" : fmt(s.total)}</span>
+    </span>`).join("")}</div>`;
+
+  const svg = el.querySelector("svg");
+  const cruz = svg.querySelector("#cruz");
+  const puntos = [...svg.querySelectorAll(".pt")];
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(fechas.length - 1,
+      Math.round((fx - padL) / ancho * (fechas.length - 1))));
+    cruz.setAttribute("x1", x(i)); cruz.setAttribute("x2", x(i));
+    cruz.setAttribute("visibility", "visible");
+    const lineasTip = [];
+    conDatos.forEach((s, k) => {
+      const v = s.valores[i];
+      const p = puntos[k];
+      if (v === null) { p.setAttribute("visibility", "hidden"); return; }
+      p.setAttribute("cx", x(i)); p.setAttribute("cy", y(v));
+      p.setAttribute("visibility", "visible");
+      lineasTip.push({ v, html: `<span style="color:${COL[k]}">■</span> ${esc(s.titulo)}: <b>${fmt(v)}</b>` });
+    });
+    lineasTip.sort((a, b) => b.v - a.v);
+    tooltip.style.display = "block";
+    tooltip.innerHTML = `<div style="margin-bottom:3px">${fFecha(fechas[i])}</div>`
+      + lineasTip.map(l => l.html).join("<br>");
+    tooltip.style.left = Math.min(window.innerWidth - tooltip.offsetWidth - 8,
+                                  ev.clientX + 14) + "px";
+    tooltip.style.top = Math.max(8, ev.clientY - tooltip.offsetHeight - 12) + "px";
+  });
+  svg.addEventListener("mouseleave", () => {
+    cruz.setAttribute("visibility", "hidden");
+    puntos.forEach(p => p.setAttribute("visibility", "hidden"));
+    tooltip.style.display = "none";
+  });
+}
+
 /* ── Estado y chips ── */
 function chipsEstado(e) {
   const chips = [];
@@ -445,7 +666,7 @@ function renderInicio() {
 
   const t = o.totals;
   const horas = t.watch_hours_28d;
-  let html = `<div class="kpis">
+  let html = alertasHTML() + `<div class="kpis">
     <div class="kpi"><div class="etiqueta">Canales</div>
       <div class="valor">${fInt(t.channels)}</div>
       <div class="sub">${t.connected === t.channels ? "todos conectados"
@@ -465,6 +686,10 @@ function renderInicio() {
   for (const c of o.channels) html += tarjetaHTML(c);
   html += `</div>${pieHTML()}`;
   app.innerHTML = html;
+  const mas = document.getElementById("alertas-mas");
+  if (mas) mas.addEventListener("click", ev => {
+    ev.preventDefault(); ALERTAS_TODAS = true; renderInicio();
+  });
 
   for (const c of o.channels) {
     const el = document.getElementById("spark-" + c.channel_id);
@@ -473,6 +698,33 @@ function renderInicio() {
   }
   document.querySelectorAll("[data-abrir]").forEach(b =>
     b.addEventListener("click", () => abrirDetalle(b.dataset.abrir)));
+}
+
+/* ── Alertas ── */
+let ALERTAS = [];
+let ALERTAS_TODAS = false;
+const TOPE_ALERTAS = 4;
+
+function alertasHTML() {
+  if (!ALERTAS.length) {
+    return `<div class="alertas-ok">✔ <b>Todo en orden</b> — ninguna
+      autorización caída, ningún canal apagado ni caídas bruscas de vistas o
+      ingresos en tus canales.</div>`;
+  }
+  const mostrar = ALERTAS_TODAS ? ALERTAS : ALERTAS.slice(0, TOPE_ALERTAS);
+  const restantes = ALERTAS.length - mostrar.length;
+  return `<div class="alertas">${mostrar.map(a => `
+    <div class="alerta ${esc(a.severidad)}">
+      <span class="ico" aria-hidden="true">${esc(a.icono)}</span>
+      <div class="cuerpo">
+        <div class="tit"><span class="sev">${esc(a.severidad_texto)}</span>${esc(a.titulo)}</div>
+        <div class="det">${esc(a.detalle)}</div>
+        <div class="acc">→ ${esc(a.accion)}</div>
+      </div>
+      ${a.channel_id ? `<button class="btn mini" data-abrir="${esc(a.channel_id)}">Ver canal</button>` : ""}
+    </div>`).join("")}
+    ${restantes > 0 ? `<a href="#" id="alertas-mas" class="alertas-mas">Ver las
+      ${restantes} alerta(s) restantes</a>` : ""}</div>`;
 }
 
 function estadoChipCanal(c) {
@@ -1028,6 +1280,219 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "Enter" && ev.target.closest && ev.target.closest("#chip-cola")) renderCola();
 });
 
+/* ── Reportes ── */
+const REP = { canales: null, dias: 28, metrica: "views", agrupacion: "canal",
+              orden: { col: "views", dir: -1 } };
+
+function fmtMetrica(m) {
+  if (m === "revenue")
+    return (v, corto) => corto ? "US$ " + fCompact(Math.round(v)) : fMoney(v);
+  if (m === "watch_hours")
+    return (v, corto) => corto ? fCompact(Math.round(v)) : fInt(Math.round(v)) + " h";
+  return (v, corto) => corto ? fCompact(Math.round(v)) : fInt(Math.round(v));
+}
+
+function qsReportes() {
+  const p = new URLSearchParams({ days: REP.dias });
+  if (REP.canales && REP.canales.size) p.set("canales", [...REP.canales].join(","));
+  return p;
+}
+
+function renderReportes() {
+  VISTA = { tipo: "reportes" };
+  const canales = OVERVIEW.channels;
+  if (!REP.canales) REP.canales = new Set(canales.map(c => c.channel_id));
+  app.innerHTML = `
+    <div class="volver"><a href="#" id="volver-rep">← Todos los canales</a></div>
+    <div class="det-cabeza"><h1>Reportes</h1>
+      <span class="soft" style="font-size:12.5px">Se calculan sobre tu histórico
+        local: no gastan cuota, pregunta lo que quieras</span></div>
+
+    <div class="controles">
+      <div class="campo"><label for="rep-metrica">Métrica</label>
+        <select id="rep-metrica">
+          <option value="views">Vistas</option>
+          <option value="watch_hours">Horas vistas</option>
+          <option value="subs_net">Suscriptores netos</option>
+          <option value="revenue">Ingresos</option>
+          <option value="likes">Me gusta</option>
+          <option value="comments">Comentarios</option>
+        </select></div>
+      <div class="campo"><label for="rep-dias">Periodo</label>
+        <select id="rep-dias">
+          <option value="7">7 días</option><option value="28">28 días</option>
+          <option value="90">90 días</option><option value="180">180 días</option>
+          <option value="365">1 año</option>
+        </select></div>
+      <div class="campo" style="flex:1;min-width:240px">
+        <label>Canales (clic para incluir o quitar)</label>
+        <div class="chips-canales" id="rep-chips">${canales.map(c => `
+          <button class="chip-canal" data-cid="${esc(c.channel_id)}"
+            aria-pressed="${REP.canales.has(c.channel_id)}">
+            <span class="punto"></span>${esc(c.title || c.channel_id)}</button>`).join("")}
+          <button class="chip-canal" id="rep-todos"><b>Todos</b></button>
+        </div></div>
+    </div>
+
+    <div class="panel"><h2 id="rep-titulo">Comparativa entre canales</h2>
+      <div class="chart" id="rep-chart"></div>
+      <p class="soft" id="rep-nota" style="font-size:12px;margin:10px 0 0"></p></div>
+
+    <div class="panel">
+      <div class="filas" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <h2 style="margin:0">Tabla dinámica</h2>
+        <select id="rep-agrupacion" style="background:var(--surface);color:var(--ink);
+          border:1px solid var(--border);border-radius:7px;padding:5px 9px;font:inherit">
+          <option value="canal">por canal</option>
+          <option value="dia">por día</option>
+          <option value="semana">por semana</option>
+          <option value="mes">por mes</option>
+        </select>
+        <span class="crece" style="flex:1"></span>
+        <span class="exportes"><a href="#" id="exp-pivote">⬇ Descargar CSV</a></span>
+      </div>
+      <div class="tabla-scroll" id="rep-pivote"></div></div>
+
+    <div class="panel">
+      <div class="filas" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <h2 style="margin:0">Mejores videos de la red
+          <span class="nota">acumulado desde su publicación, no del periodo</span></h2>
+        <span class="crece" style="flex:1"></span>
+        <span class="exportes">
+          <a href="#" id="exp-videos">⬇ Videos CSV</a>
+          <a href="#" id="exp-diario">⬇ Detalle diario CSV</a></span>
+      </div>
+      <div class="tabla-scroll" id="rep-videos"></div>
+      <p class="soft" style="font-size:12px;margin:10px 0 0">Los CSV se abren
+        de un doble clic en Excel (separador «;», decimales con coma, UTF-8).</p></div>`;
+
+  $("#rep-metrica").value = REP.metrica;
+  $("#rep-dias").value = String(REP.dias);
+  $("#rep-agrupacion").value = REP.agrupacion;
+  $("#volver-rep").addEventListener("click", ev => { ev.preventDefault(); cargar(); });
+  $("#rep-metrica").addEventListener("change", e => { REP.metrica = e.target.value; pintarReportes(); });
+  $("#rep-dias").addEventListener("change", e => { REP.dias = parseInt(e.target.value, 10); pintarReportes(); });
+  $("#rep-agrupacion").addEventListener("change", e => {
+    REP.agrupacion = e.target.value;
+    REP.orden = { col: REP.agrupacion === "canal" ? "views" : "clave",
+                  dir: REP.agrupacion === "canal" ? -1 : 1 };
+    pintarReportes();
+  });
+  $("#rep-chips").addEventListener("click", ev => {
+    const chip = ev.target.closest("[data-cid]");
+    if (chip) {
+      const cid = chip.dataset.cid;
+      REP.canales.has(cid) ? REP.canales.delete(cid) : REP.canales.add(cid);
+      if (!REP.canales.size) { REP.canales.add(cid); aviso("Deja al menos un canal."); }
+      chip.setAttribute("aria-pressed", REP.canales.has(cid));
+      pintarReportes();
+    } else if (ev.target.closest("#rep-todos")) {
+      REP.canales = new Set(canales.map(c => c.channel_id));
+      document.querySelectorAll("#rep-chips [data-cid]").forEach(
+        b => b.setAttribute("aria-pressed", "true"));
+      pintarReportes();
+    }
+  });
+  for (const [id, ruta] of [["exp-pivote", "pivote"], ["exp-videos", "videos"],
+                            ["exp-diario", "diario"]]) {
+    $("#" + id).addEventListener("click", ev => {
+      ev.preventDefault();
+      const p = qsReportes();
+      if (ruta === "pivote") p.set("agrupacion", REP.agrupacion);
+      window.location.href = `/api/export/${ruta}.csv?` + p.toString();
+    });
+  }
+  pintarReportes();
+}
+
+async function pintarReportes() {
+  const fmt = fmtMetrica(REP.metrica);
+  const p = qsReportes();
+  p.set("metrica", REP.metrica);
+  const comp = await (await fetch("/api/reportes/comparativa?" + p)).json();
+  $("#rep-titulo").textContent = `${comp.etiqueta} por canal`;
+  chartMulti($("#rep-chart"), comp, fmt);
+  $("#rep-nota").textContent = comp.agrupados
+    ? `Se pintan los 7 canales con más ${comp.etiqueta.toLowerCase()}; los otros `
+      + `${comp.agrupados} van sumados en «Otros» (más de 8 líneas no se distinguen).`
+    : "Los tramos sin línea son días sin datos sincronizados, que no es lo mismo que cero.";
+
+  // El color del punto de cada chip = el de su línea, para leer el gráfico
+  // sin ir y volver a la leyenda.
+  document.querySelectorAll("#rep-chips [data-cid] .punto").forEach(
+    d => { d.style.background = "var(--baseline)"; });
+  const mapaColor = coloresPara(comp.series);
+  comp.series.forEach(s => {
+    const chip = document.querySelector(`#rep-chips [data-cid="${CSS.escape(s.channel_id)}"] .punto`);
+    if (chip) chip.style.background = mapaColor[s.channel_id];
+  });
+
+  const pv = qsReportes();
+  pv.set("agrupacion", REP.agrupacion);
+  const piv = await (await fetch("/api/reportes/pivote?" + pv)).json();
+  pintarPivote(piv);
+
+  const vids = await (await fetch("/api/reportes/videos?" + qsReportes())).json();
+  $("#rep-videos").innerHTML = `<table>
+    <thead><tr><th>Video</th><th>Canal</th><th>Publicado</th>
+      <th class="num">Vistas</th><th class="num">Me gusta</th>
+      <th class="num">Comentarios</th><th class="num">Interacción</th></tr></thead>
+    <tbody>${vids.videos.map(v => `<tr>
+      <td><span class="tit" style="display:inline-block;max-width:38ch;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap">${esc(v.title)}</span></td>
+      <td>${esc(v.canal)}</td><td>${fFecha(v.published_at)}</td>
+      <td class="num">${fInt(v.views)}</td><td class="num">${fInt(v.likes)}</td>
+      <td class="num">${fInt(v.comments)}</td>
+      <td class="num">${v.interaccion.toLocaleString("es-ES", { minimumFractionDigits: 2 })} %</td>
+    </tr>`).join("") || `<tr><td colspan="7" class="sin-datos">Sin videos sincronizados.</td></tr>`}
+    </tbody></table>`;
+}
+
+const COLS_PIVOTE = [
+  ["etiqueta", "Grupo", false], ["views", "Vistas", true],
+  ["watch_hours", "Horas vistas", true], ["subs_net", "Subs netos", true],
+  ["likes", "Me gusta", true], ["comments", "Comentarios", true],
+  ["revenue", "Ingresos", true], ["rpm", "RPM", true],
+];
+
+function pintarPivote(piv) {
+  const filas = [...piv.filas].sort((a, b) => {
+    const col = REP.orden.col === "clave" ? "clave" : REP.orden.col;
+    const x = a[col], y = b[col];
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;      // «sin datos» siempre al final
+    if (y === null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * REP.orden.dir;
+  });
+  const celda = (f, c) => {
+    if (c === "etiqueta") return esc(f.etiqueta);
+    if (f[c] === null) return `<span class="soft">—</span>`;
+    if (c === "revenue") return fMoney(f[c]);
+    if (c === "rpm") return "US$ " + f[c].toLocaleString("es-ES", { minimumFractionDigits: 2 });
+    if (c === "watch_hours") return f[c].toLocaleString("es-ES", { maximumFractionDigits: 1 });
+    return fInt(f[c]);
+  };
+  $("#rep-pivote").innerHTML = `<table>
+    <thead><tr>${COLS_PIVOTE.map(([c, t, num]) => `
+      <th class="orden ${num ? "num" : ""}" data-col="${c}">${t}${
+        REP.orden.col === c ? ` <span class="flecha">${REP.orden.dir < 0 ? "▼" : "▲"}</span>` : ""}</th>`).join("")}</tr></thead>
+    <tbody>${filas.map(f => `<tr>${COLS_PIVOTE.map(([c, , num]) =>
+        `<td class="${num ? "num" : ""}">${celda(f, c)}</td>`).join("")}</tr>`).join("")
+      || `<tr><td colspan="8" class="sin-datos">Sin datos en este periodo.</td></tr>`}
+      ${filas.length ? `<tr class="total">${COLS_PIVOTE.map(([c, , num]) =>
+        `<td class="${num ? "num" : ""}">${celda(piv.total, c)}</td>`).join("")}</tr>` : ""}
+    </tbody></table>
+    <p class="soft" style="font-size:12px;margin:8px 0 0">Del ${fFecha(piv.desde)}
+      al ${fFecha(piv.hasta)} · RPM = ingresos por cada mil vistas · «—» es
+      sin datos (canal fuera del Programa de Socios), no cero.</p>`;
+  $("#rep-pivote").querySelectorAll("th.orden").forEach(th =>
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      REP.orden = { col, dir: REP.orden.col === col ? -REP.orden.dir : -1 };
+      pintarPivote(piv);
+    }));
+}
+
 /* ── Acciones ── */
 async function conectar() {
   const r = await fetch("/api/oauth/start");
@@ -1081,8 +1546,11 @@ function aviso(texto, ms = 4000) {
 
 /* ── Carga ── */
 async function cargar(mantenerVista = false) {
-  const r = await fetch("/api/overview");
+  const [r, ra] = await Promise.all([fetch("/api/overview"),
+                                     fetch("/api/alertas")]);
   OVERVIEW = await r.json();
+  ALERTAS = (await ra.json()).alertas || [];
+  ALERTAS_TODAS = false;
   if (OVERVIEW.estado.sync.running) vigilarSync();
   if (mantenerVista && VISTA.tipo === "detalle"
       && OVERVIEW.channels.some(c => c.channel_id === VISTA.canal)) {
@@ -1102,6 +1570,13 @@ app.addEventListener("click", ev => {
 
 $("#btn-conectar").addEventListener("click", conectar);
 $("#btn-sync").addEventListener("click", sincronizar);
+$("#btn-reportes").addEventListener("click", () => {
+  if (!OVERVIEW || !OVERVIEW.channels.length) {
+    aviso("Conecta un canal (o carga la demo) para tener algo que comparar.");
+    return;
+  }
+  renderReportes();
+});
 
 const params = new URLSearchParams(location.search);
 if (params.get("conectado")) {

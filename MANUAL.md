@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.55.1 -->
+<!-- MANUAL_VERSION: 0.56.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -499,3 +499,61 @@ etiquetas), y la edición en lote se calcula en el servidor sobre esos datos —
 lo encolado es exactamente lo que la vista previa enseñó. Desde la terminal:
 `py -m ytpanel cola` (ver) y `py -m ytpanel cola --procesar` (ejecutar, ideal
 junto al sync programado).
+
+### 13.6 Reportes y alertas (fase 3)
+
+Botón **📊 Reportes** en la cabecera. Todo lo que hay ahí se calcula sobre el
+histórico que ya tienes guardado: **no gasta cuota**, así que puedes preguntar
+lo que quieras las veces que quieras.
+
+**Comparativa entre canales.** Eliges una métrica (vistas, horas vistas,
+suscriptores netos, ingresos, me gusta o comentarios) y un periodo, y ves
+todos los canales en el mismo gráfico. Clic en un canal de la fila de arriba
+para incluirlo o quitarlo. Dos detalles pensados para que no te engañe:
+
+- **Nunca hay dos ejes.** Comparar vistas e ingresos en un mismo gráfico con
+  dos escalas hace que cualquier par de líneas parezca relacionado. Aquí se
+  ve una métrica a la vez.
+- **Un hueco en la línea es «no hay dato», no «cero»**. Un canal que aún no
+  existía, o que no has sincronizado tan atrás, deja hueco en vez de mentir
+  con una línea plana en cero.
+- Pasados 8 canales se pintan los 7 mayores y el resto se suma en «Otros»:
+  con veinte líneas de colores el gráfico deja de ser legible (y los colores
+  dejan de distinguirse para quien no ve bien el color).
+
+**Tabla dinámica.** Los mismos datos agrupados **por canal, día, semana o
+mes**, con totales de la red al pie. Clic en cualquier encabezado para
+ordenar. Incluye el **RPM** (ingresos por cada mil vistas), que es *la*
+métrica para comparar canales de tamaños distintos: dice cuánto rinde la
+audiencia, no cuánta hay. Un «—» significa sin datos (canal fuera del
+Programa de Socios), que no es lo mismo que cero.
+
+**Mejores videos de la red**: ranking de todos tus canales juntos. Ojo, sus
+contadores son **acumulados desde que se publicó cada video**, no del periodo
+elegido — es lo que entrega la API, y por eso está dicho en la propia tabla.
+
+**Exportar a Excel.** Tres CSV: el resumen agrupado, el ranking de videos y el
+**detalle día a día** (la materia prima para armar tus propias tablas
+dinámicas en Excel). Se abren de un doble clic: separador «;», decimales con
+coma y UTF-8 con BOM, que es lo que espera el Excel en español.
+
+**Alertas.** En la portada, encima de las tarjetas, el panel te dice qué
+merece tu atención hoy en vez de obligarte a revisar 20 canales:
+
+| Alerta | Cuándo salta |
+|---|---|
+| ⛔ Hay que reconectar el canal | La autorización cayó: no entran métricas ni ediciones |
+| ⚠ N días sin sincronizar | Los números que ves están congelados |
+| ⚠ Las vistas cayeron X % | 7 días contra los 7 anteriores |
+| ⚠ Los ingresos cayeron X % | Igual, con los ingresos estimados |
+| ⚠ N días sin publicar | El canal se apagó y el alcance se resiente |
+| ⚠ Ediciones fallaron en la cola | Esos cambios NO están en YouTube |
+| ▲ Las vistas subieron X % | Para que sepas qué está funcionando |
+| ▲ Un video va N× sobre su media | Oportunidad con fecha de caducidad |
+
+Los umbrales se ajustan en `config.yaml`, bloque `panel.alertas` (por ejemplo
+`caida_vistas_pct` o `dias_sin_publicar`). Y desde la terminal,
+`py -m ytpanel alertas` las imprime — pensado para programarlo por la mañana:
+solo devuelve error si hay algo **crítico**, así no te da la lata por una
+buena noticia. Para exportar sin abrir el panel:
+`py -m ytpanel exportar --que diario --dias 90`.

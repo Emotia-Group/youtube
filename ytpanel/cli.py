@@ -4,17 +4,22 @@
   python -m ytpanel sync                # sincronizar todos los canales
   python -m ytpanel sync --canal UC...  # solo uno
   python -m ytpanel canales             # lista y estado
+  python -m ytpanel cola [--procesar]   # ediciones pendientes
+  python -m ytpanel alertas             # avisos automáticos
+  python -m ytpanel exportar --que ...  # CSV para Excel
   python -m ytpanel demo [--quitar]     # datos de demostración
 
-`sync` está pensado para programarlo (Programador de tareas de Windows o
-cron) y tener la sincronización nocturna sin dejar el panel abierto.
+`sync`, `cola --procesar` y `alertas` están pensados para programarlos
+(Programador de tareas de Windows o cron) y tener la rutina nocturna hecha
+sin dejar el panel abierto.
 """
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from ytpanel import config, db, demo, jobs, sync
+from ytpanel import alerts, config, db, demo, jobs, reports, sync
 
 
 def cmd_ui(args) -> None:
@@ -86,6 +91,52 @@ def cmd_cola(args) -> None:
         conn.close()
 
 
+def cmd_alertas(args) -> None:
+    conn = db.connect()
+    try:
+        lista = alerts.revisar(conn)
+    finally:
+        conn.close()
+    if not lista:
+        print("✔ Todo en orden: ninguna alerta activa.")
+        return
+    r = alerts.resumen(lista)
+    print(f"{r['total']} alerta(s): {r['criticas']} crítica(s), "
+          f"{r['avisos']} aviso(s), {r['buenas']} buena(s) señal(es)\n")
+    for a in lista:
+        print(f"  {a['icono']} [{a['severidad_texto']}] {a['titulo']}")
+        print(f"      {a['detalle']}")
+        print(f"      → {a['accion']}")
+    # Salida distinta de cero solo si hay algo GRAVE: así el programador de
+    # tareas puede avisarte sin dar la lata por una buena noticia.
+    if r["criticas"]:
+        sys.exit(1)
+
+
+def cmd_exportar(args) -> None:
+    conn = db.connect()
+    try:
+        canales = [c["channel_id"] for c in db.list_channels(conn)]
+        if not canales:
+            print("No hay canales que exportar.")
+            return
+        if args.que == "pivote":
+            datos = reports.csv_pivote(conn, canales, args.dias, args.agrupacion)
+            defecto = f"resumen_{args.agrupacion}.csv"
+        elif args.que == "videos":
+            datos = reports.csv_videos(conn, canales)
+            defecto = "videos.csv"
+        else:
+            datos = reports.csv_diario(conn, canales, args.dias)
+            defecto = f"detalle_diario_{args.dias}d.csv"
+    finally:
+        conn.close()
+    salida = Path(args.salida or defecto)
+    salida.write_bytes(datos)
+    print(f"Escrito: {salida.resolve()}  ({len(datos):,} bytes)"
+          .replace(",", "."))
+
+
 def cmd_demo(args) -> None:
     conn = db.connect()
     try:
@@ -128,6 +179,19 @@ def main() -> None:
     p_cola.add_argument("--procesar", action="store_true",
                         help="Ejecutar los trabajos pendientes ahora")
     p_cola.set_defaults(func=cmd_cola)
+
+    p_al = sub.add_parser("alertas", help="Ver las alertas activas (para cron)")
+    p_al.set_defaults(func=cmd_alertas)
+
+    p_exp = sub.add_parser("exportar", help="Escribir un CSV para Excel")
+    p_exp.add_argument("--que", choices=("pivote", "videos", "diario"),
+                       default="pivote")
+    p_exp.add_argument("--dias", type=int, default=28)
+    p_exp.add_argument("--agrupacion",
+                       choices=("canal", "dia", "semana", "mes"),
+                       default="canal")
+    p_exp.add_argument("--salida", help="Ruta del archivo (opcional)")
+    p_exp.set_defaults(func=cmd_exportar)
 
     p_demo = sub.add_parser("demo", help="Cargar o quitar datos de demostración")
     p_demo.add_argument("--quitar", action="store_true")

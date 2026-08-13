@@ -7,6 +7,7 @@ a propósito: contiene los tokens de acceso a tus canales.
 """
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 
@@ -23,6 +24,15 @@ DEFAULTS = {
     "quota_reserve": 500,      # unidades que la cola de ediciones NUNCA toca,
                                # reservadas para el sync nocturno de métricas
     "currency": "USD",         # moneda de los ingresos estimados
+    "alertas": {               # umbrales de los avisos automáticos
+        "caida_vistas_pct": 25,      # % de caída (7 días vs. 7 anteriores)
+        "subida_vistas_pct": 40,     # % de subida que merece celebrarse
+        "caida_ingresos_pct": 25,
+        "dias_sin_publicar": 21,
+        "dias_sin_sincronizar": 3,
+        "video_despunta_x": 2.0,     # veces la mediana del canal
+        "minimo_vistas": 100,        # por debajo, los % son ruido
+    },
 }
 
 
@@ -58,7 +68,7 @@ def load_panel_config() -> dict:
     orden; el local manda). El .env se carga igual que en ytstudio."""
     from ytstudio.config import load_dotenv
     load_dotenv()
-    cfg = dict(DEFAULTS)
+    cfg = copy.deepcopy(DEFAULTS)
     for name in ("config.yaml", "config.local.yaml"):
         path = ROOT / name
         if not path.exists():
@@ -69,5 +79,14 @@ def load_panel_config() -> dict:
             continue  # un YAML roto no debe tumbar el panel; la UI ya avisa de config
         block = data.get("panel") or {}
         if isinstance(block, dict):
-            cfg.update({k: v for k, v in block.items() if v is not None})
+            for clave, valor in block.items():
+                if valor is None:
+                    continue
+                # Los bloques anidados (alertas) se FUSIONAN, no se
+                # reemplazan: cambiar un umbral no debe borrar los otros
+                # seis y dejarlos en cero sin que nadie lo note.
+                if isinstance(valor, dict) and isinstance(cfg.get(clave), dict):
+                    cfg[clave] = cfg[clave] | valor
+                else:
+                    cfg[clave] = valor
     return cfg

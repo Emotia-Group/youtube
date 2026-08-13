@@ -207,3 +207,11 @@ panel:
   quota_reserve: 500       # unidades que la cola de ediciones NUNCA gasta:
                            # quedan reservadas para el sync nocturno de métricas
   currency: USD            # moneda de los ingresos estimados
+  alertas:                 # umbrales de los avisos automáticos del panel
+    caida_vistas_pct: 25       # % de caída (7 días contra los 7 anteriores)
+    subida_vistas_pct: 40      # % de subida que merece que te avisen
+    caida_ingresos_pct: 25
+    dias_sin_publicar: 21      # canal apagado
+    dias_sin_sincronizar: 3
+    video_despunta_x: 2.0      # veces la mediana de vistas del canal
+    minimo_vistas: 100         # por debajo, los porcentajes son ruido

@@ -258,7 +258,14 @@ Qué hace esta fase:
   ejecuta lo que cabe hoy, deja el resto en espera con su motivo y reintenta
   sola los fallos pasajeros (`python -m ytpanel cola`).
 
+- **Reportes y alertas** (fase 3): comparativa de todos los canales en un
+  gráfico, tabla dinámica por canal/día/semana/mes con **RPM** y totales,
+  ranking de videos de la red y exportación a Excel (CSV listo para abrir de
+  un doble clic). Y **alertas automáticas** en la portada: autorización
+  caída, canal apagado, caídas de vistas o ingresos, y también las buenas
+  señales (un video que despunta sobre la media del canal). Desde la
+  terminal: `python -m ytpanel alertas` y `python -m ytpanel exportar`.
+
 El paso a paso de Google Cloud (proyecto, APIs, pantalla de consentimiento y
 por qué los tokens caducan a los 7 días mientras la app está «en pruebas»)
-está en el **MANUAL.md, capítulo 13**. Fase siguiente del plan: reportes
-exportables, comparativas entre canales y alertas.
+está en el **MANUAL.md, capítulo 13**.
