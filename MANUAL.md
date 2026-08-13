@@ -417,6 +417,13 @@ Se abre con doble clic en **`panel.bat`** (o `python -m ytpanel ui`) en
 > privacidad y un video demo, tarda de días a semanas). Con la app verificada,
 > los tokens duran hasta que tú los revoques.
 
+> 💡 **Si Google responde «Error 400: redirect_uri_mismatch»** al conectar un
+> canal: crea la credencial como tipo **«Aplicación web»** en vez de «App de
+> escritorio» y añade en **URIs de redireccionamiento autorizados** exactamente
+> `http://localhost:8766/oauth/callback` (si cambiaste el puerto en
+> `config.yaml`, usa ese número). Descarga ese JSON como `client_secrets.json`:
+> el panel acepta los dos formatos sin tocar nada más.
+
 ### 13.2 Conectar los canales
 
 Botón **«＋ Conectar canal»** → eliges la cuenta de Google → si la cuenta
