@@ -23,7 +23,9 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from ytpanel import config, db, demo, google_api, sync, vault
+import base64
+
+from ytpanel import config, db, demo, google_api, jobs, sync, vault
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -34,6 +36,8 @@ _OAUTH_TTL = 600
 
 # Una sincronización a la vez; la UI hace polling de las líneas del log.
 SYNC = {"running": False, "lines": [], "result": None, "started": ""}
+# La cola de ediciones corre aparte del sync (y también de una en una).
+COLA = {"running": False, "lines": []}
 _LOCK = threading.Lock()
 
 
@@ -63,6 +67,7 @@ def _estado(conn) -> dict:
         "quota_budget": int(cfg["quota_budget"]),
         "sync": {"running": SYNC["running"],
                  "lines": SYNC["lines"][-12:], "started": SYNC["started"]},
+        "cola": db.cola_resumen(conn) | {"running": COLA["running"]},
     }
 
 
@@ -97,6 +102,35 @@ def start_sync(channel_id: str | None = None) -> bool:
                     started=db.now_str())
     threading.Thread(target=_sync_worker, args=(channel_id,),
                      daemon=True).start()
+    return True
+
+
+def _cola_worker() -> None:
+    conn = db.connect()
+    try:
+        def log(msg: str) -> None:
+            with _LOCK:
+                COLA["lines"].append(msg)
+        jobs.procesar_cola(conn, log=log)
+    except Exception:
+        with _LOCK:
+            COLA["lines"].append("✖ Error inesperado procesando la cola:")
+            COLA["lines"].extend(traceback.format_exc().splitlines()[-3:])
+    finally:
+        conn.close()
+        with _LOCK:
+            COLA["running"] = False
+
+
+def start_cola() -> bool:
+    """Arranca el procesado de la cola en segundo plano (si no está ya).
+    Se dispara solo tras cada encolado: con cuota disponible la edición es
+    casi inmediata; sin cuota, queda en espera con su motivo."""
+    with _LOCK:
+        if COLA["running"]:
+            return False
+        COLA.update(running=True, lines=[])
+    threading.Thread(target=_cola_worker, daemon=True).start()
     return True
 
 
@@ -174,6 +208,25 @@ class Handler(BaseHTTPRequestHandler):
                                        "lines": SYNC["lines"][-30:],
                                        "result": SYNC["result"],
                                        "started": SYNC["started"]})
+            if path == "/api/jobs":
+                estado = (query.get("estado") or [None])[0]
+                conn = db.connect()
+                try:
+                    lista = db.list_jobs(conn, estado)
+                    canales = {c["channel_id"]: c["title"]
+                               for c in db.list_channels(conn)}
+                finally:
+                    conn.close()
+                for j in lista:
+                    j["canal"] = canales.get(j["channel_id"], j["channel_id"])
+                    j["etiqueta"] = jobs.ETIQUETAS.get(j["kind"], j["kind"])
+                with _LOCK:
+                    corriendo = COLA["running"]
+                return self._json({"jobs": lista, "running": corriendo})
+            m = re.fullmatch(r"/api/channel/([\w-]+)/playlist/([\w-]+)/items",
+                             path)
+            if m:
+                return self._playlist_items(m.group(1), m.group(2))
             if path == "/api/oauth/start":
                 return self._oauth_start()
             if path == "/oauth/callback":
@@ -223,12 +276,180 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     conn.close()
                 return self._json({"desconectado": True})
+            if path == "/api/edits":
+                return self._encolar_edicion(self._body())
+            if path == "/api/edits/lote":
+                return self._encolar_lote(self._body())
+            if path == "/api/playlists":
+                return self._crear_playlist(self._body())
+            if path in ("/api/playlist/add", "/api/playlist/remove",
+                        "/api/playlist/move"):
+                return self._playlist_op(path.rsplit("/", 1)[1], self._body())
+            m = re.fullmatch(r"/api/jobs/(\d+)/(reintentar|cancelar)", path)
+            if m:
+                return self._job_accion(int(m.group(1)), m.group(2))
+            if path == "/api/cola/procesar":
+                return self._json({"started": start_cola(), "running": True})
             raise ApiError(404, "No encontrado.")
         except ApiError as e:
             self._json({"error": str(e)}, e.status)
         except Exception:
             traceback.print_exc()
             self._json({"error": "Error interno del panel."}, 500)
+
+    # --- Edición (todo termina en la cola; nada escribe directo) --------
+
+    def _encolar_edicion(self, body: dict) -> None:
+        channel_id = body.get("channel_id") or ""
+        video_id = body.get("video_id") or ""
+        if not channel_id or not video_id:
+            raise ApiError(400, "Faltan channel_id o video_id.")
+        cambios = {k: body[k] for k in ("title", "description", "tags")
+                   if k in body}
+        imagen = None
+        if body.get("image_b64"):
+            mime = body.get("image_mime", "")
+            if mime not in ("image/jpeg", "image/png"):
+                raise ApiError(400, "La miniatura debe ser JPG o PNG.")
+            try:
+                contenido = base64.b64decode(body["image_b64"], validate=True)
+            except (ValueError, TypeError):
+                raise ApiError(400, "La imagen llegó corrupta; vuelve a elegirla.")
+            if len(contenido) > 2 * 1024 * 1024:
+                raise ApiError(400, f"La miniatura pesa "
+                               f"{len(contenido) / 1024 / 1024:.1f} MB; "
+                               "YouTube admite 2 MB.")
+            imagen = (contenido, mime)
+        if not cambios and not imagen:
+            raise ApiError(400, "No hay ningún cambio que aplicar.")
+        conn = db.connect()
+        try:
+            creados = jobs.encolar_edicion(conn, channel_id, video_id,
+                                           cambios, imagen)
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        finally:
+            conn.close()
+        start_cola()
+        return self._json({"jobs": creados})
+
+    def _encolar_lote(self, body: dict) -> None:
+        conn = db.connect()
+        try:
+            resultado = jobs.encolar_lote(
+                conn, body.get("channel_id") or "",
+                body.get("video_ids") or [],
+                body.get("operacion") or "", body.get("params") or {})
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        finally:
+            conn.close()
+        if resultado["creados"]:
+            start_cola()
+        return self._json(resultado)
+
+    def _crear_playlist(self, body: dict) -> None:
+        titulo = (body.get("titulo") or "").strip()
+        if not titulo:
+            raise ApiError(400, "La playlist necesita un título.")
+        privacidad = body.get("privacidad", "public")
+        if privacidad not in ("public", "unlisted", "private"):
+            raise ApiError(400, "Privacidad inválida.")
+        conn = db.connect()
+        try:
+            job_id = db.enqueue_job(
+                conn, body.get("channel_id") or "", "playlist_create",
+                {"titulo": titulo, "descripcion": body.get("descripcion", ""),
+                 "privacidad": privacidad}, jobs.COSTOS["playlist_create"])
+        finally:
+            conn.close()
+        start_cola()
+        return self._json({"jobs": [job_id]})
+
+    def _playlist_op(self, accion: str, body: dict) -> None:
+        channel_id = body.get("channel_id") or ""
+        kind = {"add": "playlist_add", "remove": "playlist_remove",
+                "move": "playlist_move"}[accion]
+        requeridos = {"playlist_add": ("playlist_id", "video_id"),
+                      "playlist_remove": ("item_id",),
+                      "playlist_move": ("item_id", "playlist_id", "video_id",
+                                        "position")}[kind]
+        payload = {}
+        for campo in requeridos:
+            if body.get(campo) in (None, ""):
+                raise ApiError(400, f"Falta {campo}.")
+            payload[campo] = body[campo]
+        conn = db.connect()
+        try:
+            job_id = db.enqueue_job(conn, channel_id, kind, payload,
+                                    jobs.COSTOS[kind])
+        finally:
+            conn.close()
+        start_cola()
+        return self._json({"jobs": [job_id]})
+
+    def _job_accion(self, job_id: int, accion: str) -> None:
+        conn = db.connect()
+        try:
+            fila = conn.execute("SELECT status FROM jobs WHERE id=?",
+                                (job_id,)).fetchone()
+            if not fila:
+                raise ApiError(404, "Ese trabajo no existe.")
+            if accion == "reintentar":
+                if fila["status"] not in ("error", "cancelado"):
+                    raise ApiError(400, "Solo se reintentan trabajos en error.")
+                db.update_job(conn, job_id, status="pendiente", attempts=0,
+                              not_before="", nota="")
+            else:
+                if fila["status"] not in ("pendiente", "error"):
+                    raise ApiError(400, "Ese trabajo ya no se puede cancelar.")
+                db.update_job(conn, job_id, status="cancelado")
+        finally:
+            conn.close()
+        if accion == "reintentar":
+            start_cola()
+        return self._json({"ok": True})
+
+    def _playlist_items(self, channel_id: str, playlist_id: str) -> None:
+        """Los items se leen EN VIVO (1 unidad): una playlist cambia desde
+        muchos sitios y un editor sobre una copia vieja reordena a ciegas."""
+        conn = db.connect()
+        try:
+            blob = db.get_token_blob(conn, channel_id)
+            if blob is None:
+                raise ApiError(400, "El canal no tiene token (¿es demo?).")
+            token = vault.unseal(blob)
+            client = google_api.load_client_secrets()
+
+            def persist(tok: dict) -> None:
+                db.save_token(conn, channel_id, vault.seal(tok))
+
+            api = google_api.YouTubeAPI(client, token,
+                                        on_token_refresh=persist)
+            try:
+                resp = api.playlist_items_full(playlist_id)
+            except google_api.ApiHttpError as e:
+                raise ApiError(502, f"YouTube respondió: {e.message}")
+            db.record_sync(conn, channel_id, started_at=db.now_str(), ok=True,
+                           detail="cola: lectura de playlist",
+                           quota_units=api.quota_units)
+        except RuntimeError as e:
+            raise ApiError(400, str(e))
+        finally:
+            conn.close()
+        items = []
+        for it in resp.get("items") or []:
+            sn = it.get("snippet") or {}
+            items.append({
+                "item_id": it.get("id", ""),
+                "video_id": ((sn.get("resourceId") or {}).get("videoId")
+                             or (it.get("contentDetails") or {})
+                             .get("videoId", "")),
+                "title": sn.get("title", ""),
+                "position": sn.get("position", 0),
+            })
+        items.sort(key=lambda x: x["position"])
+        return self._json({"items": items})
 
     # --- OAuth ----------------------------------------------------------
 

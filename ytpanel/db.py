@@ -15,13 +15,14 @@ Tablas:
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from pathlib import Path
 
 from ytpanel import config
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS channels (
@@ -68,9 +69,35 @@ CREATE TABLE IF NOT EXISTS videos (
   privacy          TEXT NOT NULL DEFAULT '',
   views            INTEGER NOT NULL DEFAULT 0,
   likes            INTEGER NOT NULL DEFAULT 0,
-  comments         INTEGER NOT NULL DEFAULT 0
+  comments         INTEGER NOT NULL DEFAULT 0,
+  description      TEXT NOT NULL DEFAULT '',
+  tags             TEXT NOT NULL DEFAULT '[]',   -- lista JSON
+  category_id      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_videos_channel ON videos(channel_id, published_at DESC);
+CREATE TABLE IF NOT EXISTS playlists (
+  playlist_id TEXT PRIMARY KEY,
+  channel_id  TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  privacy     TEXT NOT NULL DEFAULT '',
+  item_count  INTEGER NOT NULL DEFAULT 0,
+  updated_at  TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS jobs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id  TEXT NOT NULL,
+  kind        TEXT NOT NULL,                     -- video_update | thumbnail_set | playlist_*
+  payload     TEXT NOT NULL DEFAULT '{}',        -- JSON con los cambios
+  status      TEXT NOT NULL DEFAULT 'pendiente', -- pendiente | en_curso | hecho | error | cancelado
+  nota        TEXT NOT NULL DEFAULT '',          -- por qué espera o por qué falló
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  not_before  TEXT NOT NULL DEFAULT '',          -- backoff: no ejecutar antes de esto
+  units_est   INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT '',
+  updated_at  TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_estado ON jobs(status, not_before);
 CREATE TABLE IF NOT EXISTS sync_log (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   channel_id  TEXT NOT NULL DEFAULT '',
@@ -100,9 +127,19 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 
 def migrate(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    # Migración por CAPACIDADES, no por número: una base v1 ya tiene la tabla
+    # videos (el CREATE IF NOT EXISTS no la toca), así que las columnas nuevas
+    # de la fase 2 se añaden mirando qué falta. Idempotente y sin perder datos.
+    existentes = {r["name"] for r in conn.execute("PRAGMA table_info(videos)")}
+    for columna, ddl in (("description", "TEXT NOT NULL DEFAULT ''"),
+                         ("tags", "TEXT NOT NULL DEFAULT '[]'"),
+                         ("category_id", "TEXT NOT NULL DEFAULT ''")):
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE videos ADD COLUMN {columna} {ddl}")
     conn.execute(
         "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
-        "ON CONFLICT(key) DO NOTHING", (str(SCHEMA_VERSION),))
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (str(SCHEMA_VERSION),))
     conn.commit()
 
 
@@ -175,17 +212,150 @@ def upsert_videos(conn: sqlite3.Connection, channel_id: str,
     for v in videos:
         conn.execute(
             "INSERT INTO videos(video_id, channel_id, title, published_at, "
-            " thumbnail_url, duration_seconds, privacy, views, likes, comments) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?) "
+            " thumbnail_url, duration_seconds, privacy, views, likes, comments, "
+            " description, tags, category_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(video_id) DO UPDATE SET title=excluded.title, "
             " thumbnail_url=excluded.thumbnail_url, "
             " duration_seconds=excluded.duration_seconds, privacy=excluded.privacy, "
-            " views=excluded.views, likes=excluded.likes, comments=excluded.comments",
+            " views=excluded.views, likes=excluded.likes, comments=excluded.comments, "
+            " description=excluded.description, tags=excluded.tags, "
+            " category_id=excluded.category_id",
             (v["video_id"], channel_id, v.get("title", ""), v.get("published_at", ""),
              v.get("thumbnail_url", ""), v.get("duration_seconds", 0),
              v.get("privacy", ""), v.get("views", 0), v.get("likes", 0),
-             v.get("comments", 0)))
+             v.get("comments", 0), v.get("description", ""),
+             json.dumps(v.get("tags", []), ensure_ascii=False),
+             v.get("category_id", "")))
     conn.commit()
+
+
+def update_video_local(conn: sqlite3.Connection, video_id: str, *,
+                       title: str | None = None, description: str | None = None,
+                       tags: list | None = None,
+                       thumbnail_url: str | None = None) -> None:
+    """Refleja en la base local una edición YA aplicada en YouTube, para que
+    la interfaz muestre el resultado sin esperar al próximo sync."""
+    sets, valores = [], []
+    for col, val in (("title", title), ("description", description),
+                     ("thumbnail_url", thumbnail_url)):
+        if val is not None:
+            sets.append(f"{col}=?")
+            valores.append(val)
+    if tags is not None:
+        sets.append("tags=?")
+        valores.append(json.dumps(tags, ensure_ascii=False))
+    if sets:
+        conn.execute(f"UPDATE videos SET {', '.join(sets)} WHERE video_id=?",
+                     valores + [video_id])
+        conn.commit()
+
+
+def get_video(conn: sqlite3.Connection, video_id: str) -> dict | None:
+    row = conn.execute("SELECT * FROM videos WHERE video_id=?",
+                       (video_id,)).fetchone()
+    return _video_dict(row) if row else None
+
+
+def _video_dict(row) -> dict:
+    v = dict(row)
+    try:
+        v["tags"] = json.loads(v.get("tags") or "[]")
+    except ValueError:
+        v["tags"] = []
+    return v
+
+
+# ---------------------------------------------------------------------------
+# Playlists
+# ---------------------------------------------------------------------------
+
+def replace_playlists(conn: sqlite3.Connection, channel_id: str,
+                      playlists: list[dict]) -> None:
+    """El sync trae la foto completa del canal: se reemplaza su conjunto para
+    que las playlists borradas en YouTube desaparezcan también aquí."""
+    conn.execute("DELETE FROM playlists WHERE channel_id=?", (channel_id,))
+    for p in playlists:
+        # OR REPLACE: una playlist transferida a otro canal conserva su ID
+        # global — el registro simplemente se muda de canal.
+        conn.execute(
+            "INSERT OR REPLACE INTO playlists(playlist_id, channel_id, title, "
+            " description, privacy, item_count, updated_at) VALUES(?,?,?,?,?,?,?)",
+            (p["playlist_id"], channel_id, p.get("title", ""),
+             p.get("description", ""), p.get("privacy", ""),
+             p.get("item_count", 0), now_str()))
+    conn.commit()
+
+
+def list_playlists(conn: sqlite3.Connection, channel_id: str) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM playlists WHERE channel_id=? ORDER BY title",
+        (channel_id,)).fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Cola de trabajos (las escrituras van SIEMPRE por aquí: cuota bajo control)
+# ---------------------------------------------------------------------------
+
+def enqueue_job(conn: sqlite3.Connection, channel_id: str, kind: str,
+                payload: dict, units_est: int) -> int:
+    cur = conn.execute(
+        "INSERT INTO jobs(channel_id, kind, payload, units_est, created_at, "
+        " updated_at) VALUES(?,?,?,?,?,?)",
+        (channel_id, kind, json.dumps(payload, ensure_ascii=False), units_est,
+         now_str(), now_str()))
+    conn.commit()
+    return cur.lastrowid
+
+
+def update_job(conn: sqlite3.Connection, job_id: int, **fields) -> None:
+    permitidos = {"status", "nota", "attempts", "not_before", "payload"}
+    bad = set(fields) - permitidos
+    if bad:
+        raise ValueError(f"Campos desconocidos de job: {sorted(bad)}")
+    sets = ", ".join(f"{c}=?" for c in fields) + ", updated_at=?"
+    conn.execute(f"UPDATE jobs SET {sets} WHERE id=?",
+                 list(fields.values()) + [now_str(), job_id])
+    conn.commit()
+
+
+def list_jobs(conn: sqlite3.Connection, status: str | None = None,
+              limit: int = 200) -> list[dict]:
+    where, args = "", []
+    if status:
+        where, args = "WHERE status=?", [status]
+    filas = conn.execute(
+        f"SELECT * FROM jobs {where} ORDER BY id DESC LIMIT ?",
+        args + [limit]).fetchall()
+    out = []
+    for r in filas:
+        j = dict(r)
+        try:
+            j["payload"] = json.loads(j["payload"])
+        except ValueError:
+            j["payload"] = {}
+        out.append(j)
+    return out
+
+
+def due_jobs(conn: sqlite3.Connection) -> list[dict]:
+    """Pendientes ya ejecutables (respetando el backoff), en orden de llegada."""
+    filas = conn.execute(
+        "SELECT * FROM jobs WHERE status='pendiente' AND not_before<=? "
+        "ORDER BY id", (now_str(),)).fetchall()
+    return [dict(r) | {"payload": json.loads(r["payload"] or "{}")}
+            for r in filas]
+
+
+def cola_resumen(conn: sqlite3.Connection) -> dict:
+    filas = conn.execute(
+        "SELECT status, COUNT(*) c, COALESCE(SUM(units_est),0) u FROM jobs "
+        "WHERE status IN ('pendiente','en_curso','error') GROUP BY status"
+    ).fetchall()
+    por = {r["status"]: {"n": r["c"], "unidades": r["u"]} for r in filas}
+    return {"pendientes": por.get("pendiente", {}).get("n", 0),
+            "errores": por.get("error", {}).get("n", 0),
+            "unidades_pendientes": por.get("pendiente", {}).get("unidades", 0)}
 
 
 def save_token(conn: sqlite3.Connection, channel_id: str, blob: bytes) -> None:
@@ -216,7 +386,8 @@ def delete_channel(conn: sqlite3.Connection, channel_id: str) -> None:
     """Desconectar = borrar TODO lo del canal (token, métricas, videos,
     historial de syncs). Es lo que exige la política de datos de la API y lo
     que uno espera al pulsar «desconectar»."""
-    for table in ("tokens", "channel_daily", "videos", "sync_log"):
+    for table in ("tokens", "channel_daily", "videos", "sync_log", "playlists",
+                  "jobs"):
         conn.execute(f"DELETE FROM {table} WHERE channel_id=?", (channel_id,))
     conn.execute("DELETE FROM channels WHERE channel_id=?", (channel_id,))
     conn.commit()
@@ -307,7 +478,7 @@ def channel_detail(conn: sqlite3.Connection, channel_id: str,
                        (channel_id,)).fetchone()
     if not row:
         return None
-    videos = [dict(r) for r in conn.execute(
+    videos = [_video_dict(r) for r in conn.execute(
         "SELECT * FROM videos WHERE channel_id=? ORDER BY published_at DESC "
         "LIMIT 50", (channel_id,)).fetchall()]
     syncs = [dict(r) for r in conn.execute(
@@ -315,7 +486,8 @@ def channel_detail(conn: sqlite3.Connection, channel_id: str,
         "WHERE channel_id=? ORDER BY id DESC LIMIT 5", (channel_id,)).fetchall()]
     return {"channel": channel_summary(conn, dict(row)),
             "series": series(conn, channel_id, days),
-            "videos": videos, "syncs": syncs}
+            "videos": videos, "syncs": syncs,
+            "playlists": list_playlists(conn, channel_id)}
 
 
 def quota_today(conn: sqlite3.Connection) -> int:

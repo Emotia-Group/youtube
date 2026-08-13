@@ -78,8 +78,28 @@ def parse_videos(resp: dict) -> list[dict]:
             "views": int(stats.get("viewCount") or 0),
             "likes": int(stats.get("likeCount") or 0),
             "comments": int(stats.get("commentCount") or 0),
+            # El snippet completo: es lo que edita la fase 2 (videos.update
+            # BORRA lo que no se reenvía, así que hay que tenerlo entero)
+            "description": snippet.get("description", ""),
+            "tags": snippet.get("tags") or [],
+            "category_id": snippet.get("categoryId", ""),
         })
     return videos
+
+
+def parse_playlists(resp: dict) -> list[dict]:
+    out = []
+    for item in resp.get("items") or []:
+        snippet = item.get("snippet") or {}
+        out.append({
+            "playlist_id": item.get("id", ""),
+            "title": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "privacy": (item.get("status") or {}).get("privacyStatus", ""),
+            "item_count": int((item.get("contentDetails") or {})
+                              .get("itemCount") or 0),
+        })
+    return out
 
 
 def _date_range(conn, channel_id: str, cfg: dict, today: str) -> tuple[str, str]:
@@ -166,6 +186,16 @@ def sync_channel(conn, channel_id: str, *, cfg: dict | None = None,
                 db.upsert_videos(conn, channel_id, videos)
                 resumen["videos"] = len(videos)
                 log(f"  · {len(videos)} videos al día")
+
+        # 2b · Playlists del canal (1 unidad; las borradas en YouTube caen
+        # aquí). Si esta lectura falla, no arrastra al resto del sync.
+        try:
+            listas = parse_playlists(api.playlists_mine())
+            db.replace_playlists(conn, channel_id, listas)
+            if listas:
+                log(f"  · {len(listas)} playlists")
+        except google_api.ApiHttpError as e:
+            log(f"  · playlists no disponibles ({e.reason})")
 
         # 3 · Métricas diarias
         start, end = _date_range(conn, channel_id, cfg, today)

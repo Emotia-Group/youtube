@@ -9,6 +9,49 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.55.0 — 2026-08-13
+La Torre de Control aprende a **administrar** (Fase 2 del plan): ya no solo
+mides tus canales — los editas desde el panel, de a uno o en lote, sin abrir
+20 veces YouTube Studio.
+
+- ✎ EDITOR EN CADA VIDEO: título, descripción y etiquetas con contadores de
+  los límites REALES de la API (100 caracteres, 5 000 bytes — tildes y emojis
+  cuentan más de uno —, ~500 de etiquetas en total), y la miniatura (JPG/PNG
+  hasta 2 MB). Los límites se avisan ANTES de encolar, no con un 400 de
+  Google después de gastar cuota.
+- ☑ EDICIÓN EN LOTE CON VISTA PREVIA: marcas videos y aplicas buscar y
+  reemplazar (título o descripción), añadir texto al final de la descripción,
+  añadir etiquetas o mandar a una playlist. La vista previa enseña el
+  antes → después y el costo en cuota; el lote se materializa EN EL SERVIDOR
+  desde la base local, así lo encolado es exactamente lo que viste. Lo que no
+  aplica se reporta como omitido con su motivo, nada pasa en silencio.
+- 📋 TODO PASA POR LA COLA (chip en la cabecera): cada edición cuesta ~51 de
+  las 10 000 unidades diarias. La cola ejecuta lo que cabe hoy, deja el resto
+  **en espera con su motivo** y lo retoma sola tras el reinicio de cuota de
+  medianoche (hora del Pacífico), guardando una reserva
+  (`panel.quota_reserve`) para que el sync nocturno nunca se quede sin
+  unidades. Reintentos automáticos (hasta 3) para cortes de red y 5xx;
+  errores definitivos con el mensaje de Google legible y botón Reintentar.
+- 🛡 EL DETALLE QUE EVITA DESASTRES: `videos.update` BORRA todo campo que no
+  se reenvíe — cambiar un título «a pelo» borraría etiquetas e idiomas. El
+  panel relee el video FRESCO de YouTube justo antes de cada edición y
+  fusiona sobre lo real, preservando categoría e idiomas declarados.
+- 📑 PLAYLISTS: crear (pública/oculta/privada), abrir cualquiera y añadir,
+  quitar o reordenar videos; los items se leen EN VIVO para no reordenar
+  sobre una copia vieja. El sync ahora también trae las playlists de cada
+  canal (+1 unidad por canal, de lectura tolerante: si falla no arrastra al
+  resto).
+- 🗃 La base guarda ahora el snippet completo de cada video (descripción,
+  etiquetas, categoría) — migración automática y sin pérdida para bases de
+  la fase 1 — y `python -m ytpanel cola` permite ver y procesar la cola
+  desde la terminal o el programador de tareas.
+
+Batería nueva (`tests/test_v0_55_0.py`): migración v1→v2 con datos intactos,
+merge que no borra etiquetas, validaciones de límites, cola con espera por
+cuota y reintentos, 4xx legible, lote con omitidos y endpoints del servidor —
+todo sin tocar internet. La batería v0.54.0 se ajusta al nuevo costo del sync
+(4 unidades: se añadió la lectura de playlists).
+
 ## v0.54.1 — 2026-08-13
 La suite completa marcó 2 baterías en rojo tras estrenar la Torre de Control.
 Al diagnosticarlas, **el defecto era de la prueba, no del programa** (como en

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.54.1 -->
+<!-- MANUAL_VERSION: 0.55.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -461,3 +461,37 @@ cabecera muestra lo gastado hoy por el panel.
   canal en YouTube no se toca.
 - ¿Quieres verlo amueblado sin conectar nada? «Cargar demo» crea 4 canales
   ficticios (no llaman a ninguna API); «Quitar demo» los borra de raíz.
+
+### 13.5 Editar desde el panel (fase 2): metadatos, miniaturas y playlists
+
+Cada video de un canal conectado tiene un lápiz **✎** en su fila: se abre el
+editor con **título, descripción y etiquetas** (con contadores de los límites
+reales de YouTube: 100 caracteres el título, 5 000 *bytes* la descripción —
+tildes y emojis cuentan más de uno — y ~500 caracteres el total de etiquetas)
+y la **miniatura** (JPG/PNG hasta 2 MB; el canal debe estar verificado por
+teléfono). En la sección **Playlists** puedes crear listas y abrir cualquiera
+para añadir, quitar o reordenar videos.
+
+**Edición en lote**: el botón «☑ Edición en lote» activa casillas en la tabla.
+Marcas videos, eliges la operación — buscar y reemplazar en título o
+descripción, añadir texto al final de la descripción, añadir etiquetas, o
+añadir a una playlist — y pulsas **Vista previa**: verás el antes → después y
+el costo en cuota ANTES de confirmar. Nada se aplica sin que lo veas.
+
+**Todo pasa por la cola** (chip «📋 Cola» en la cabecera). Por qué: cada
+edición cuesta ~51 unidades de las 10 000 diarias, y un lote grande sobre
+20 canales puede no caber hoy. La cola ejecuta lo que cabe, deja el resto
+**en espera con su motivo** y lo retoma sola tras el reinicio de cuota
+(medianoche, hora del Pacífico). Además reserva unidades
+(`panel.quota_reserve`, 500 por defecto) para que las ediciones jamás dejen
+sin cuota al sync nocturno. Los errores pasajeros (cortes de red, 5xx de
+Google) se reintentan solos hasta 3 veces; los definitivos quedan en la cola
+con el mensaje de Google legible y un botón **Reintentar**.
+
+Detalles finos que el panel ya maneja por ti: antes de cada edición se relee
+el video **tal como está en YouTube** en ese momento (la API borra todo campo
+que no se reenvíe: sin esa lectura, cambiar el título borraría las
+etiquetas), y la edición en lote se calcula en el servidor sobre esos datos —
+lo encolado es exactamente lo que la vista previa enseñó. Desde la terminal:
+`py -m ytpanel cola` (ver) y `py -m ytpanel cola --procesar` (ejecutar, ideal
+junto al sync programado).

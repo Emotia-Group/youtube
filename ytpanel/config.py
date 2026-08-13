@@ -20,6 +20,8 @@ DEFAULTS = {
     "resync_overlap_days": 3,  # Analytics consolida tarde: se re-piden los últimos días
     "max_recent_videos": 50,   # últimos videos por canal en cada sync
     "quota_budget": 10000,     # cuota diaria de la Data API (para el medidor de la UI)
+    "quota_reserve": 500,      # unidades que la cola de ediciones NUNCA toca,
+                               # reservadas para el sync nocturno de métricas
     "currency": "USD",         # moneda de los ingresos estimados
 }
 

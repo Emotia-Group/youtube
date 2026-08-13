@@ -250,7 +250,14 @@ Qué hace esta fase:
   tokens se cifran con `cryptography`, y desconectar un canal borra todo lo
   suyo. Los canales demo no llaman a ninguna API.
 
+- **Edición sin salir del panel** (fase 2): títulos, descripciones y
+  etiquetas con contadores de los límites reales, miniaturas (JPG/PNG ≤2 MB),
+  playlists (crear, ordenar, añadir/quitar) y **edición en lote** con vista
+  previa del antes → después. Todo pasa por una **cola con gestor de cuota**:
+  ejecuta lo que cabe hoy, deja el resto en espera con su motivo y reintenta
+  sola los fallos pasajeros (`python -m ytpanel cola`).
+
 El paso a paso de Google Cloud (proyecto, APIs, pantalla de consentimiento y
 por qué los tokens caducan a los 7 días mientras la app está «en pruebas»)
-está en el **MANUAL.md, capítulo 13**. Fases siguientes del plan: edición de
-títulos/miniaturas/descripciones/playlists en lote y reportes exportables.
+está en el **MANUAL.md, capítulo 13**. Fase siguiente del plan: reportes
+exportables, comparativas entre canales y alertas.

@@ -87,6 +87,13 @@ class TransportFalso:
                                "viewCount": "34000", "videoCount": "12"},
                 "contentDetails": {"relatedPlaylists": {"uploads": "UU_PRUEBA"}},
             }]}).encode()
+        if "/playlists?" in url:  # sync de playlists (se añadió en v0.55.0)
+            return 200, json.dumps({"items": [{
+                "id": "PL_PRUEBA",
+                "snippet": {"title": "Mis mejores"},
+                "status": {"privacyStatus": "public"},
+                "contentDetails": {"itemCount": 2},
+            }]}).encode()
         if "/playlistItems" in url:
             return 200, json.dumps({"items": [
                 {"contentDetails": {"videoId": "vid001"}},
@@ -270,8 +277,9 @@ check("T10d los ingresos se fusionan y el canal queda monetization=ok",
       canal["monetization"] == "ok" and conn.execute(
           "SELECT revenue FROM channel_daily WHERE channel_id='UC_PRUEBA' "
           "AND date=?", (HOY,)).fetchone()["revenue"] == 1.5, "")
-check("T11 la cuota contada es 3 unidades (canal + playlist + videos; "
-      "Analytics no gasta de aquí)", r["quota"] == 3, r["quota"])
+# Desde la v0.55.0 el sync también lee las playlists del canal: +1 unidad.
+check("T11 la cuota contada es 4 unidades (canal + subidas + videos + "
+      "playlists; Analytics no gasta de aquí)", r["quota"] == 4, r["quota"])
 check("T11b y quota_today la refleja en el medidor",
       db.quota_today(conn) >= 3, db.quota_today(conn))
 

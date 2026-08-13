@@ -23,6 +23,7 @@ from ytpanel import config
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 DATA_API = "https://www.googleapis.com/youtube/v3"
+UPLOAD_API = "https://www.googleapis.com/upload/youtube/v3"
 ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2/reports"
 
 # Se piden desde el día uno los permisos que el panel completo va a usar:
@@ -38,6 +39,7 @@ SCOPES = [
 # Costo en unidades de cuota de la Data API (las llamadas a Analytics no
 # gastan de esta cuota: tienen la suya aparte, holgada para 20 canales).
 UNITS_LIST = 1
+UNITS_WRITE = 50   # update/insert/delete y subir miniatura cuestan 50 c/u
 
 
 class ApiHttpError(RuntimeError):
@@ -197,19 +199,30 @@ class YouTubeAPI:
         if self.on_token_refresh:
             self.on_token_refresh(self.token)
 
-    def _get(self, url: str, params: dict, units: int = 0) -> dict:
+    def _call(self, method: str, url: str, params: dict, units: int = 0,
+              json_body: dict | None = None, raw_body: bytes | None = None,
+              content_type: str | None = None) -> dict:
         self.quota_units += units
         if self.token.get("expires_at", 0) <= time.time():
             self._refresh_now()
         clean = {k: v for k, v in params.items() if v is not None}
-        full = url + "?" + urllib.parse.urlencode(clean)
+        full = url + ("?" + urllib.parse.urlencode(clean) if clean else "")
+        body = None
+        extra: dict = {}
+        if json_body is not None:
+            body = json.dumps(json_body).encode("utf-8")
+            extra["Content-Type"] = "application/json; charset=utf-8"
+        elif raw_body is not None:
+            body = raw_body
+            extra["Content-Type"] = content_type or "application/octet-stream"
         refreshed = False
         for attempt in range(3):
             status, raw = self.transport(
-                "GET", full,
-                {"Authorization": f"Bearer {self.token['access_token']}"}, None)
-            if status == 200:
-                return json.loads(raw.decode("utf-8"))
+                method, full,
+                {"Authorization": f"Bearer {self.token['access_token']}"}
+                | extra, body)
+            if 200 <= status < 300:
+                return json.loads(raw.decode("utf-8")) if raw.strip() else {}
             if status == 401 and not refreshed:
                 # El access token murió antes de expires_at (revocación de
                 # sesión, reloj del equipo…): un refresh y otro intento.
@@ -221,6 +234,9 @@ class YouTubeAPI:
                 continue
             raise _parse_error(status, raw)
         raise _parse_error(status, raw)  # inalcanzable salvo bucle agotado
+
+    def _get(self, url: str, params: dict, units: int = 0) -> dict:
+        return self._call("GET", url, params, units)
 
     # --- Data API (gasta cuota) ---------------------------------------
 
@@ -241,6 +257,74 @@ class YouTubeAPI:
         return self._get(f"{DATA_API}/videos", {
             "part": "snippet,statistics,contentDetails,status",
             "id": ",".join(video_ids[:50]), "maxResults": 50,
+        }, units=UNITS_LIST)
+
+    def playlists_mine(self) -> dict:
+        return self._get(f"{DATA_API}/playlists", {
+            "part": "snippet,status,contentDetails", "mine": "true",
+            "maxResults": 50,
+        }, units=UNITS_LIST)
+
+    # --- Data API: escritura (fase 2; 50 unidades cada operación) -------
+
+    def videos_snippet(self, video_id: str) -> dict:
+        """El snippet FRESCO de un video, justo antes de editarlo: si alguien
+        cambió algo desde el último sync, se edita sobre lo real, no sobre la
+        copia local (y videos.update BORRA todo campo que no se reenvíe)."""
+        items = self._get(f"{DATA_API}/videos", {
+            "part": "snippet", "id": video_id}, units=UNITS_LIST).get("items") or []
+        if not items:
+            raise ApiHttpError(404, "notFound",
+                               f"El video {video_id} ya no existe en YouTube.")
+        return items[0]["snippet"]
+
+    def videos_update_snippet(self, video_id: str, snippet: dict) -> dict:
+        return self._call("PUT", f"{DATA_API}/videos", {"part": "snippet"},
+                          units=UNITS_WRITE,
+                          json_body={"id": video_id, "snippet": snippet})
+
+    def thumbnails_set(self, video_id: str, image: bytes, mime: str) -> dict:
+        return self._call("POST", f"{UPLOAD_API}/thumbnails/set",
+                          {"videoId": video_id}, units=UNITS_WRITE,
+                          raw_body=image, content_type=mime)
+
+    def playlist_insert(self, title: str, description: str = "",
+                        privacy: str = "public") -> dict:
+        return self._call("POST", f"{DATA_API}/playlists",
+                          {"part": "snippet,status"}, units=UNITS_WRITE,
+                          json_body={"snippet": {"title": title,
+                                                 "description": description},
+                                     "status": {"privacyStatus": privacy}})
+
+    def playlist_item_insert(self, playlist_id: str, video_id: str) -> dict:
+        return self._call("POST", f"{DATA_API}/playlistItems",
+                          {"part": "snippet"}, units=UNITS_WRITE,
+                          json_body={"snippet": {
+                              "playlistId": playlist_id,
+                              "resourceId": {"kind": "youtube#video",
+                                             "videoId": video_id}}})
+
+    def playlist_item_update(self, item_id: str, playlist_id: str,
+                             video_id: str, position: int) -> dict:
+        # La API exige reenviar playlistId y resourceId aunque solo cambie
+        # la posición.
+        return self._call("PUT", f"{DATA_API}/playlistItems",
+                          {"part": "snippet"}, units=UNITS_WRITE,
+                          json_body={"id": item_id, "snippet": {
+                              "playlistId": playlist_id,
+                              "position": position,
+                              "resourceId": {"kind": "youtube#video",
+                                             "videoId": video_id}}})
+
+    def playlist_item_delete(self, item_id: str) -> dict:
+        return self._call("DELETE", f"{DATA_API}/playlistItems",
+                          {"id": item_id}, units=UNITS_WRITE)
+
+    def playlist_items_full(self, playlist_id: str) -> dict:
+        """Items con snippet (título y posición) para el editor de playlists."""
+        return self._get(f"{DATA_API}/playlistItems", {
+            "part": "snippet,contentDetails", "playlistId": playlist_id,
+            "maxResults": 50,
         }, units=UNITS_LIST)
 
     # --- Analytics API (cuota aparte, no descuenta de las 10 000) ------

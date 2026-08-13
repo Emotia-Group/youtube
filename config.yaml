@@ -204,4 +204,6 @@ panel:
   resync_overlap_days: 3   # Analytics re-consolida los últimos días: se re-piden
   max_recent_videos: 50    # últimos videos por canal en cada sync
   quota_budget: 10000      # cuota diaria de la Data API (para el medidor)
+  quota_reserve: 500       # unidades que la cola de ediciones NUNCA gasta:
+                           # quedan reservadas para el sync nocturno de métricas
   currency: USD            # moneda de los ingresos estimados

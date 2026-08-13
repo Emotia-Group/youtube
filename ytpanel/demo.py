@@ -105,6 +105,12 @@ def seed(conn, days: int = 120) -> int:
             v["likes"] = int(v["views"] * 0.04)
             v["comments"] = int(v["views"] * 0.004)
         db.upsert_videos(conn, cid, videos)
+        db.replace_playlists(conn, cid, [
+            {"playlist_id": f"{cid}_pl1", "title": "Lo mejor del canal",
+             "privacy": "public", "item_count": 5},
+            {"playlist_id": f"{cid}_pl2", "title": "Series completas",
+             "privacy": "public", "item_count": 7},
+        ])
     return len(_CANALES)
 
 

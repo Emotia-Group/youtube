@@ -245,6 +245,58 @@
 
   footer { color: var(--muted); font-size: 12.5px; padding: 18px 0 40px; }
   footer .sep { margin: 0 8px; }
+
+  /* ── Edición (fase 2) ── */
+  .chip.clicable { cursor: pointer; }
+  .chip.clicable:hover { filter: brightness(1.08); }
+  .btn.mini { padding: 3px 9px; font-size: 12.5px; }
+  .editor {
+    background: var(--wash); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin: 6px 0 10px;
+  }
+  .editor .campo { margin-bottom: 12px; }
+  .editor label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .editor input[type=text], .editor textarea, .lote-bar input[type=text],
+  .lote-bar select, .editor select {
+    width: 100%; box-sizing: border-box;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 7px 10px; font: inherit;
+  }
+  .editor textarea { min-height: 110px; resize: vertical; }
+  .contador { font-size: 11px; color: var(--muted); text-align: right;
+              font-variant-numeric: tabular-nums; }
+  .contador.excedido { color: var(--critico); font-weight: 700; }
+  .editor .filas { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .mini-preview { width: 120px; height: 68px; object-fit: cover; border-radius: 6px;
+                  border: 1px solid var(--border); background: var(--chip-bg); }
+  /* [hidden] pierde contra display:flex de la clase; que gane siempre */
+  .lote-bar[hidden], #pl-editor[hidden] { display: none; }
+  .lote-bar {
+    display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+    background: var(--wash); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+  }
+  .lote-bar .campo { min-width: 170px; flex: 1; }
+  .lote-preview { font-size: 13px; margin-top: 10px; }
+  .lote-preview li { margin-bottom: 3px; }
+  .lote-preview .antes { color: var(--muted); text-decoration: line-through; }
+  .badge { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .badge.pendiente { color: var(--aviso); background: color-mix(in srgb, var(--aviso) 14%, transparent); }
+  .badge.en_curso { color: var(--serie-vistas); background: color-mix(in srgb, var(--serie-vistas) 12%, transparent); }
+  .badge.hecho { color: var(--bueno); background: color-mix(in srgb, var(--bueno) 12%, transparent); }
+  .badge.error { color: var(--critico); background: color-mix(in srgb, var(--critico) 12%, transparent); }
+  .badge.cancelado { color: var(--muted); background: var(--chip-bg); }
+  .pl-item { display: flex; align-items: center; gap: 8px; padding: 6px 0;
+             border-bottom: 1px solid var(--grid); font-size: 13.5px; }
+  .pl-item:last-child { border-bottom: 0; }
+  .pl-item .pos { color: var(--muted); font-variant-numeric: tabular-nums; width: 2ch; }
+  .pl-item .tit { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nota-celda { max-width: 40ch; overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; }
+  td .btn.mini + .btn.mini { margin-left: 6px; }
+  #tabla-videos:not(.lote) .chk { display: none; }
+  #tabla-videos .chk { width: 26px; }
 </style>
 </head>
 <body>
@@ -374,6 +426,12 @@ function chipsEstado(e) {
   const uso = e.cuota_hoy, tope = e.quota_budget || 10000;
   chips.push(`<span class="chip" title="Unidades de la Data API gastadas hoy por este panel (las métricas de Analytics no gastan de aquí)">
     Cuota hoy: ${fInt(uso)} / ${fInt(tope)}</span>`);
+  const cola = e.cola || {};
+  const nCola = (cola.pendientes || 0) + (cola.errores || 0);
+  const claseCola = cola.errores ? "critico" : (cola.pendientes ? "aviso" : "");
+  chips.push(`<span class="chip clicable ${claseCola}" id="chip-cola" role="button" tabindex="0"
+    title="Cola de ediciones: ver estado, reintentar o cancelar">
+    ${cola.running ? "⏳" : "📋"} Cola: ${cola.pendientes || 0} pendiente(s)${cola.errores ? ` · ${cola.errores} error(es)` : ""}</span>`);
   return chips.join("");
 }
 
@@ -509,6 +567,26 @@ function renderVacio() {
 }
 
 /* ── Vista: detalle ── */
+let DET = null;   // estado del detalle abierto: {det, channelId, sel:Set}
+
+function filaVideo(v, esDemo) {
+  const titulo = esDemo ? esc(v.title)
+    : `<a href="https://youtu.be/${esc(v.video_id)}" target="_blank" rel="noopener">${esc(v.title)}</a>`;
+  return `<tr data-vid="${esc(v.video_id)}">
+    ${esDemo ? "" : `<td class="chk"><input type="checkbox" data-sel="${esc(v.video_id)}" aria-label="Seleccionar para lote"></td>`}
+    <td><span class="celda-video">
+      ${v.thumbnail_url ? `<img src="${esc(v.thumbnail_url)}" alt="">` : `<img alt="" style="visibility:hidden">`}
+      <span class="tit">${titulo}</span></span></td>
+    <td>${fFecha(v.published_at)}</td>
+    <td class="num">${fDur(v.duration_seconds)}</td>
+    <td class="num">${fInt(v.views)}</td>
+    <td class="num">${fInt(v.likes)}</td>
+    <td class="num">${fInt(v.comments)}</td>
+    ${esDemo ? "" : `<td><button class="btn mini" data-editar="${esc(v.video_id)}"
+      title="Editar título, descripción, etiquetas o miniatura">✎</button></td>`}
+  </tr>`;
+}
+
 async function abrirDetalle(channelId) {
   VISTA = { tipo: "detalle", canal: channelId, days: VISTA.days || 90 };
   const r = await fetch(`/api/channel/${channelId}?days=${VISTA.days}`);
@@ -541,23 +619,33 @@ async function abrirDetalle(channelId) {
       <span class="nota">${conIngresos ? "US$ · se ajustan a fin de mes; la cifra de pago vive en AdSense" : ""}</span></h2>
       <div class="chart" id="ch-ingresos"></div></div>
 
+    ${esDemo ? "" : `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
+      <button class="btn mini" id="btn-lote">☑ Edición en lote</button>
+      <span class="soft" style="font-size:12.5px">o edita un video con el lápiz ✎ de su fila</span></div>
+    <div class="lote-bar" id="lote-bar" hidden></div>`}
     <div class="panel"><h2>Últimos videos</h2>
-      <div class="tabla-scroll"><table>
-        <thead><tr><th>Video</th><th>Publicado</th><th class="num">Duración</th>
-          <th class="num">Vistas</th><th class="num">Me gusta</th><th class="num">Comentarios</th></tr></thead>
-        <tbody>${det.videos.map(v => `<tr>
-          <td><span class="celda-video">
-            ${v.thumbnail_url ? `<img src="${esc(v.thumbnail_url)}" alt="">` : `<img alt="" style="visibility:hidden">`}
-            <span class="tit">${esDemo ? esc(v.title)
-              : `<a href="https://youtu.be/${esc(v.video_id)}" target="_blank" rel="noopener">${esc(v.title)}</a>`}</span>
-          </span></td>
-          <td>${fFecha(v.published_at)}</td>
-          <td class="num">${fDur(v.duration_seconds)}</td>
-          <td class="num">${fInt(v.views)}</td>
-          <td class="num">${fInt(v.likes)}</td>
-          <td class="num">${fInt(v.comments)}</td></tr>`).join("") ||
-          `<tr><td colspan="6" class="sin-datos">Sin videos sincronizados todavía.</td></tr>`}
+      <div class="tabla-scroll"><table id="tabla-videos">
+        <thead><tr>${esDemo ? "" : `<th class="chk"></th>`}<th>Video</th><th>Publicado</th><th class="num">Duración</th>
+          <th class="num">Vistas</th><th class="num">Me gusta</th><th class="num">Comentarios</th>${esDemo ? "" : `<th></th>`}</tr></thead>
+        <tbody>${det.videos.map(v => filaVideo(v, esDemo)).join("") ||
+          `<tr><td colspan="8" class="sin-datos">Sin videos sincronizados todavía.</td></tr>`}
         </tbody></table></div></div>
+
+    <div class="panel"><h2>Playlists
+      <span class="nota">${esDemo ? "solo lectura en demo" : "los cambios pasan por la cola"}</span></h2>
+      <div id="pl-lista">${det.playlists.length ? det.playlists.map(p => `
+        <div class="pl-item" data-pid="${esc(p.playlist_id)}">
+          <span class="tit"><b>${esc(p.title)}</b> · ${fInt(p.item_count)} videos · ${esc(p.privacy || "—")}</span>
+          ${esDemo ? "" : `<button class="btn mini" data-abrir-pl="${esc(p.playlist_id)}" data-titulo="${esc(p.title)}">Abrir</button>`}
+        </div>`).join("")
+        : `<p class="sin-datos">Sin playlists sincronizadas todavía.</p>`}</div>
+      <div id="pl-editor" hidden style="margin-top:12px"></div>
+      ${esDemo ? "" : `<div class="editor" style="margin-top:12px"><div class="filas">
+        <input type="text" id="pl-nueva-titulo" placeholder="Título de la playlist nueva" style="flex:1;min-width:200px">
+        <select id="pl-nueva-priv"><option value="public">Pública</option>
+          <option value="unlisted">Oculta</option><option value="private">Privada</option></select>
+        <button class="btn mini" id="pl-crear">＋ Crear playlist</button></div></div>`}
+    </div>
 
     <div class="panel"><h2>Últimas sincronizaciones</h2>
       ${det.syncs.length ? `<div class="tabla-scroll"><table>
@@ -583,7 +671,362 @@ async function abrirDetalle(channelId) {
     b.addEventListener("click", () => { VISTA.days = parseInt(b.dataset.dias, 10); abrirDetalle(channelId); }));
   const bd = document.getElementById("btn-desconectar");
   if (bd) bd.addEventListener("click", () => desconectar(c.channel_id, c.title || c.channel_id));
+
+  DET = { det, channelId, sel: new Set() };
+  if (!esDemo) {
+    $("#btn-lote").addEventListener("click", alternarLote);
+    const tabla = $("#tabla-videos");
+    tabla.addEventListener("click", ev => {
+      const be = ev.target.closest("[data-editar]");
+      if (be) abrirEditor(be.dataset.editar);
+    });
+    tabla.addEventListener("change", ev => {
+      const cb = ev.target.closest("[data-sel]");
+      if (!cb) return;
+      cb.checked ? DET.sel.add(cb.dataset.sel) : DET.sel.delete(cb.dataset.sel);
+      const n = $("#lote-n");
+      if (n) n.textContent = DET.sel.size;
+    });
+    const crear = document.getElementById("pl-crear");
+    if (crear) crear.addEventListener("click", crearPlaylist);
+    document.querySelectorAll("[data-abrir-pl]").forEach(b =>
+      b.addEventListener("click", () => abrirPlaylist(b.dataset.abrirPl, b.dataset.titulo)));
+  }
 }
+
+/* ── Editor de un video ── */
+function abrirEditor(videoId) {
+  const fila = document.querySelector(`tr[data-vid="${CSS.escape(videoId)}"]`);
+  const v = DET.det.videos.find(x => x.video_id === videoId);
+  if (!fila || !v) return;
+  const previa = fila.nextElementSibling;
+  if (previa && previa.classList.contains("editor-tr")) { previa.remove(); return; }
+  document.querySelectorAll(".editor-tr").forEach(e => e.remove());
+  const tr = document.createElement("tr");
+  tr.className = "editor-tr";
+  tr.innerHTML = `<td colspan="8"><div class="editor">
+    <div class="campo"><label for="ed-titulo">Título</label>
+      <input type="text" id="ed-titulo" value="${esc(v.title)}">
+      <div class="contador" id="ed-titulo-n"></div></div>
+    <div class="campo"><label for="ed-descr">Descripción</label>
+      <textarea id="ed-descr">${esc(v.description)}</textarea>
+      <div class="contador" id="ed-descr-n"></div></div>
+    <div class="campo"><label for="ed-tags">Etiquetas (separadas por comas)</label>
+      <input type="text" id="ed-tags" value="${esc(v.tags.join(", "))}">
+      <div class="contador" id="ed-tags-n"></div></div>
+    <div class="campo"><label>Miniatura nueva (opcional · JPG/PNG hasta 2 MB · requiere canal verificado por teléfono)</label>
+      <div class="filas">
+        <img class="mini-preview" id="ed-mini-prev" alt=""
+             ${v.thumbnail_url ? `src="${esc(v.thumbnail_url)}"` : ""}>
+        <input type="file" id="ed-mini" accept="image/jpeg,image/png">
+      </div></div>
+    <div class="filas">
+      <button class="btn primario mini" id="ed-guardar">Guardar cambios</button>
+      <button class="btn mini" id="ed-cerrar">Cancelar</button>
+      <span class="soft" style="font-size:12px">Se aplica por la cola (~51 unidades de cuota; +50 la miniatura)</span>
+    </div></div></td>`;
+  fila.after(tr);
+  let imagen = null;   // {b64, mime}
+  const bytes = t => new TextEncoder().encode(t).length;
+  const contar = () => {
+    const t = $("#ed-titulo").value, d = $("#ed-descr").value;
+    const tags = $("#ed-tags").value.split(",").map(x => x.trim()).filter(Boolean);
+    const suma = tags.reduce((a, x) => a + x.length + 2, 0);
+    ponContador("#ed-titulo-n", t.length, 100, " caracteres");
+    ponContador("#ed-descr-n", bytes(d), 5000, " bytes");
+    ponContador("#ed-tags-n", suma, 480, " caracteres en total");
+  };
+  ["#ed-titulo", "#ed-descr", "#ed-tags"].forEach(s =>
+    $(s).addEventListener("input", contar));
+  contar();
+  $("#ed-mini").addEventListener("change", ev => {
+    const f = ev.target.files[0];
+    imagen = null;
+    if (!f) return;
+    if (!["image/jpeg", "image/png"].includes(f.type)) {
+      aviso("La miniatura debe ser JPG o PNG."); ev.target.value = ""; return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      aviso(`Esa imagen pesa ${(f.size / 1024 / 1024).toFixed(1)} MB; YouTube admite 2 MB.`);
+      ev.target.value = ""; return;
+    }
+    const lector = new FileReader();
+    lector.onload = () => {
+      $("#ed-mini-prev").src = lector.result;
+      imagen = { b64: lector.result.split(",")[1], mime: f.type };
+    };
+    lector.readAsDataURL(f);
+  });
+  $("#ed-cerrar").addEventListener("click", () => tr.remove());
+  $("#ed-guardar").addEventListener("click", async () => {
+    const cuerpo = { channel_id: DET.channelId, video_id: videoId };
+    const t = $("#ed-titulo").value, d = $("#ed-descr").value;
+    const tags = $("#ed-tags").value.split(",").map(x => x.trim()).filter(Boolean);
+    if (t !== v.title) cuerpo.title = t;
+    if (d !== v.description) cuerpo.description = d;
+    if (JSON.stringify(tags) !== JSON.stringify(v.tags)) cuerpo.tags = tags;
+    if (imagen) { cuerpo.image_b64 = imagen.b64; cuerpo.image_mime = imagen.mime; }
+    if (!("title" in cuerpo) && !("description" in cuerpo)
+        && !("tags" in cuerpo) && !imagen) { aviso("No hay cambios."); return; }
+    const r = await fetch("/api/edits", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+    const data = await r.json();
+    if (!r.ok) { aviso(data.error || "No se pudo encolar.", 8000); return; }
+    tr.remove();
+    aviso(`Cambios encolados (${data.jobs.length} trabajo/s). La cola los aplica ya.`);
+    vigilarCola(() => { if (VISTA.tipo === "detalle") abrirDetalle(DET.channelId); });
+  });
+}
+
+function ponContador(sel, n, tope, sufijo) {
+  const el = $(sel);
+  el.textContent = `${fInt(n)} / ${fInt(tope)}${sufijo}`;
+  el.classList.toggle("excedido", n > tope);
+}
+
+/* ── Edición en lote ── */
+function alternarLote() {
+  const tabla = $("#tabla-videos"), bar = $("#lote-bar");
+  const activo = tabla.classList.toggle("lote");
+  bar.hidden = !activo;
+  if (!activo) { bar.innerHTML = ""; DET.sel.clear(); return; }
+  bar.innerHTML = `
+    <div class="campo"><label for="lote-op">Operación</label>
+      <select id="lote-op">
+        <option value="reemplazar">Buscar y reemplazar</option>
+        <option value="anexar_descripcion">Añadir texto al final de la descripción</option>
+        <option value="agregar_etiquetas">Añadir etiquetas</option>
+        <option value="agregar_a_playlist">Añadir a una playlist</option>
+      </select></div>
+    <div class="campo" id="lote-params" style="flex:2"></div>
+    <button class="btn mini" id="lote-preview">Vista previa</button>
+    <button class="btn primario mini" id="lote-encolar" disabled>Encolar</button>
+    <span class="soft" style="font-size:12px"><span id="lote-n">0</span> seleccionados</span>
+    <div class="lote-preview" id="lote-out" style="width:100%"></div>`;
+  const params = () => {
+    const op = $("#lote-op").value, z = $("#lote-params");
+    if (op === "reemplazar") z.innerHTML = `<div class="filas">
+      <select id="lp-campo" style="width:auto"><option value="title">en el título</option>
+        <option value="description">en la descripción</option></select>
+      <input type="text" id="lp-buscar" placeholder="buscar…" style="flex:1">
+      <input type="text" id="lp-reemplazo" placeholder="reemplazar por…" style="flex:1"></div>`;
+    else if (op === "anexar_descripcion") z.innerHTML =
+      `<input type="text" id="lp-texto" placeholder="Texto a añadir (ej. enlaces, aviso, firma)">`;
+    else if (op === "agregar_etiquetas") z.innerHTML =
+      `<input type="text" id="lp-tags" placeholder="etiquetas nuevas, separadas por comas">`;
+    else z.innerHTML = `<select id="lp-playlist">${DET.det.playlists.map(p =>
+      `<option value="${esc(p.playlist_id)}">${esc(p.title)}</option>`).join("")
+      || `<option value="">(este canal no tiene playlists)</option>`}</select>`;
+    $("#lote-out").innerHTML = ""; $("#lote-encolar").disabled = true;
+  };
+  $("#lote-op").addEventListener("change", params);
+  params();
+  $("#lote-preview").addEventListener("click", previewLote);
+  $("#lote-encolar").addEventListener("click", encolarLote);
+}
+
+function loteParams() {
+  const op = $("#lote-op").value;
+  if (op === "reemplazar") return { campo: $("#lp-campo").value,
+    buscar: $("#lp-buscar").value, reemplazo: $("#lp-reemplazo").value };
+  if (op === "anexar_descripcion") return { texto: $("#lp-texto").value };
+  if (op === "agregar_etiquetas") return { tags: $("#lp-tags").value
+    .split(",").map(t => t.trim()).filter(Boolean) };
+  return { playlist_id: $("#lp-playlist").value };
+}
+
+function previewLote() {
+  const out = $("#lote-out");
+  if (!DET.sel.size) { out.innerHTML = "Marca al menos un video (casillas de la izquierda)."; return; }
+  const op = $("#lote-op").value, p = loteParams();
+  const vids = DET.det.videos.filter(v => DET.sel.has(v.video_id));
+  let filas = [], aplicables = 0;
+  for (const v of vids) {
+    if (op === "reemplazar") {
+      if (!p.buscar || !v[p.campo].includes(p.buscar)) {
+        filas.push(`<li><span class="antes">${esc(v.title)}</span> — no contiene «${esc(p.buscar)}»</li>`);
+        continue;
+      }
+      aplicables++;
+      const despues = p.campo === "title"
+        ? v.title.replace(p.buscar, p.reemplazo)
+        : v.title + " (descripción modificada)";
+      filas.push(`<li><span class="antes">${esc(v.title)}</span> → <b>${esc(despues)}</b></li>`);
+    } else if (op === "agregar_a_playlist") {
+      aplicables++; filas.push(`<li>${esc(v.title)} → playlist</li>`);
+    } else {
+      aplicables++; filas.push(`<li>${esc(v.title)}</li>`);
+    }
+  }
+  const costo = aplicables * (op === "agregar_a_playlist" ? 50 : 51);
+  out.innerHTML = `<ul>${filas.slice(0, 8).join("")}</ul>
+    ${filas.length > 8 ? `…y ${filas.length - 8} más. ` : ""}
+    <b>${aplicables}</b> cambio(s) aplicable(s) · costo estimado ${fInt(costo)} unidades de cuota.
+    ${aplicables ? "Revisa y pulsa «Encolar»." : ""}`;
+  $("#lote-encolar").disabled = !aplicables;
+}
+
+async function encolarLote() {
+  const r = await fetch("/api/edits/lote", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channel_id: DET.channelId,
+      video_ids: [...DET.sel], operacion: $("#lote-op").value,
+      params: loteParams() }) });
+  const data = await r.json();
+  if (!r.ok) { aviso(data.error || "No se pudo encolar el lote.", 8000); return; }
+  const motivos = (data.omitidos || []).slice(0, 3)
+    .map(o => o.motivo).join("; ");
+  aviso(`Lote encolado: ${data.creados.length} trabajo(s)`
+    + (data.omitidos.length ? ` · ${data.omitidos.length} omitido(s) (${motivos}…)` : "."), 7000);
+  vigilarCola(() => { if (VISTA.tipo === "detalle") abrirDetalle(DET.channelId); });
+}
+
+/* ── Playlists ── */
+async function crearPlaylist() {
+  const titulo = $("#pl-nueva-titulo").value.trim();
+  if (!titulo) { aviso("Ponle un título a la playlist."); return; }
+  const r = await fetch("/api/playlists", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channel_id: DET.channelId, titulo,
+      privacidad: $("#pl-nueva-priv").value }) });
+  const data = await r.json();
+  if (!r.ok) { aviso(data.error || "No se pudo crear.", 8000); return; }
+  aviso("Playlist encolada; aparecerá en segundos.");
+  vigilarCola(() => { if (VISTA.tipo === "detalle") abrirDetalle(DET.channelId); });
+}
+
+async function abrirPlaylist(pid, titulo) {
+  const zona = $("#pl-editor");
+  zona.hidden = false;
+  zona.innerHTML = `<p class="soft">Cargando «${esc(titulo)}»…</p>`;
+  const r = await fetch(`/api/channel/${DET.channelId}/playlist/${pid}/items`);
+  const data = await r.json();
+  if (!r.ok) { zona.innerHTML = `<p class="sin-datos">${esc(data.error || "No se pudo leer la playlist.")}</p>`; return; }
+  const enLista = new Set(data.items.map(i => i.video_id));
+  const candidatos = DET.det.videos.filter(v => !enLista.has(v.video_id));
+  zona.innerHTML = `<div class="editor">
+    <div class="filas" style="justify-content:space-between">
+      <b>${esc(titulo)}</b>
+      <button class="btn mini" id="pl-cerrar">Cerrar</button></div>
+    <div style="margin:10px 0">${data.items.map((it, i) => `
+      <div class="pl-item">
+        <span class="pos">${i + 1}</span><span class="tit">${esc(it.title)}</span>
+        <button class="btn mini" data-pl-mv="-1" data-item="${esc(it.item_id)}"
+          data-vid="${esc(it.video_id)}" data-pos="${it.position}" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="btn mini" data-pl-mv="1" data-item="${esc(it.item_id)}"
+          data-vid="${esc(it.video_id)}" data-pos="${it.position}"
+          ${i === data.items.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn mini" data-pl-quitar="${esc(it.item_id)}" title="Quitar de la playlist">✕</button>
+      </div>`).join("") || `<p class="sin-datos">La playlist está vacía.</p>`}</div>
+    <div class="filas">
+      <select id="pl-add-vid" style="flex:1">${candidatos.map(v =>
+        `<option value="${esc(v.video_id)}">${esc(v.title)}</option>`).join("")
+        || `<option value="">(todos los videos ya están)</option>`}</select>
+      <button class="btn mini" id="pl-add">＋ Añadir</button></div></div>`;
+  $("#pl-cerrar").addEventListener("click", () => { zona.hidden = true; zona.innerHTML = ""; });
+  const refrescar = () => vigilarCola(() => abrirPlaylist(pid, titulo));
+  zona.querySelectorAll("[data-pl-quitar]").forEach(b => b.addEventListener("click", async () => {
+    await postJson("/api/playlist/remove", { channel_id: DET.channelId,
+      item_id: b.dataset.plQuitar }); refrescar();
+  }));
+  zona.querySelectorAll("[data-pl-mv]").forEach(b => b.addEventListener("click", async () => {
+    const nueva = Math.max(0, parseInt(b.dataset.pos, 10) + parseInt(b.dataset.plMv, 10));
+    await postJson("/api/playlist/move", { channel_id: DET.channelId,
+      playlist_id: pid, item_id: b.dataset.item, video_id: b.dataset.vid,
+      position: nueva }); refrescar();
+  }));
+  $("#pl-add").addEventListener("click", async () => {
+    const vid = $("#pl-add-vid").value;
+    if (!vid) return;
+    await postJson("/api/playlist/add", { channel_id: DET.channelId,
+      playlist_id: pid, video_id: vid }); refrescar();
+  });
+}
+
+async function postJson(ruta, cuerpo) {
+  const r = await fetch(ruta, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+  const data = await r.json();
+  if (!r.ok) { aviso(data.error || "La operación falló.", 8000); throw new Error(data.error); }
+  aviso("Encolado; aplicando…");
+  return data;
+}
+
+/* ── Cola ── */
+let COLA_TIMER = null;
+function vigilarCola(alTerminar) {
+  if (COLA_TIMER) { COLA_TIMER.cbs.push(alTerminar || (() => {})); return; }
+  COLA_TIMER = { cbs: [alTerminar || (() => {})] };
+  COLA_TIMER.id = setInterval(async () => {
+    const r = await fetch("/api/jobs?estado=en_curso");
+    const s = await r.json();
+    if (!s.running) {
+      clearInterval(COLA_TIMER.id);
+      const cbs = COLA_TIMER.cbs;
+      COLA_TIMER = null;
+      const rj = await fetch("/api/jobs?estado=error");
+      const errores = (await rj.json()).jobs.length;
+      aviso(errores ? `Cola procesada con ${errores} error(es); ábrela desde la cabecera.`
+                    : "Cola procesada: cambios aplicados en YouTube.");
+      const ov = await fetch("/api/overview");
+      OVERVIEW = await ov.json();
+      $("#estado-chips").innerHTML = chipsEstado(OVERVIEW.estado);
+      cbs.forEach(cb => cb());
+    }
+  }, 1500);
+}
+
+async function renderCola() {
+  VISTA = { tipo: "cola", days: VISTA.days };
+  const r = await fetch("/api/jobs");
+  const data = await r.json();
+  app.innerHTML = `
+    <div class="volver"><a href="#" id="volver-cola">← Todos los canales</a></div>
+    <div class="det-cabeza"><h1>Cola de ediciones</h1><span class="crece"></span>
+      <button class="btn mini" id="cola-procesar">▶ Procesar ahora</button></div>
+    <div class="panel"><div class="tabla-scroll"><table>
+      <thead><tr><th>#</th><th>Canal</th><th>Trabajo</th><th>Estado</th>
+        <th>Nota</th><th class="num">Intentos</th><th>Actualizado</th><th></th></tr></thead>
+      <tbody>${data.jobs.map(j => `<tr>
+        <td class="num">${j.id}</td>
+        <td>${esc(j.canal)}</td>
+        <td>${esc(j.etiqueta)}</td>
+        <td><span class="badge ${esc(j.status)}">${esc(j.status.replace("_", " "))}</span></td>
+        <td class="nota-celda" title="${esc(j.nota)}">${esc(j.nota)}</td>
+        <td class="num">${j.attempts}</td>
+        <td>${esc(j.updated_at)}</td>
+        <td>${["error", "cancelado"].includes(j.status)
+            ? `<button class="btn mini" data-job-retry="${j.id}">Reintentar</button>` : ""}
+           ${j.status === "pendiente"
+            ? `<button class="btn mini" data-job-cancel="${j.id}">Cancelar</button>` : ""}</td>
+      </tr>`).join("") ||
+        `<tr><td colspan="8" class="sin-datos">La cola está vacía: todo lo encolado ya se aplicó.</td></tr>`}
+      </tbody></table></div></div>
+    <p class="soft" style="font-size:12.5px">Los trabajos «en espera por cuota» se
+    reanudan solos tras el reinicio diario de cuota (medianoche, hora del Pacífico).</p>`;
+  $("#volver-cola").addEventListener("click", ev => { ev.preventDefault(); cargar(); });
+  $("#cola-procesar").addEventListener("click", async () => {
+    await fetch("/api/cola/procesar", { method: "POST" });
+    vigilarCola(() => { if (VISTA.tipo === "cola") renderCola(); });
+  });
+  app.querySelectorAll("[data-job-retry]").forEach(b => b.addEventListener("click", async () => {
+    await fetch(`/api/jobs/${b.dataset.jobRetry}/reintentar`, { method: "POST" });
+    vigilarCola(() => { if (VISTA.tipo === "cola") renderCola(); });
+    renderCola();
+  }));
+  app.querySelectorAll("[data-job-cancel]").forEach(b => b.addEventListener("click", async () => {
+    await fetch(`/api/jobs/${b.dataset.jobCancel}/cancelar`, { method: "POST" });
+    renderCola();
+  }));
+  if (data.running) vigilarCola(() => { if (VISTA.tipo === "cola") renderCola(); });
+}
+
+document.addEventListener("click", ev => {
+  if (ev.target.closest("#chip-cola")) renderCola();
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && ev.target.closest && ev.target.closest("#chip-cola")) renderCola();
+});
 
 /* ── Acciones ── */
 async function conectar() {

@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ytpanel import config, db, demo, sync
+from ytpanel import config, db, demo, jobs, sync
 
 
 def cmd_ui(args) -> None:
@@ -63,6 +63,29 @@ def cmd_canales(args) -> None:
               f"{c['last_sync'] or 'nunca'}{demo_tag}")
 
 
+def cmd_cola(args) -> None:
+    conn = db.connect()
+    try:
+        if args.procesar:
+            resumen = jobs.procesar_cola(conn, log=print)
+            print(f"\nHechos {resumen['hechos']} · errores {resumen['errores']}"
+                  f" · en espera {resumen['en_espera']}"
+                  f" · {resumen['unidades']} unidades de cuota")
+            if resumen["errores"]:
+                sys.exit(1)
+            return
+        lista = db.list_jobs(conn)
+        if not lista:
+            print("La cola está vacía.")
+            return
+        for j in lista[:40]:
+            etiqueta = jobs.ETIQUETAS.get(j["kind"], j["kind"])
+            print(f"  #{j['id']:>4}  {j['status']:<10} {etiqueta:<22} "
+                  f"{j['channel_id']:<26} {j['nota'][:60]}")
+    finally:
+        conn.close()
+
+
 def cmd_demo(args) -> None:
     conn = db.connect()
     try:
@@ -100,6 +123,11 @@ def main() -> None:
 
     p_can = sub.add_parser("canales", help="Listar canales conectados")
     p_can.set_defaults(func=cmd_canales)
+
+    p_cola = sub.add_parser("cola", help="Ver o procesar la cola de ediciones")
+    p_cola.add_argument("--procesar", action="store_true",
+                        help="Ejecutar los trabajos pendientes ahora")
+    p_cola.set_defaults(func=cmd_cola)
 
     p_demo = sub.add_parser("demo", help="Cargar o quitar datos de demostración")
     p_demo.add_argument("--quitar", action="store_true")
