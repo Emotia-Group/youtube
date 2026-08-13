@@ -9,6 +9,16 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.55.1 — 2026-08-13
+- ⬇ NUEVO `pull.bat`: traer la última versión en segundos, sin esperar a que
+  pip revise las dependencias (que es lo que hace lento a `actualizar.bat`).
+  Trae **la rama en la que estés**, no una fija; avanza con `--ff-only` para
+  no inventar merges ni abrir un editor a media actualización; dice qué
+  cambió y con qué versión te quedaste; y **si esa versión tocó
+  `requirements.txt`, te avisa** de pasar una vez por `actualizar.bat`. Si
+  algo lo bloquea (cambios locales, historial separado), explica cuál de los
+  tres casos es y el comando exacto para salir.
+
 ## v0.55.0 — 2026-08-13
 La Torre de Control aprende a **administrar** (Fase 2 del plan): ya no solo
 mides tus canales — los editas desde el panel, de a uno o en lote, sin abrir

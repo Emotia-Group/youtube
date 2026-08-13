@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.55.0 -->
+<!-- MANUAL_VERSION: 0.55.1 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -79,8 +79,12 @@ prueba internas en unos 6 minutos.
   importante**.
 
 ### 2.5 Actualizar el programa
-`git pull` y vuelve a abrir `iniciar.bat`. Arriba a la izquierda verás la
-versión; haz clic para leer las **novedades**.
+Doble clic en **`pull.bat`**: trae la última versión de tu rama en segundos y
+te dice qué cambió. Si el aviso menciona que cambiaron las dependencias, pasa
+una vez por **`actualizar.bat`** (hace lo mismo y además reinstala las
+librerías de Python, por eso tarda más). Luego vuelve a abrir `iniciar.bat` o
+`panel.bat`. Arriba a la izquierda verás la versión; haz clic para leer las
+**novedades**.
 
 Dos avisos que pueden aparecer ahí, y qué significan:
 

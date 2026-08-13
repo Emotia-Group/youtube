@@ -50,8 +50,9 @@ py -m ytstudio ui
 ```
 
 Después de la primera instalación, basta con **doble clic en `iniciar.bat`**
-(abre el programa y el navegador solos) y **`actualizar.bat`** para traer la
-última versión. Las claves de API se configuran desde la propia interfaz
+(abre el programa y el navegador solos), **`pull.bat`** para traer la última
+versión en segundos y **`actualizar.bat`** cuando además haga falta reinstalar
+dependencias. Las claves de API se configuran desde la propia interfaz
 (⚙ Configuración → Claves de API).
 
 Para ffmpeg en Windows: descarga `ffmpeg-release-essentials.zip` de
