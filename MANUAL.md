@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.53.0 -->
+<!-- MANUAL_VERSION: 0.54.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -384,3 +384,73 @@ compárteme ese archivo. Ahí está todo lo necesario para diagnosticarlo.
 - **Fase**: cada uno de los 11 pasos de la generación.
 - **Reanudar**: seguir donde se quedó sin re-pagar lo hecho.
 - **Tope de presupuesto**: freno automático de gasto por corrida.
+
+---
+
+## 13. Torre de Control: el panel multicanal
+
+ytstudio hace los videos; la **Torre de Control** administra los canales.
+Se abre con doble clic en **`panel.bat`** (o `python -m ytpanel ui`) en
+`http://localhost:8766`, y todo lo que ve y guarda vive **en tu equipo**
+(`panel_data/`), no en ningún servicio de terceros.
+
+### 13.1 Preparar Google Cloud (una sola vez, ~15 minutos)
+
+1. Entra a [console.cloud.google.com](https://console.cloud.google.com) con tu
+   cuenta principal y crea **UN** proyecto (p. ej. «emotia-panel»). Uno solo
+   para todo el sistema: crear varios para sumar cuota va contra las normas
+   de YouTube y sí es sancionable.
+2. En **APIs y servicios → Biblioteca**, habilita **YouTube Data API v3** y
+   **YouTube Analytics API**.
+3. En **Pantalla de consentimiento OAuth**: tipo **Externo**, rellena nombre y
+   correos. Mientras la app esté «En pruebas», añade en **Usuarios de prueba**
+   los correos de TODAS las cuentas de Google dueñas de tus canales.
+4. En **Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo
+   **«App de escritorio»**, y descarga el JSON como `client_secrets.json` en
+   la carpeta del programa (el mismo archivo sirve para la publicación de
+   ytstudio).
+
+> ⚠ **Mientras la app esté «En pruebas», Google caduca los tokens a los
+> 7 días**: el panel marcará los canales como «Reconectar» cada semana. Es
+> molesto pero esperado. La solución definitiva es **Publicar la app** y pasar
+> la verificación de Google (gratuita; pide una página web con política de
+> privacidad y un video demo, tarda de días a semanas). Con la app verificada,
+> los tokens duran hasta que tú los revoques.
+
+### 13.2 Conectar los canales
+
+Botón **«＋ Conectar canal»** → eliges la cuenta de Google → si la cuenta
+tiene canales de marca, Google te deja elegir **la identidad del canal** →
+aceptas los permisos. Repite por cada canal: **un token por canal**, da igual
+de qué cuenta sea. El panel pide desde el día uno los permisos de gestión y
+lectura de ingresos que usarán las fases siguientes, para no tener que
+reconectar los 20 canales cuando llegue la edición de metadatos.
+
+Al conectar, el panel trae la primera foto: 90 días de métricas diarias y los
+últimos 50 videos. Los **ingresos** solo aparecen en canales dentro del
+Programa de Socios (YPP); en los demás la tarjeta dice «ingresos sin acceso»
+y no es un error. Y son **estimados**: se ajustan a fin de mes, la cifra de
+pago real vive en AdSense.
+
+### 13.3 Sincronizar cada día
+
+- **A mano**: botón «⟳ Sincronizar» (verás el avance arriba).
+- **Programado** (recomendado): tarea diaria con
+  `py -m ytpanel sync` (Programador de tareas de Windows) o
+  `python3 -m ytpanel sync` (cron). Cada corrida es incremental y re-pide los
+  últimos 3 días porque Analytics los re-consolida.
+
+**Cuota**: leer métricas casi no gasta (≈3 unidades de Data API por canal y
+corrida, de 10 000 diarias; Analytics tiene cuota aparte). El medidor de la
+cabecera muestra lo gastado hoy por el panel.
+
+### 13.4 Seguridad y datos
+
+- Los tokens se guardan **cifrados** (paquete `cryptography`; si falta, el
+  panel avisa con «⚠ Tokens sin cifrar» — instálalo con
+  `pip install cryptography`).
+- El panel solo escucha en tu equipo (127.0.0.1), nunca en la red.
+- **Desconectar un canal borra** su token y todas sus métricas locales; el
+  canal en YouTube no se toca.
+- ¿Quieres verlo amueblado sin conectar nada? «Cargar demo» crea 4 canales
+  ficticios (no llaman a ninguna API); «Quitar demo» los borra de raíz.

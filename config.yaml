@@ -196,3 +196,12 @@ publish:
   enabled: false
   privacy: private
   category_id: '27'
+
+# ── Torre de Control (panel multicanal: python -m ytpanel ui) ──────────────
+panel:
+  port: 8766               # ytstudio usa 8765; el panel vive al lado
+  history_days: 90         # histórico que trae la PRIMERA sincronización
+  resync_overlap_days: 3   # Analytics re-consolida los últimos días: se re-piden
+  max_recent_videos: 50    # últimos videos por canal en cada sync
+  quota_budget: 10000      # cuota diaria de la Data API (para el medidor)
+  currency: USD            # moneda de los ingresos estimados

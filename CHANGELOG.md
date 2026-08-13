@@ -9,6 +9,47 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.54.0 — 2026-08-13
+Nace la **🎛️ Torre de Control** (`panel.bat` · `python -m ytpanel ui`,
+puerto 8766): el panel multicanal para administrar los canales donde ytstudio
+publica. Es la **Fase 1** del plan (conectar y ver); las siguientes traerán
+edición de metadatos en lote y reportes exportables.
+
+- 🔌 CONECTA CANALES DE CUALQUIER CUENTA: botón «Conectar canal» → OAuth de
+  Google → eliges cuenta e identidad (canales de marca incluidos). **Un token
+  por canal**, guardado **cifrado** en `panel_data/` (paquete `cryptography`;
+  sin él, el panel funciona pero avisa «tokens sin cifrar»). Desconectar un
+  canal borra token y métricas: tus datos, tus reglas.
+- 📈 HISTÓRICO PROPIO Y CRECIENTE: cada sync guarda las métricas diarias
+  (vistas, minutos, subs ganados/perdidos, likes, comentarios, shares e
+  **ingresos estimados** si el canal está en YPP) en una base local SQLite.
+  Studio muestra ventanas; aquí el registro es tuyo y no caduca.
+- ⚡ SYNC INCREMENTAL Y BARATO: la primera vez trae 90 días; después solo lo
+  nuevo, re-pidiendo los últimos 3 días porque Analytics los re-consolida.
+  ~3 unidades de cuota Data API por canal y corrida (las 10 000 diarias dan
+  de sobra para 20 canales); medidor de cuota en la cabecera. Los ingresos
+  van en consulta SEPARADA: un canal fuera de YPP no rompe su sync — queda
+  «ingresos sin acceso», que es un hecho, no un error.
+- 🃏 TARJETAS QUE CUENTAN LA SEMANA: por canal — suscriptores con delta de
+  7 días, vistas 7/28 días contra el periodo anterior, sparkline de 28 días,
+  horas vistas, ingresos y último video; estados visibles («✔ Al día»,
+  «⚠ Reconectar» cuando la autorización cae). Detalle con series de
+  30/90/180 días con tooltip, tabla de últimos videos y bitácora de syncs.
+- 🧪 SIN CONECTAR NADA TAMBIÉN SE VE: «Cargar demo» crea 4 canales ficticios
+  deterministas que cubren los estados reales (monetizado, sin YPP,
+  reconectar, canal joven). No llaman a ninguna API y se quitan de raíz.
+- 🕒 PARA LA NOCHE: `python -m ytpanel sync` desde cron o el Programador de
+  tareas deja la sincronización diaria hecha sin abrir el panel.
+- 📖 MANUAL cap. 13: Google Cloud paso a paso (un solo proyecto, qué APIs
+  habilitar, usuarios de prueba) y el porqué del «Reconectar» semanal
+  mientras la app OAuth siga «En pruebas» (tokens de 7 días; se cura
+  publicando y verificando la app, gratis).
+
+Batería nueva (`tests/test_v0_54_0.py`): base de datos y ventanas de métricas,
+bóveda con y sin cifrado, URL y flujo OAuth, sync completo/incremental con
+transporte falso (sin internet), ingresos 403 tolerado, demo determinista y
+servidor web de punta a punta.
+
 ## v0.53.0 — 2026-08-11
 Cierra los **tres huecos** que declaré en la v0.52.0 y añade el idioma del
 texto en pantalla que pediste.

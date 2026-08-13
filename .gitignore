@@ -23,6 +23,8 @@ assets/elements/*/*
 !assets/elements/*/.gitkeep
 client_secrets.json
 token.json
+# Datos de la Torre de Control: base de métricas y TOKENS de tus canales
+panel_data/
 .venv/
 predicciones.jsonl
 

@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torre de Control — panel multicanal</title>
+<style>
+  /* Tokens (claro por defecto; el oscuro redefine SOLO tokens) */
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --accent: #a8372b;            /* garnet: SOLO cromo de la UI, nunca series */
+    --accent-ink: #ffffff;
+    --wash: rgba(168,55,43,0.07);
+    --serie-vistas: #2a78d6;      /* paleta de datos validada (slot azul) */
+    --serie-ingresos: #008300;    /* slot verde (igual en ambos temas) */
+    --delta-buena: #006300;
+    --critico: #d03b3b;
+    --aviso: #b07d10;
+    --bueno: #0ca30c;
+    --chip-bg: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --accent: #e06a5b;
+      --accent-ink: #241210;
+      --wash: rgba(224,106,91,0.10);
+      --serie-vistas: #3987e5;
+      --serie-ingresos: #008300;
+      --delta-buena: #0ca30c;
+      --critico: #e66767;
+      --aviso: #d9a544;
+      --bueno: #0ca30c;
+      --chip-bg: #262624;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --accent: #e06a5b;
+    --accent-ink: #241210;
+    --wash: rgba(224,106,91,0.10);
+    --serie-vistas: #3987e5;
+    --serie-ingresos: #008300;
+    --delta-buena: #0ca30c;
+    --critico: #e66767;
+    --aviso: #d9a544;
+    --bueno: #0ca30c;
+    --chip-bg: #262624;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button { font: inherit; cursor: pointer; }
+  :is(a, button, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+  /* ── Barra superior ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 12px 0; flex-wrap: wrap; }
+  .marca { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+  .marca .v { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .estado-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; padding: 2px 9px; border-radius: 99px;
+    background: var(--chip-bg); color: var(--ink-2); white-space: nowrap;
+  }
+  .chip.critico { color: var(--critico); background: color-mix(in srgb, var(--critico) 12%, transparent); }
+  .chip.bueno   { color: var(--bueno);   background: color-mix(in srgb, var(--bueno) 12%, transparent); }
+  .chip.aviso   { color: var(--aviso);   background: color-mix(in srgb, var(--aviso) 14%, transparent); }
+  .crece { flex: 1; }
+  .btn {
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--ink);
+    padding: 7px 14px;
+  }
+  .btn:hover { background: var(--wash); }
+  .btn.primario { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.primario:hover { filter: brightness(1.06); }
+  .btn[disabled] { opacity: .55; cursor: default; }
+
+  /* ── Banner de sync ── */
+  #sync-banner {
+    display: none; padding: 7px 0; font-size: 13px; color: var(--ink-2);
+    border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  #sync-banner.activo { display: block; }
+  #sync-banner .punto {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); margin-right: 8px;
+    animation: latido 1.2s ease-in-out infinite;
+  }
+  @keyframes latido { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { #sync-banner .punto { animation: none; } }
+
+  /* ── KPIs ── */
+  .kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin: 22px 0;
+  }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px 14px;
+  }
+  .kpi .etiqueta { font-size: 12px; color: var(--muted); }
+  .kpi .valor { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin-top: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .delta-arriba { color: var(--delta-buena); }
+  .delta-abajo { color: var(--critico); }
+  .medidor { height: 4px; border-radius: 2px; background: var(--grid); margin-top: 8px; overflow: hidden; }
+  .medidor > i { display: block; height: 100%; background: var(--accent); }
+  .medidor.alerta > i { background: var(--critico); }
+
+  /* ── Tarjetas de canal ── */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 14px; padding-bottom: 40px;
+  }
+  .tarjeta {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .tarjeta .cabeza { display: flex; align-items: center; gap: 11px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: var(--chip-bg); color: var(--ink-2);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; overflow: hidden;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .quien { min-width: 0; }
+  .quien .nombre { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .quien .handle { font-size: 12px; color: var(--muted); }
+  .cifras { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+  .cifra .n { font-size: 20px; font-weight: 700; }
+  .cifra .t { font-size: 11px; color: var(--muted); display: block; }
+  .spark { position: relative; }
+  .spark svg { display: block; width: 100%; height: 56px; }
+  .mini-fila { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; }
+  .mini-fila b { color: var(--ink); font-weight: 650; }
+  .ultimo { font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 10px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pie-tarjeta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+
+  /* ── Detalle ── */
+  .volver { margin: 18px 0 6px; }
+  .det-cabeza { display: flex; align-items: center; gap: 14px; margin: 8px 0 18px; flex-wrap: wrap; }
+  .det-cabeza .avatar { width: 54px; height: 54px; font-size: 18px; }
+  .det-cabeza h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .rango { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .rango button { border: 0; background: var(--surface); color: var(--ink-2); padding: 6px 12px; font-size: 13px; }
+  .rango button + button { border-left: 1px solid var(--border); }
+  .rango button.activo { background: var(--wash); color: var(--ink); font-weight: 600; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 14px;
+  }
+  .panel h2 { font-size: 14px; margin: 0 0 10px; font-weight: 650; }
+  .panel h2 .nota { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 190px; }
+  .sin-datos { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+  .tabla-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 13.5px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .celda-video { display: flex; align-items: center; gap: 10px; min-width: 240px; }
+  .celda-video img { width: 60px; height: 34px; object-fit: cover; border-radius: 4px; background: var(--chip-bg); }
+  .celda-video .tit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; }
+
+  /* ── Onboarding vacío ── */
+  .vacio { max-width: 620px; margin: 48px auto; text-align: left; }
+  .vacio h1 { font-size: 24px; letter-spacing: -0.01em; }
+  .vacio ol { padding-left: 0; list-style: none; counter-reset: paso; margin: 24px 0; }
+  .vacio li {
+    counter-increment: paso; display: flex; gap: 14px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .vacio li::before {
+    content: counter(paso); flex: none; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .vacio .paso-tit { font-weight: 650; }
+  .vacio .paso-des { font-size: 13.5px; color: var(--ink-2); }
+  .demo-linea { color: var(--muted); font-size: 13.5px; margin-top: 18px; }
+
+  /* ── Tooltip compartido ── */
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 50; display: none;
+    background: var(--ink); color: var(--page);
+    font-size: 12px; padding: 5px 9px; border-radius: 6px; white-space: nowrap;
+  }
+  #tooltip b { font-variant-numeric: tabular-nums; }
+
+  /* ── Aviso flotante ── */
+  #toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--page); padding: 9px 16px;
+    border-radius: 8px; font-size: 13.5px; display: none; z-index: 60;
+    max-width: 90vw;
+  }
+
+  footer { color: var(--muted); font-size: 12.5px; padding: 18px 0 40px; }
+  footer .sep { margin: 0 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap topbar">
+    <span class="marca">🎛️ Torre de Control<span class="v" id="version"></span></span>
+    <span class="estado-chips" id="estado-chips"></span>
+    <span class="crece"></span>
+    <button class="btn" id="btn-sync" aria-label="Sincronizar todos los canales">⟳ Sincronizar</button>
+    <button class="btn primario" id="btn-conectar">＋ Conectar canal</button>
+  </div>
+  <div id="sync-banner"><div class="wrap"><span class="punto"></span><span id="sync-linea">Sincronizando…</span></div></div>
+</header>
+
+<main class="wrap" id="app" aria-live="polite">
+  <p style="color:var(--muted);margin-top:32px">Cargando…</p>
+</main>
+
+<div id="tooltip" role="presentation"></div>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const app = $("#app"), tooltip = $("#tooltip");
+let OVERVIEW = null;
+let VISTA = { tipo: "inicio", canal: null, days: 90 };
+let SYNC_TIMER = null;
+
+/* ── Formatos (es-ES) ── */
+const fInt = n => (n ?? 0).toLocaleString("es-ES");
+const fCompact = n => n >= 1e6 ? (n / 1e6).toLocaleString("es-ES", { maximumFractionDigits: 1 }) + " M"
+                  : n >= 1e4 ? (n / 1e3).toLocaleString("es-ES", { maximumFractionDigits: 1 }) + " mil"
+                  : fInt(n);
+const fMoney = n => n == null ? "—" :
+  "US$ " + n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const fFecha = iso => { if (!iso) return "—"; const d = new Date(iso.slice(0, 10) + "T12:00:00");
+  return d.getDate() + " " + MESES[d.getMonth()]; };
+const fDur = s => { const m = Math.floor(s / 60), r = s % 60;
+  return m + ":" + String(r).padStart(2, "0"); };
+const esc = t => String(t ?? "").replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function deltaHTML(actual, previo, fmt = fCompact) {
+  if (previo == null || actual == null || previo === 0) return "";
+  const pct = (actual - previo) / previo * 100;
+  if (!isFinite(pct)) return "";
+  const arriba = pct >= 0;
+  return `<span class="${arriba ? "delta-arriba" : "delta-abajo"}" title="vs. periodo anterior">` +
+         `${arriba ? "▲" : "▼"} ${Math.abs(pct).toLocaleString("es-ES", { maximumFractionDigits: 1 })}%</span>`;
+}
+
+/* ── Charts SVG (una serie por gráfico; sin doble eje jamás) ── */
+function pathDe(points, W, H, pad, maxY) {
+  const n = points.length;
+  const x = i => pad + (n === 1 ? (W - 2 * pad) / 2 : i / (n - 1) * (W - 2 * pad));
+  const y = v => H - pad - (maxY ? (v / maxY) * (H - 2 * pad) : 0);
+  return { x, y, d: points.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ") };
+}
+
+function lineChart(el, serie, { key, color, alto = 190, fmt = fInt, ejes = true }) {
+  const datos = serie.map(d => ({ date: d.date, v: d[key] ?? 0 }));
+  if (!datos.length) { el.innerHTML = '<p class="sin-datos">Sin datos todavía.</p>'; return; }
+  const W = 900, H = alto, pad = ejes ? 26 : 6;
+  const maxY = Math.max(...datos.map(d => d.v), 1) * 1.05;
+  const { x, y, d } = pathDe(datos.map(p => p.v), W, H, pad, maxY);
+  const base = (H - pad).toFixed(1);
+  let g = "";
+  if (ejes) {
+    for (let i = 1; i <= 3; i++) {
+      const gy = (pad + (H - 2 * pad) * (1 - i / 3)).toFixed(1);
+      g += `<line x1="${pad}" x2="${W - pad}" y1="${gy}" y2="${gy}" style="stroke:var(--grid)" stroke-width="1"/>`;
+    }
+  }
+  const fin = datos[datos.length - 1];
+  el.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Serie diaria">
+      ${g}
+      <line x1="${pad}" x2="${W - pad}" y1="${base}" y2="${base}" style="stroke:var(--baseline)" stroke-width="1"/>
+      <path d="${d} L ${x(datos.length - 1).toFixed(1)} ${base} L ${x(0).toFixed(1)} ${base} Z"
+            style="fill:${color}" opacity="0.10"/>
+      <path d="${d}" style="stroke:${color}" stroke-width="2" fill="none"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(datos.length - 1).toFixed(1)}" cy="${y(fin.v).toFixed(1)}" r="3.4" style="fill:${color}"/>
+      <line id="cruz" x1="0" x2="0" y1="${pad}" y2="${base}" style="stroke:var(--baseline)"
+            stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      <circle id="punto" r="3.4" style="fill:${color}" visibility="hidden"/>
+    </svg>` + (ejes ?
+    `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums">
+       <span>${fFecha(datos[0].date)}</span>
+       <span>máx. ${fmt(Math.round(maxY / 1.05))}</span>
+       <span>${fFecha(fin.date)}</span></div>` : "");
+  const svg = el.querySelector("svg");
+  const cruz = svg.querySelector("#cruz"), punto = svg.querySelector("#punto");
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(datos.length - 1,
+      Math.round((fx - pad) / (W - 2 * pad) * (datos.length - 1))));
+    const px = x(i), py = y(datos[i].v);
+    cruz.setAttribute("x1", px); cruz.setAttribute("x2", px);
+    cruz.setAttribute("visibility", "visible");
+    punto.setAttribute("cx", px); punto.setAttribute("cy", py);
+    punto.setAttribute("visibility", "visible");
+    tooltip.style.display = "block";
+    tooltip.innerHTML = `${fFecha(datos[i].date)} · <b>${fmt(datos[i].v)}</b>`;
+    tooltip.style.left = Math.min(window.innerWidth - tooltip.offsetWidth - 8, ev.clientX + 14) + "px";
+    tooltip.style.top = (ev.clientY - 34) + "px";
+  });
+  svg.addEventListener("mouseleave", () => {
+    cruz.setAttribute("visibility", "hidden");
+    punto.setAttribute("visibility", "hidden");
+    tooltip.style.display = "none";
+  });
+}
+
+/* ── Estado y chips ── */
+function chipsEstado(e) {
+  const chips = [];
+  if (!e.client_secrets)
+    chips.push(`<span class="chip aviso" title="Falta client_secrets.json en la carpeta del programa">⚠ Falta client_secrets.json</span>`);
+  chips.push(e.cifrado
+    ? `<span class="chip" title="Los tokens se guardan cifrados en panel_data/">🔒 Tokens cifrados</span>`
+    : `<span class="chip aviso" title="Instala el paquete cryptography para cifrar los tokens">⚠ Tokens sin cifrar</span>`);
+  const uso = e.cuota_hoy, tope = e.quota_budget || 10000;
+  chips.push(`<span class="chip" title="Unidades de la Data API gastadas hoy por este panel (las métricas de Analytics no gastan de aquí)">
+    Cuota hoy: ${fInt(uso)} / ${fInt(tope)}</span>`);
+  return chips.join("");
+}
+
+/* ── Vista: inicio ── */
+function renderInicio() {
+  const o = OVERVIEW;
+  $("#version").textContent = o.estado.version ? " · " + o.estado.version : "";
+  $("#estado-chips").innerHTML = chipsEstado(o.estado);
+
+  if (!o.channels.length) { renderVacio(); return; }
+
+  const t = o.totals;
+  const horas = t.watch_hours_28d;
+  let html = `<div class="kpis">
+    <div class="kpi"><div class="etiqueta">Canales</div>
+      <div class="valor">${fInt(t.channels)}</div>
+      <div class="sub">${t.connected === t.channels ? "todos conectados"
+        : `${fInt(t.connected)} conectados · ${fInt(t.channels - t.connected)} demo`}</div></div>
+    <div class="kpi"><div class="etiqueta">Suscriptores</div>
+      <div class="valor">${fCompact(t.subscribers)}</div></div>
+    <div class="kpi"><div class="etiqueta">Vistas · 28 días</div>
+      <div class="valor">${fCompact(t.views_28d)}</div>
+      <div class="sub">${deltaHTML(t.views_28d, t.views_prev_28d)}</div></div>
+    <div class="kpi"><div class="etiqueta">Horas vistas · 28 días</div>
+      <div class="valor">${fCompact(Math.round(horas))}</div></div>
+    <div class="kpi"><div class="etiqueta">Ingresos · 28 días</div>
+      <div class="valor">${t.revenue_28d == null ? "—" : fMoney(t.revenue_28d)}</div>
+      <div class="sub">${t.revenue_28d == null ? "sin canales con acceso" : "estimados (se ajustan a fin de mes)"}</div></div>
+  </div><div class="grid">`;
+
+  for (const c of o.channels) html += tarjetaHTML(c);
+  html += `</div>${pieHTML()}`;
+  app.innerHTML = html;
+
+  for (const c of o.channels) {
+    const el = document.getElementById("spark-" + c.channel_id);
+    if (el) lineChart(el, c.sparkline.map(p => ({ date: p.date, views: p.views })),
+      { key: "views", color: "var(--serie-vistas)", alto: 56, ejes: false, fmt: fInt });
+  }
+  document.querySelectorAll("[data-abrir]").forEach(b =>
+    b.addEventListener("click", () => abrirDetalle(b.dataset.abrir)));
+}
+
+function estadoChipCanal(c) {
+  const chips = [];
+  if (c.is_demo) chips.push(`<span class="chip">◌ demo</span>`);
+  if (c.token_status === "reauth")
+    chips.push(`<span class="chip critico" title="La autorización caducó o fue revocada: vuelve a conectar el canal">⚠ Reconectar</span>`);
+  else if (c.token_status === "sin_token")
+    chips.push(`<span class="chip aviso">⚠ Sin token</span>`);
+  else if (!c.is_demo)
+    chips.push(`<span class="chip bueno">✔ Al día</span>`);
+  return chips.join(" ");
+}
+
+function avatarHTML(c) {
+  if (c.thumbnail_url) return `<span class="avatar"><img src="${esc(c.thumbnail_url)}" alt=""></span>`;
+  const ini = (c.title || "?").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+  return `<span class="avatar" aria-hidden="true">${esc(ini)}</span>`;
+}
+
+function tarjetaHTML(c) {
+  const ultimo = c.last_video
+    ? `Último video: <b>${esc(c.last_video.title)}</b> · ${fFecha(c.last_video.published_at)} · ${fCompact(c.last_video.views)} vistas`
+    : "Aún sin videos sincronizados";
+  const ingresos = c.revenue_28d != null ? `<span>· <b>${fMoney(c.revenue_28d)}</b> 28 d</span>`
+    : (c.monetization === "sin_acceso"
+        ? `<span title="El canal no está en el Programa de Socios o el permiso monetario no fue concedido">· ingresos sin acceso</span>` : "");
+  const subsNet = c.subs_net_7d ?? 0;
+  return `<article class="tarjeta">
+    <div class="cabeza">
+      ${avatarHTML(c)}
+      <div class="quien">
+        <div class="nombre">${esc(c.title || c.channel_id)}</div>
+        <div class="handle">${esc(c.handle || "")}</div>
+      </div>
+      <span class="crece"></span>
+      ${estadoChipCanal(c)}
+    </div>
+    <div class="cifras">
+      <span class="cifra"><span class="n">${fCompact(c.subscriber_count)}</span>
+        <span class="t">suscriptores ${subsNet ? `<span class="${subsNet > 0 ? "delta-arriba" : "delta-abajo"}">${subsNet > 0 ? "+" : ""}${fInt(subsNet)} · 7 d</span>` : ""}</span></span>
+      <span class="cifra"><span class="n">${fCompact(c.views_7d)}</span>
+        <span class="t">vistas · 7 d ${deltaHTML(c.views_7d, c.views_prev_7d)}</span></span>
+      <span class="cifra"><span class="n">${fCompact(c.views_28d)}</span>
+        <span class="t">vistas · 28 d</span></span>
+    </div>
+    <div class="spark" id="spark-${esc(c.channel_id)}" title="Vistas diarias, últimos 28 días"></div>
+    <div class="mini-fila">
+      <span><b>${fCompact(Math.round((c.watch_minutes_28d || 0) / 60))}</b> h vistas 28 d</span>
+      ${ingresos}
+    </div>
+    <div class="ultimo">${ultimo}</div>
+    <div class="pie-tarjeta">
+      <span>Sync: ${esc(c.last_sync || "nunca")}</span>
+      <span class="crece"></span>
+      <button class="btn" data-abrir="${esc(c.channel_id)}">Ver detalle</button>
+    </div>
+  </article>`;
+}
+
+function pieHTML() {
+  const hayDemo = OVERVIEW.channels.some(c => c.is_demo);
+  return `<footer>
+    Los datos viven solo en tu equipo (panel_data/). Desconectar un canal borra todo lo suyo.
+    ${hayDemo ? `<span class="sep">·</span><a href="#" id="quitar-demo">Quitar canales de demostración</a>` : ""}
+    <span class="sep">·</span><a href="#" id="cargar-demo">Cargar demo</a>
+  </footer>`;
+}
+
+/* ── Vista: vacío / onboarding ── */
+function renderVacio() {
+  app.innerHTML = `<div class="vacio">
+    <h1>Conecta tu primer canal</h1>
+    <p style="color:var(--ink-2)">La Torre de Control habla directo con las APIs oficiales de
+    YouTube: cada canal se conecta una vez y sus métricas se guardan aquí, en tu equipo.</p>
+    <ol>
+      <li><div><div class="paso-tit">Pon client_secrets.json en la carpeta del programa</div>
+        <div class="paso-des">El mismo archivo que usa la publicación de ytstudio: proyecto de Google Cloud
+        con <b>YouTube Data API v3</b> y <b>YouTube Analytics API</b> habilitadas, credencial OAuth tipo
+        «App de escritorio». El MANUAL.md trae el paso a paso.</div></div></li>
+      <li><div><div class="paso-tit">Pulsa «Conectar canal»</div>
+        <div class="paso-des">Elige la cuenta de Google y, si es un canal de marca, la identidad del canal.
+        Repite por cada canal: un token por canal, da igual de qué cuenta sea.</div></div></li>
+      <li><div><div class="paso-tit">Sincroniza</div>
+        <div class="paso-des">La primera foto trae 90 días de métricas. Después, cada sync es incremental
+        (y puedes programar <code>python -m ytpanel sync</code> cada noche).</div></div></li>
+    </ol>
+    <button class="btn primario" id="btn-conectar-2">＋ Conectar canal</button>
+    <p class="demo-linea">¿Solo quieres ver cómo luce? <a href="#" id="cargar-demo">Carga datos de demostración</a>.</p>
+  </div>`;
+  $("#btn-conectar-2").addEventListener("click", conectar);
+}
+
+/* ── Vista: detalle ── */
+async function abrirDetalle(channelId) {
+  VISTA = { tipo: "detalle", canal: channelId, days: VISTA.days || 90 };
+  const r = await fetch(`/api/channel/${channelId}?days=${VISTA.days}`);
+  if (!r.ok) { aviso("No se pudo abrir el canal."); return; }
+  const det = await r.json();
+  const c = det.channel;
+  const esDemo = !!c.is_demo;
+  const linkStudio = esDemo ? "" :
+    `<a href="https://studio.youtube.com/channel/${esc(c.channel_id)}" target="_blank" rel="noopener">Abrir en YouTube Studio ↗</a>`;
+  const conIngresos = det.series.some(d => d.revenue != null);
+
+  app.innerHTML = `
+    <div class="volver"><a href="#" id="volver">← Todos los canales</a></div>
+    <div class="det-cabeza">
+      ${avatarHTML(c)}
+      <div><h1>${esc(c.title || c.channel_id)}</h1>
+        <div style="font-size:13px;color:var(--muted)">${esc(c.handle || "")}
+          · ${fCompact(c.subscriber_count)} suscriptores · ${fInt(c.video_count)} videos ${linkStudio ? "· " + linkStudio : ""}</div></div>
+      <span class="crece"></span>
+      ${estadoChipCanal(c)}
+      ${esDemo ? "" : `<button class="btn" id="btn-desconectar">Desconectar</button>`}
+      <span class="rango" role="group" aria-label="Rango de días">
+        ${[30, 90, 180].map(d =>
+          `<button data-dias="${d}" class="${d === VISTA.days ? "activo" : ""}">${d} d</button>`).join("")}
+      </span>
+    </div>
+
+    <div class="panel"><h2>Vistas por día</h2><div class="chart" id="ch-vistas"></div></div>
+    <div class="panel"><h2>Ingresos estimados por día
+      <span class="nota">${conIngresos ? "US$ · se ajustan a fin de mes; la cifra de pago vive en AdSense" : ""}</span></h2>
+      <div class="chart" id="ch-ingresos"></div></div>
+
+    <div class="panel"><h2>Últimos videos</h2>
+      <div class="tabla-scroll"><table>
+        <thead><tr><th>Video</th><th>Publicado</th><th class="num">Duración</th>
+          <th class="num">Vistas</th><th class="num">Me gusta</th><th class="num">Comentarios</th></tr></thead>
+        <tbody>${det.videos.map(v => `<tr>
+          <td><span class="celda-video">
+            ${v.thumbnail_url ? `<img src="${esc(v.thumbnail_url)}" alt="">` : `<img alt="" style="visibility:hidden">`}
+            <span class="tit">${esDemo ? esc(v.title)
+              : `<a href="https://youtu.be/${esc(v.video_id)}" target="_blank" rel="noopener">${esc(v.title)}</a>`}</span>
+          </span></td>
+          <td>${fFecha(v.published_at)}</td>
+          <td class="num">${fDur(v.duration_seconds)}</td>
+          <td class="num">${fInt(v.views)}</td>
+          <td class="num">${fInt(v.likes)}</td>
+          <td class="num">${fInt(v.comments)}</td></tr>`).join("") ||
+          `<tr><td colspan="6" class="sin-datos">Sin videos sincronizados todavía.</td></tr>`}
+        </tbody></table></div></div>
+
+    <div class="panel"><h2>Últimas sincronizaciones</h2>
+      ${det.syncs.length ? `<div class="tabla-scroll"><table>
+        <thead><tr><th>Inicio</th><th>Resultado</th><th class="num">Cuota</th></tr></thead>
+        <tbody>${det.syncs.map(s => `<tr>
+          <td>${esc(s.started_at)}</td>
+          <td>${s.ok ? "✔ " : `<span style="color:var(--critico)">✖ </span>`}${esc(s.detail)}</td>
+          <td class="num">${fInt(s.quota_units)}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="sin-datos">Todavía no se ha sincronizado.</p>`}
+    </div>
+    ${pieHTML()}`;
+
+  lineChart($("#ch-vistas"), det.series, { key: "views", color: "var(--serie-vistas)", fmt: fInt });
+  if (conIngresos)
+    lineChart($("#ch-ingresos"), det.series.map(d => ({ date: d.date, revenue: d.revenue ?? 0 })),
+      { key: "revenue", color: "var(--serie-ingresos)", fmt: n => fMoney(n) });
+  else
+    $("#ch-ingresos").innerHTML = `<p class="sin-datos">Sin datos de ingresos: el canal no está en el
+      Programa de Socios o el permiso monetario no fue concedido al conectar.</p>`;
+
+  $("#volver").addEventListener("click", ev => { ev.preventDefault(); VISTA = { tipo: "inicio" }; renderInicio(); });
+  document.querySelectorAll("[data-dias]").forEach(b =>
+    b.addEventListener("click", () => { VISTA.days = parseInt(b.dataset.dias, 10); abrirDetalle(channelId); }));
+  const bd = document.getElementById("btn-desconectar");
+  if (bd) bd.addEventListener("click", () => desconectar(c.channel_id, c.title || c.channel_id));
+}
+
+/* ── Acciones ── */
+async function conectar() {
+  const r = await fetch("/api/oauth/start");
+  const data = await r.json();
+  if (!r.ok) { aviso(data.error || "No se pudo iniciar la conexión.", 9000); return; }
+  window.location.href = data.url;
+}
+
+async function sincronizar() {
+  const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const data = await r.json();
+  if (!data.started && data.running) aviso("Ya hay una sincronización en marcha.");
+  vigilarSync();
+}
+
+async function desconectar(channelId, nombre) {
+  if (!confirm(`¿Desconectar «${nombre}»?\n\nSe borra su token y todas sus métricas de este equipo. ` +
+               `El canal en YouTube no se toca. Podrás reconectarlo cuando quieras.`)) return;
+  await fetch(`/api/channel/${channelId}/desconectar`, { method: "POST" });
+  await cargar();
+}
+
+async function demoCargar(ev) { ev.preventDefault(); await fetch("/api/demo", { method: "POST" }); await cargar(); }
+async function demoQuitar(ev) { ev.preventDefault(); await fetch("/api/demo/quitar", { method: "POST" }); await cargar(); }
+
+function vigilarSync() {
+  if (SYNC_TIMER) return;
+  $("#sync-banner").classList.add("activo");
+  SYNC_TIMER = setInterval(async () => {
+    const r = await fetch("/api/sync/status");
+    const s = await r.json();
+    $("#sync-linea").textContent = s.lines.length ? s.lines[s.lines.length - 1] : "Sincronizando…";
+    if (!s.running) {
+      clearInterval(SYNC_TIMER); SYNC_TIMER = null;
+      $("#sync-banner").classList.remove("activo");
+      const fallos = (s.result || []).filter(x => x && !x.ok);
+      aviso(fallos.length
+        ? `Sincronización con ${fallos.length} problema(s); revisa las tarjetas marcadas.`
+        : "Sincronización completa.");
+      await cargar(true);
+    }
+  }, 1500);
+}
+
+function aviso(texto, ms = 4000) {
+  const t = $("#toast");
+  t.textContent = texto; t.style.display = "block";
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = "none"; }, ms);
+}
+
+/* ── Carga ── */
+async function cargar(mantenerVista = false) {
+  const r = await fetch("/api/overview");
+  OVERVIEW = await r.json();
+  if (OVERVIEW.estado.sync.running) vigilarSync();
+  if (mantenerVista && VISTA.tipo === "detalle"
+      && OVERVIEW.channels.some(c => c.channel_id === VISTA.canal)) {
+    await abrirDetalle(VISTA.canal);
+  } else {
+    VISTA = { tipo: "inicio", days: VISTA.days };
+    renderInicio();
+  }
+}
+
+/* Los enlaces de demo se re-pintan con cada vista: delegación, no cableado */
+app.addEventListener("click", ev => {
+  const a = ev.target.closest("#cargar-demo, #quitar-demo");
+  if (!a) return;
+  (a.id === "cargar-demo" ? demoCargar : demoQuitar)(ev);
+});
+
+$("#btn-conectar").addEventListener("click", conectar);
+$("#btn-sync").addEventListener("click", sincronizar);
+
+const params = new URLSearchParams(location.search);
+if (params.get("conectado")) {
+  history.replaceState(null, "", "/");
+  aviso(`Canal conectado: ${params.get("conectado")}. Trayendo sus primeros datos…`, 6000);
+}
+cargar();
+</script>
+</body>
+</html>

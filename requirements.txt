@@ -20,3 +20,7 @@ yt-dlp>=2024.10           # análisis profundo de videos de referencia por enlac
 # Publicación en YouTube (opcional)
 google-api-python-client>=2.100
 google-auth-oauthlib>=1.1
+
+# Torre de Control (panel multicanal) — cifra los tokens de tus canales.
+# El panel funciona sin este paquete, pero guarda los tokens sin cifrar y avisa.
+cryptography>=41

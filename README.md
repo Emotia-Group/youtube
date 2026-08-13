@@ -219,3 +219,38 @@ rutas del paquete final para subirlo manualmente.
 | B-roll (~35 imágenes) | FLUX / gpt-image-1 | ~$1.5–3 |
 | Video IA (opcional, por escena de 5 s) | Kling | ~$0.15–0.5 c/u |
 | Música | biblioteca local / MusicGen | gratis / centavos |
+
+## 🎛️ Torre de Control — panel multicanal (Fase 1)
+
+ytstudio **produce** los videos; la Torre de Control **administra los
+canales**: conecta cada canal por OAuth (sin intermediarios, directo a las
+APIs oficiales de YouTube), guarda su histórico de métricas en tu equipo y lo
+muestra en un panel con tarjetas por canal.
+
+```bash
+python -m ytpanel ui       # abre http://localhost:8766   (Windows: panel.bat)
+python -m ytpanel sync     # sincronizar desde la terminal (cron / Programador)
+python -m ytpanel demo     # 4 canales ficticios para ver el panel amueblado
+```
+
+Qué hace esta fase:
+
+- **Conectar canal** con la cuenta de Google que sea — un token por canal
+  (los canales de marca se eligen en la pantalla de Google). Requiere el
+  mismo `client_secrets.json` que la publicación de ytstudio, con
+  **YouTube Data API v3** y **YouTube Analytics API** habilitadas.
+- **Sincronización incremental**: la primera vez trae 90 días de métricas
+  diarias (vistas, minutos, subs, likes… e **ingresos estimados** si el canal
+  está en el Programa de Socios); después solo pide lo nuevo. ~3 unidades de
+  cuota por canal y corrida — el medidor de cuota vive en la cabecera.
+- **Tarjetas por canal**: suscriptores con delta semanal, vistas 7/28 días,
+  sparkline, horas vistas, ingresos y último video; detalle con series de
+  30/90/180 días y tabla de últimos videos.
+- **Datos tuyos y locales**: todo vive en `panel_data/` (fuera de Git), los
+  tokens se cifran con `cryptography`, y desconectar un canal borra todo lo
+  suyo. Los canales demo no llaman a ninguna API.
+
+El paso a paso de Google Cloud (proyecto, APIs, pantalla de consentimiento y
+por qué los tokens caducan a los 7 días mientras la app está «en pruebas»)
+está en el **MANUAL.md, capítulo 13**. Fases siguientes del plan: edición de
+títulos/miniaturas/descripciones/playlists en lote y reportes exportables.
