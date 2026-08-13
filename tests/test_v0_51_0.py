@@ -115,6 +115,13 @@ def existe(ruta: str) -> bool:
 
 
 mencionados = set(re.findall(r"`([a-z_]+(?:\.[a-z_]+)+)`", texto))
+# Los ARCHIVOS con extensión (panel.bat, client_secrets.json…) le parecen
+# rutas de ajuste a la regex, pero no lo son — y desde la v0.54.0 existe el
+# bloque `panel:` en config.yaml, así que «panel.bat» buscaba cfg[panel][bat]
+# y salía «inventado» con el manual diciendo la verdad. Un ajuste real nunca
+# termina en extensión de archivo.
+_EXTENSIONES = (".bat", ".sh", ".json", ".yaml", ".yml", ".md", ".py")
+mencionados = {r for r in mencionados if not r.endswith(_EXTENSIONES)}
 inventados = [r for r in mencionados
               if r.split(".")[0] in cfg and not existe(r)]
 check("T3 ningún ajuste mencionado en el manual es inventado", not inventados,

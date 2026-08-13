@@ -9,6 +9,17 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.54.1 — 2026-08-13
+La suite completa marcó 2 baterías en rojo tras estrenar la Torre de Control.
+Al diagnosticarlas, **el defecto era de la prueba, no del programa** (como en
+la v0.51.2): la batería que vigila el manual lee los tokens `con.puntos` como
+rutas de config.yaml, y «panel.bat» — que es un ARCHIVO — chocó con el nuevo
+bloque `panel:` y salía «ajuste inventado» con el manual diciendo la verdad.
+
+- 🧪 La comprobación ahora descarta lo que termina en extensión de archivo
+  (.bat, .sh, .json, .yaml, .md, .py): un ajuste real nunca la lleva. La
+  batería anidada que re-ejecuta esa (v0.51.1) vuelve a verde en cascada.
+
 ## v0.54.0 — 2026-08-13
 Nace la **🎛️ Torre de Control** (`panel.bat` · `python -m ytpanel ui`,
 puerto 8766): el panel multicanal para administrar los canales donde ytstudio
