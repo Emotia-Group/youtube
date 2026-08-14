@@ -193,11 +193,33 @@ function go(screen, slug) {
   if (screen === 'guion') loadScript();
 }
 
+// La versión de la cabecera es un BOTÓN: abre el registro de cambios. Además
+// avisa de los dos estados que confunden al actualizar — que el proceso en
+// marcha sea más viejo que los archivos (hay que reiniciar) y que haya
+// archivos del programa modificados sin guardar.
+function pintarVersion() {
+  const v = S.cfg?.version || {};
+  const nodo = $('#ver');
+  nodo.replaceChildren();
+  const viejo = S.cfg?.server_version && S.cfg.server_version !== v.version;
+  nodo.append(el('button', {
+    class: 'btn btn-ghost btn-sm', style: 'font:11px var(--mono)',
+    title: 'Ver qué trae cada versión del programa',
+    onclick: showChangelog,
+  }, [v.version, v.date].filter(Boolean).join(' · ') || 'versión'));
+  if (viejo) nodo.append(el('span', { class: 'tag', style: 'margin-left:8px', title: `Los archivos están en ${v.version} pero el proceso corre ${S.cfg.server_version}.` }, 'actualización NO aplicada: reinicia'));
+  if (v.modified) {
+    const cuales = (v.modified_files || []).join('\n');
+    nodo.append(el('span', { class: 'tag tag-quiet', style: 'margin-left:8px', title: cuales || '' },
+      `${v.modified_count} archivo(s) del programa modificados`));
+  }
+}
+
 /* ---------- carga ---------- */
 async function boot() {
   await safe(async () => {
     S.cfg = await api('/api/config');
-    $('#ver').textContent = [S.cfg.version?.version, S.cfg.version?.date].filter(Boolean).join(' · ');
+    pintarVersion();
     S.projects = await api('/api/projects');
   });
   render();
@@ -259,7 +281,10 @@ function viewProyectos() {
   for (const p of S.projects) {
     const estado = p.running ? `generando${p.phaseLabel || ''}` : p.has_error ? 'con error' : p.done === p.total ? 'listo' : 'borrador';
     body.append(el('tr', { class: 'row', onclick: () => go('corrida', p.slug) },
-      el('td', { style: 'font-family:var(--heading);font-size:17px' }, p.display_name || p.slug),
+      el('td', { style: 'width:96px;padding-right:14px' }, thumb(p, 84)),
+      el('td', {},
+        el('div', { style: 'font-family:var(--heading);font-size:17px' }, p.display_name || p.slug),
+        el('div', { style: 'margin-top:4px' }, fmtBadges(p))),
       el('td', {}, p.running ? el('span', { class: 'tag' }, estado) : el('span', { class: 'tag tag-quiet' }, estado)),
       el('td', { class: 'mono', style: 'text-align:right' }, `${p.done}/${p.total}`),
       el('td', { class: 'mono', style: 'text-align:right' }, p.scene_count ? `${p.scene_count} esc.` : '—'),
@@ -277,7 +302,7 @@ function viewProyectos() {
       } })),
     el('table', { style: 'margin-top:20px' },
       el('thead', {}, el('tr', {},
-        el('th', {}, 'Proyecto'), el('th', {}, 'Estado'),
+        el('th', {}, ''), el('th', {}, 'Proyecto'), el('th', {}, 'Estado'),
         el('th', { style: 'text-align:right' }, 'Fases'),
         el('th', { style: 'text-align:right' }, 'Escenas'),
         el('th', { style: 'text-align:right' }, 'Duración'),
@@ -472,11 +497,130 @@ function viewBiblioteca() {
     el('div', { class: 'kicker' }, `${done.length} videos terminados`),
     el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Biblioteca'),
     el('div', { class: 'grid4', style: 'margin-top:22px' }, done.map(p => el('figure', { style: 'margin:0;cursor:pointer', onclick: () => go('corrida', p.slug) },
-      el('div', { class: 'plate', style: 'aspect-ratio:16/9' }),
+      thumb(p, 230),
       el('figcaption', { style: 'margin-top:8px;line-height:1.5' },
         el('span', { style: 'font-family:var(--heading);font-size:17px' }, p.display_name || p.slug),
         el('br'),
-        el('span', { class: 'mono muted' }, [p.total_duration ? fmtSec(p.total_duration) : null, dateOf(p.created_at)].filter(Boolean).join(' · ')))))));
+        el('span', { class: 'mono muted' }, [p.total_duration ? fmtSec(p.total_duration) : null, dateOf(p.created_at)].filter(Boolean).join(' · ')),
+        el('div', { style: 'margin-top:6px' }, fmtBadges(p)))))));
+}
+
+// PROPORCIÓN REAL del proyecto: un Reel se ve como teléfono vertical y un
+// anuncio cuadrado como cuadrado, en vez de forzarlo todo a 16:9.
+function aspectOf(p) {
+  const a = p.video_aspect || { w: 1920, h: 1080 };
+  return { w: a.w || 1920, h: a.h || 1080, vert: (a.h || 0) > (a.w || 0) };
+}
+
+// Ficha visual de un proyecto: su MINIATURA de verdad si ya existe, y si no
+// una placa con el motivo. Antes siempre salía la placa decorativa, así que
+// todos los proyectos se veían iguales y no había forma de reconocerlos.
+function thumb(p, ancho) {
+  const a = aspectOf(p);
+  const w = a.vert ? Math.round((ancho || 230) * 0.62) : (a.w === a.h ? Math.round((ancho || 230) * 0.8) : (ancho || 230));
+  const estilo = `width:${w}px;height:auto;aspect-ratio:${a.w}/${a.h};object-fit:cover;border:1px solid var(--divider);border-radius:3px`;
+  if (p.thumbnail && p.slug) return el('img', { src: `/files/${p.slug}/${p.thumbnail}?v=${p.done || 0}`, loading: 'lazy', style: estilo, alt: p.display_name || p.slug });
+  return el('div', { class: 'plate', style: `width:${w}px;aspect-ratio:${a.w}/${a.h};display:flex;align-items:center;justify-content:center` },
+    el('span', { class: 'kicker', style: 'background:var(--bg);padding:3px 7px' },
+      p.done === p.total ? 'sin miniatura' : 'en proceso'));
+}
+
+// Distintivos de formato y plantilla (un Short, un Reel, un anuncio…).
+function fmtBadges(p) {
+  const f = S.cfg?.formats?.[p.format];
+  const t = p.short_template && p.short_template !== 'libre' ? S.cfg?.short_templates?.[p.short_template] : null;
+  return [
+    f && p.format !== 'long' ? el('span', { class: 'tag', style: 'margin-right:6px' }, f.label) : null,
+    t ? el('span', { class: 'tag tag-quiet' }, t.label) : null,
+  ].filter(Boolean);
+}
+
+// REGISTRO DE CAMBIOS al pulsar la versión de la cabecera. En el rediseño la
+// versión era texto muerto: se perdió la ventana que cuenta qué trae cada
+// versión del programa.
+function overlay(titulo, contenido, ancho) {
+  const caja = el('div', { class: 'card', style: `background:var(--bg);max-width:${ancho || 700}px;width:100%;max-height:82vh;overflow:auto;padding:20px 22px` },
+    el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:16px;position:sticky;top:-20px;background:var(--bg);padding:2px 0 12px' },
+      el('h2', { style: 'font-size:23px' }, titulo),
+      el('button', { class: 'btn btn-sm', onclick: () => ov.remove() }, 'Cerrar')),
+    contenido);
+  const ov = el('div', { style: 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99;display:flex;align-items:center;justify-content:center;padding:24px',
+    onclick: e => { if (e.target === ov) ov.remove(); } }, caja);
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', esc); }
+  });
+  document.body.append(ov);
+  return ov;
+}
+
+// Markdown mínimo: títulos, viñetas, tablas, negrita y código. El manual y el
+// registro de cambios se escriben en Markdown, y sin esto salían como un
+// bloque de texto plano con los asteriscos y las barras a la vista.
+function mdInline(s) {
+  return String(s)
+    .replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    .replace(/`([^`]+)`/g, '<code style="font:11px var(--mono);background:var(--a100);padding:1px 4px;border-radius:3px">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function mdToHtml(md) {
+  const out = [];
+  // El manual y el registro de cambios vienen con las líneas CORTADAS a 80
+  // caracteres. Tratando cada línea como un párrafo, el texto salía roto a
+  // media frase y una negrita partida en dos líneas no se cerraba nunca.
+  // Primero se reúnen las líneas de continuación en su bloque lógico.
+  const nuevoBloque = t => !t || /^(#{1,6} |[-*] |\d+\. |>|\||---|===)/.test(t);
+  const lineas = [];
+  for (const cruda of String(md || '').split('\n')) {
+    const t = cruda.trim();
+    if (!nuevoBloque(t) && lineas.length && lineas[lineas.length - 1]
+        && !/^(#{1,6} |>|\||---|===)/.test(lineas[lineas.length - 1])) {
+      lineas[lineas.length - 1] += ' ' + t;     // continúa el bloque anterior
+    } else {
+      lineas.push(t);
+    }
+  }
+  let tabla = null;
+  const cerrarTabla = () => { if (tabla) { out.push('<table>' + tabla.join('') + '</table>'); tabla = null; } };
+  for (const l of lineas) {
+    const t = l.trim();
+    if (/^\|(.+)\|$/.test(t)) {
+      const celdas = t.slice(1, -1).split('|').map(c => c.trim());
+      if (celdas.every(c => /^:?-{2,}:?$/.test(c))) continue;   // la fila de guiones
+      const th = tabla === null;
+      tabla = tabla || [];
+      tabla.push('<tr>' + celdas.map(c => th ? `<th>${mdInline(c)}</th>` : `<td>${mdInline(c)}</td>`).join('') + '</tr>');
+      continue;
+    }
+    cerrarTabla();
+    if (/^#{1,6} /.test(t)) {
+      const n = t.match(/^#+/)[0].length;
+      const tam = [30, 25, 20, 17, 16, 15][n - 1];
+      out.push(`<h${Math.min(n, 4)} id="s-${out.length}" style="font-size:${tam}px;margin:22px 0 8px">${mdInline(t.replace(/^#+ /, ''))}</h${Math.min(n, 4)}>`);
+    } else if (/^[-*] /.test(t)) {
+      out.push(`<div style="margin:4px 0 4px 16px;line-height:1.65">• ${mdInline(t.slice(2))}</div>`);
+    } else if (/^\d+\. /.test(t)) {
+      out.push(`<div style="margin:4px 0 4px 16px;line-height:1.65">${mdInline(t)}</div>`);
+    } else if (/^>/.test(t)) {
+      out.push(`<div style="margin:8px 0;padding-left:12px;border-left:2px solid var(--accent);line-height:1.65">${mdInline(t.replace(/^>\s?/, ''))}</div>`);
+    } else if (/^(---|===)/.test(t)) {
+      out.push('<hr style="border:0;border-top:1px solid var(--divider);margin:18px 0">');
+    } else if (t) {
+      out.push(`<p style="margin:8px 0;line-height:1.7">${mdInline(t)}</p>`);
+    }
+  }
+  cerrarTabla();
+  return out.join('');
+}
+
+async function showChangelog() {
+  let md = '';
+  try { md = (await api('/api/changelog')).content; }
+  catch (e) { alert('No se pudo leer el registro de cambios: ' + e.message); return; }
+  overlay('Novedades de cada versión',
+    el('div', { html: mdToHtml(md), style: 'font-size:14px' }), 760);
 }
 
 // Casilla SÍ/NO con su explicación debajo. Muchos ajustes del programa son

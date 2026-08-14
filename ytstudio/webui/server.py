@@ -226,7 +226,26 @@ def _project_summary(slug: str) -> dict:
         "input_meta": project.get("input_meta"),
         "total_duration": project.get("total_duration"),
         "scene_count": project.get("scene_count"),
+        # MINIATURA Y FORMATO en el resumen (no solo en el detalle): sin esto
+        # la Biblioteca y la lista de proyectos no tienen con qué pintar la
+        # imagen del video, y todas las fichas salen vacías e iguales.
+        "thumbnail": (f"{DIRS['final']}/miniatura.jpg"
+                      if (project.dir / DIRS["final"] / "miniatura.jpg").exists()
+                      else None),
+        "format": project.get("format") or "long",
+        "short_template": project.get("short_template"),
+        "video_aspect": _project_aspect(project),
     }
+
+
+def _project_aspect(project) -> dict:
+    """Proporción REAL del proyecto, para que la ficha se vea como el video:
+    un Reel como teléfono vertical, un anuncio cuadrado como cuadrado."""
+    try:
+        pv = load_config(project.dir).get("video", {})
+        return {"w": int(pv.get("width", 1920)), "h": int(pv.get("height", 1080))}
+    except Exception:
+        return {"w": 1920, "h": 1080}
 
 
 def api_list_projects() -> list[dict]:
@@ -461,12 +480,7 @@ def api_project_detail(slug: str) -> dict:
     # como teléfono 9:16, un Ad como cuadrado, no todo como 16:9.
     detail["format"] = project.get("format") or "long"
     detail["short_template"] = project.get("short_template")
-    try:
-        pv = load_config(project.dir).get("video", {})
-        detail["video_aspect"] = {"w": int(pv.get("width", 1920)),
-                                  "h": int(pv.get("height", 1080))}
-    except Exception:
-        detail["video_aspect"] = {"w": 1920, "h": 1080}
+    detail["video_aspect"] = _project_aspect(project)
     return detail
 
 
