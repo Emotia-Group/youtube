@@ -9,6 +9,51 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.59.0 — 2026-08-14
+La interfaz nueva, terminada. El rediseño traía el aspecto que querías pero
+le faltaban dos tercios de lo que el programa sabía hacer: 721 líneas frente a
+1457, con 72 funciones ausentes. No estaba rota — estaba a medias.
+
+- 🈯 **EL IDIOMA, QUE ADEMÁS CORROMPÍA LA CONFIGURACIÓN.** El selector mostraba
+  `[object Object]` porque pintaba el objeto entero en vez de su nombre — y
+  guardaba **esa misma cadena** en `language`. De propina, «Ducking» era un
+  campo numérico sobre un ajuste de sí/no: también escribía basura. Ahora es
+  una casilla que dice **«Bajar la música cuando hablas»**, con su explicación,
+  y los desplegables tienen fondo propio (antes salían blancos sobre blanco).
+- 📐 **FORMATO DE SALIDA CON LA PROPORCIÓN PROTEGIDA.** Eran dos campos sueltos:
+  bastaba rozar la flechita del ancho para dejar 1922×1080 y deformar el video.
+  Ahora se elige un formato conocido (16:9, 2K, 4K, 9:16, 1:1, 4:5) y las dos
+  medidas se fijan juntas; el modo libre lleva candado de proporción.
+- ⚙ **VUELVEN LOS PROVEEDORES Y MODELOS**, generados desde el catálogo del
+  programa —así los modelos nuevos aparecen solos— con el modo híbrido, la
+  calidad de GPT Image y las 6 claves de API explicadas una por una.
+- 🖼 **MINIATURAS DE VERDAD.** La causa estaba en el servidor: la lista de
+  proyectos no enviaba la miniatura, así que la Biblioteca pintaba un recuadro
+  decorativo idéntico para todos. Ahora se ve la imagen del video con su
+  proporción real, también en el storyboard y en el marco de teléfono del
+  video vertical.
+- 📚 **CANALES Y ESTILOS DEJAN DE SER DECORATIVOS**: crear, editar y borrar, con
+  los 13 campos reales del estilo y el branding de rótulos con presets de un
+  clic. Los estilos se agrupan bajo su canal.
+- 🎬 **PROYECTO NUEVO COMPLETO**: «¿Para dónde es este video?» como primera
+  decisión con tarjetas de plataforma, la plantilla narrativa que aparece solo
+  en los cortos, y el selector de **tus** estilos guardados por canal.
+- 📁 **PESTAÑA MATERIAL**, que no existía: sin ella no había forma de subir tu
+  narración, tu guion, tu B-roll, las fotos del personaje ni un enlace de
+  referencia. Quien narra sus propios videos no podía ni empezar.
+- 📖 **MANUAL, LOG DE EVENTOS Y BANCO DE ELEMENTOS.** El manual con índice
+  lateral, tablas renderizadas y buscador **sin tildes** (nadie escribe
+  «híbrido» con tilde). El banco vuelve a la Biblioteca con subida, borrado y
+  vista previa —los clips se reproducen al pasar el ratón— y se muestra aunque
+  no haya videos terminados, porque llenarlo es lo primero que conviene hacer.
+- 🕐 **LA VERSIÓN VUELVE A ABRIR EL REGISTRO DE CAMBIOS**, y avisa de los dos
+  estados que confunden al actualizar: que el proceso siga siendo el viejo (hay
+  que reiniciar) y que haya archivos del programa modificados.
+- 🌐 **SIN INTERNET.** La interfaz cargaba tipografías desde Google: bloqueaba
+  el arranque hasta que la petición fallaba y, sin conexión, el texto salía
+  igual con la de respaldo. Ahora usa familias del sistema con el mismo aire
+  editorial. Comprobado: **ninguna petición fuera de tu equipo**.
+
 ## v0.58.0 — 2026-08-14
 Dos modelos que el programa usaba tenían fecha de apagado — uno de ellos en
 tres días — y ninguno avisaba. Además, la revisión del mercado dejó tres

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.58.0 -->
+<!-- MANUAL_VERSION: 0.59.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
