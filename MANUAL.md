@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.59.0 -->
+<!-- MANUAL_VERSION: 0.59.1 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -365,6 +365,7 @@ global del 8 % de tu grabación.
 | **Insertos documentales** | Automático | Foto real, cifra animada o mapa cuando se menciona algo |
 | **Mapas localizadores** | Automático | Pin animado sobre cartografía REAL; si no la hay, una imagen del lugar (nunca una ficha vacía) |
 | **Cama de ambiente** | Automático | Viento, multitud, sala… según lo que se narra |
+| **Sonido propio de los clips** | Automático con Veo 3.1 | El clip llega con el ambiente REAL de su imagen (pasos, viento, una plaza) y suena en su escena, por encima de la cama sintética. Los demás modelos de video llegan mudos. Se apaga en ⚙ Configuración → Audio |
 | **Efectos incidentales** | Automático | whoosh, riser, boom, papel, latido |
 | **Acento de los insertos** | ⚙ Configuración → Audio | Paleta de sonido de las tarjetas: archivo, sobrio, épico, registro, moderno o sin sonido |
 | **Texto legible en la imagen** | Automático | Si en la escena se lee algo (periódico, cartel, lápida), se genera con el modelo de mejor tipografía |

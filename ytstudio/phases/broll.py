@@ -1769,8 +1769,18 @@ def run(project, cfg) -> None:
                     notify(f"⚠ Clip de la escena {s['id']} falló — esa escena "
                            "usará imagen animada.")
     for s in video_scenes:
-        if (broll_dir / f"scene_{s['id']:03d}.mp4").exists():
+        clip = broll_dir / f"scene_{s['id']:03d}.mp4"
+        if clip.exists():
             s["broll_video"] = f"scene_{s['id']:03d}.mp4"
+            # Con Veo, el clip trae su propio ambiente. Se comprueba para
+            # TODOS los clips, no solo los recién generados: si una corrida
+            # anterior se cortó justo entre la descarga y la extracción, aquí
+            # se recupera sin volver a pagar nada.
+            if videogen is not None and hasattr(videogen, "ensure_audio"):
+                try:
+                    videogen.ensure_audio(clip)
+                except Exception:
+                    pass   # el sonido nativo es una mejora: nunca tumba la fase
         else:
             s["broll_type"] = "image"
             s.pop("broll_video", None)

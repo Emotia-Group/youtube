@@ -185,6 +185,15 @@ audio:
                              # y, si no hay, los sintetiza en local (gratis).
   ambience_db: -30           # volumen de la cama de ambiente (muy por debajo de
                              # la voz: acompaña, no protagoniza)
+  native_audio: true         # SONIDO PROPIO DE LOS CLIPS: Veo 3.1 devuelve el
+                             # video con su ambiente ya sincronizado con lo que
+                             # se ve (pasos sobre grava, viento, una plaza).
+                             # Se coloca en su escena, por encima de la cama
+                             # sintética y por debajo de la voz. Los demás
+                             # modelos de video llegan mudos y esto no aplica
+  native_audio_db: -24       # volumen del sonido nativo. Por encima del
+                             # ambiente (-30) porque es el sonido REAL de esa
+                             # imagen, y por debajo de la música y la voz
   end_fade: 1.5               # fundido de cierre del audio al final (segundos)
   # Respiración estilo documental (narración propia): los espacios en blanco
   # se insertan SOLO dentro de las pausas naturales de tu grabación — la voz

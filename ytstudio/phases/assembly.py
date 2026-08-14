@@ -1053,6 +1053,67 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
     return args, filters, "sfx"
 
 
+def native_audio_file(project, scene: dict) -> Path | None:
+    """Pista de sonido PROPIA del clip de esa escena, o None.
+
+    Solo Veo 3.1 devuelve el video con su ambiente ya sincronizado con lo que
+    se ve (pasos sobre grava, viento en un campo, murmullo de una plaza). El
+    proveedor la separa a un archivo junto al clip; se localiza por convención
+    —`scene_007.mp4` → `scene_007_amb.m4a`— para que reanudar una fase o
+    rehacer una escena suelta siga funcionando sin llevar cuentas aparte."""
+    if scene.get("broll_type") != "video" or not scene.get("broll_video"):
+        return None
+    clip = project.path("broll", str(scene["broll_video"]))
+    amb = clip.with_name(clip.stem + "_amb.m4a")
+    return amb if amb.exists() and amb.stat().st_size > 0 else None
+
+
+def _native_audio_graph(scenes: list[dict], project, cfg,
+                        first_input: int) -> tuple[list[str], list[str], str | None]:
+    """SONIDO NATIVO de los clips, colocado en su escena de la línea de tiempo.
+
+    Va por debajo de la voz y por encima de la cama de ambiente sintética: es
+    el sonido REAL de esa imagen, así que manda sobre el fondo genérico
+    mientras dura. Cada escena entra con su propio `adelay`, recortada a la
+    duración exacta de la escena y con micro-fundidos que evitan el chasquido
+    al entrar y salir."""
+    if not cfg["audio"].get("native_audio", True):
+        return [], [], None
+    pistas = []
+    for s in scenes:
+        f = native_audio_file(project, s)
+        if f:
+            pistas.append((s, f))
+    if not pistas:
+        return [], [], None
+
+    db = float(cfg["audio"].get("native_audio_db", -24))
+    args: list[str] = []
+    filters: list[str] = []
+    labels: list[str] = []
+    for i, (s, f) in enumerate(pistas):
+        idx = first_input + i
+        args += ["-i", str(f)]
+        dur = max(0.1, float(s.get("duration") or 0))
+        # Fundidos cortos proporcionales a la escena: en un clip de 4 s un
+        # fundido de 0.25 s no se nota, pero quita el chasquido del corte.
+        fd = min(0.25, dur / 8)
+        ms = int(round(float(s.get("_start") or 0.0) * 1000))
+        filters.append(
+            f"[{idx}:a]aresample=44100,aformat=channel_layouts=stereo,"
+            f"atrim=0:{dur:.3f},apad=whole_dur={dur:.3f},"
+            f"volume={db:g}dB,afade=t=in:st=0:d={fd:.2f},"
+            f"afade=t=out:st={max(0.0, dur - fd):.3f}:d={fd:.2f},"
+            f"adelay={ms}|{ms}[nat{i}]")
+        labels.append(f"[nat{i}]")
+    if len(labels) == 1:
+        filters.append(f"{labels[0]}anull[nat]")
+    else:
+        filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:"
+                       "duration=longest:normalize=0[nat]")
+    return args, filters, "nat"
+
+
 def _ambience_input(project, cfg, total: float,
                     idx: int) -> tuple[list[str], str, str | None]:
     """(args de entrada, filtro, etiqueta) de la CAMA DE AMBIENTE, o vacío si
@@ -1284,6 +1345,16 @@ def run(project, cfg) -> None:
         afilters.append(amb_filter)
         next_idx += 1
 
+    # SONIDO NATIVO de los clips (Veo 3.1): el ambiente REAL de cada imagen,
+    # en su escena. Entra por encima de la cama sintética y por debajo de la
+    # voz — el resto de modelos devuelve el clip mudo y esto no existe.
+    nat_args, nat_filters, nat_label = _native_audio_graph(
+        scenes, project, cfg, next_idx)
+    if nat_args:
+        args += nat_args
+        afilters += nat_filters
+        next_idx += len(nat_args) // 2
+
     envelope = _music_envelope(scenes, music_db, swing_db)
     afilters.append(f"[1:a]volume='{envelope}':eval=frame[m]")
     if duck:
@@ -1296,8 +1367,10 @@ def run(project, cfg) -> None:
     afilters += sfx_filters
     mix_in = (f"[{voice_mx}][{music_label}]"
               + (f"[{sfx_label}]" if sfx_label else "")
-              + (f"[{amb_label}]" if amb_label else ""))
-    n_mix = 2 + (1 if sfx_label else 0) + (1 if amb_label else 0)
+              + (f"[{amb_label}]" if amb_label else "")
+              + (f"[{nat_label}]" if nat_label else ""))
+    n_mix = (2 + (1 if sfx_label else 0) + (1 if amb_label else 0)
+             + (1 if nat_label else 0))
     # Cierre: fundido LARGO del audio (mínimo 2.5s) que muere EXACTAMENTE con
     # la imagen — un fundido corto que arrancaba al acabar la voz sonaba a
     # «la música termina antes que el video, y de golpe».

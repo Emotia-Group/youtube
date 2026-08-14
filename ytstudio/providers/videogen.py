@@ -49,6 +49,20 @@ class ReplicateVideo:
         pero un clip corto obligaría a repetirlo en bucle."""
         return clip_duration_for(self.model, seconds)
 
+    def ensure_audio(self, clip: Path) -> Path | None:
+        """Separa la pista propia de un clip YA descargado si aún no está.
+
+        Cubre la reanudación: si la fase se cortó entre bajar el clip y
+        extraerle el sonido, al volver el clip ya existe y nunca se llamaría a
+        `generate()` — el ambiente de esa escena se habría perdido en silencio.
+        No cuesta nada: es ffmpeg local sobre un archivo ya pagado."""
+        if not self.native_audio or not clip.exists():
+            return None
+        out = clip.with_name(clip.stem + "_amb.m4a")
+        if out.exists() and out.stat().st_size > 0:
+            return out
+        return self._extract_audio(clip)
+
     def _extract_audio(self, clip: Path) -> Path | None:
         """Separa la pista nativa del clip a un archivo propio. Devuelve None
         si el clip llegó mudo (o si ffmpeg no encuentra pista de audio)."""

@@ -9,6 +9,28 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.59.1 — 2026-08-14
+El sonido propio de los clips de Veo, por fin en el video.
+
+- 🔊 **EL AMBIENTE REAL DE CADA IMAGEN.** Veo 3.1 devuelve el clip con su
+  sonido ya sincronizado con lo que se ve —pasos sobre grava, viento en un
+  campo, el murmullo de una plaza—. Hasta ahora esa pista se extraía y se
+  guardaba junto al clip, pero **no llegaba al video final**: se perdía.
+  Ahora entra en la mezcla **en su escena exacta**, recortada a la duración de
+  la escena (no a la del clip), con micro-fundidos que evitan el chasquido del
+  corte. Va por encima de la cama de ambiente sintética —es el sonido REAL de
+  esa imagen, manda sobre el fondo genérico— y por debajo de la voz y la
+  música. Se apaga con `audio.native_audio` y su nivel se ajusta con
+  `audio.native_audio_db` (−24 dB por defecto).
+- 🔁 **Y no se pierde al reanudar.** Si una corrida se cortaba justo entre
+  bajar el clip y extraerle el sonido, al volver el clip ya existía y esa
+  pista no se recuperaba nunca: la escena quedaba muda sin avisar. Ahora se
+  comprueba en TODOS los clips, no solo en los recién generados, y se
+  recupera con ffmpeg local sin volver a pagar nada.
+- La batería nueva mide el resultado **con audio real**: comprueba que el
+  sonido no suena antes de su escena, que suena durante, y que se calla al
+  terminarla.
+
 ## v0.59.0 — 2026-08-14
 La interfaz nueva, terminada. El rediseño traía el aspecto que querías pero
 le faltaban dos tercios de lo que el programa sabía hacer: 721 líneas frente a
