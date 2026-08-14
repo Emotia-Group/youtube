@@ -121,8 +121,12 @@ try:
     local.unlink()
     srv.migrate_local_config()
     fresh = yaml.safe_load(local.read_text(encoding="utf-8"))
-    check("T3d sin archivo local, se crea solo con la marca (sin providers)",
-          fresh.get("migrations") == ["images_replicate_v0_45"]
+    # Lo que protege esta comprobación es que el archivo nace SIN sección
+    # 'providers' (si naciera con una, la migración estaría imponiendo
+    # proveedores en vez de limitarse a dejar constancia). Se comprueba que la
+    # marca esté, no que sea la única: cada versión puede añadir las suyas.
+    check("T3d sin archivo local, se crea solo con la(s) marca(s), sin providers",
+          "images_replicate_v0_45" in (fresh.get("migrations") or [])
           and "providers" not in fresh, str(fresh))
 
     # -----------------------------------------------------------------------

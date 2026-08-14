@@ -26,7 +26,9 @@ formas concretas de gastar menos sin bajar la calidad.
 - 💸 MODO HÍBRIDO: LA MAYOR PALANCA DE AHORRO DEL PROGRAMA. Nuevo interruptor
   en ⚙ Configuración → Imágenes: **escalar las imágenes tras generarlas**. Con
   FLUX schnell (~$0.003) más el escalado (~$0.002), las ~100 imágenes de un
-  documental de 10 min pasan de **~$4.50 a ~$0.50 — un 90 % menos**. Con la
+  documental de 10 min pasan de **~$4.50 a ~$0.50 — un 90 % menos**, y además
+  **se generan antes** (la estimación baja de ~21 a ~13 minutos: schnell es
+  mucho más rápido y el escalado no compensa esa diferencia). Con la
   advertencia honesta por delante: el escalado recupera resolución, **no
   inventa** la microtextura de un modelo caro, así que conviene probarlo con tu
   tema antes de adoptarlo para la versión final. Las imágenes que ya dan la

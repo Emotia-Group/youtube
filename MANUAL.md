@@ -157,11 +157,14 @@ Hay combos de un clic para empezar.
 Las ~100 imágenes de B-roll son, con diferencia, la partida más cara. Tienes
 tres rutas en ⚙ Configuración → Imágenes:
 
-| Ruta | Coste (100 img) | Cuándo usarla |
-|---|---|---|
-| **Modo híbrido**: FLUX schnell + escalado activado | **~$0.50** | Por defecto para producción en volumen. Prueba primero un video con tu tema |
-| FLUX 1.1 Pro | ~$4.50 | Cuando el video es importante y quieres el techo de fotorrealismo |
-| FLUX schnell sin escalar | ~$0.30 | Solo para validar la ESTRUCTURA; sale a baja resolución |
+| Ruta | Coste (100 img) | Tiempo | Cuándo usarla |
+|---|---|---|---|
+| **Modo híbrido**: FLUX schnell + escalado activado | **~$0.50** | ~13 min | Por defecto para producción en volumen. Prueba primero un video con tu tema |
+| FLUX 1.1 Pro | ~$4.50 | ~21 min | Cuando el video es importante y quieres el techo de fotorrealismo |
+| FLUX schnell sin escalar | ~$0.30 | ~3 min | Solo para validar la ESTRUCTURA; sale a baja resolución |
+
+El modo híbrido no solo es más barato: también es **más rápido** que el modelo
+caro, porque schnell genera en segundos y el escalado no compensa esa ventaja.
 
 **Qué es el modo híbrido.** Generas la imagen con un modelo barato y el
 programa le sube la resolución después. Sale un 90 % más barato que generar
