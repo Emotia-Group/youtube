@@ -579,6 +579,7 @@ STYLE_PRESETS: dict = {
             "Prefijo sugerido: 'cinematic documentary photography, film still, natural "
             "dramatic lighting, shallow depth of field, muted color grade, 35mm'"),
         "tone": "Narrador documental sobrio y absorbente, ritmo pausado con tensión creciente",
+        "insert_sfx": "archivo",
         "music": "orchestral documentary, subtle tension, ambient strings",
     },
     "cine_epico": {
@@ -591,6 +592,7 @@ STYLE_PRESETS: dict = {
             "Prefijo sugerido: 'epic cinematic film still, anamorphic, volumetric light, "
             "teal and orange color grade, imax scale'"),
         "tone": "Narración solemne y poderosa, con momentos de silencio dramático",
+        "insert_sfx": "epico",
         "music": "epic orchestral, cinematic percussion, emotional build",
     },
     "misterio_oscuro": {
@@ -603,6 +605,7 @@ STYLE_PRESETS: dict = {
             "Prefijo sugerido: 'dark moody cinematic still, chiaroscuro lighting, noir "
             "atmosphere, cold color grade, fog'"),
         "tone": "Narrador de suspenso, pausado, con preguntas que generan intriga",
+        "insert_sfx": "sobrio",
         "music": "dark ambient tension, pulsing suspense, minimal piano",
     },
     "historia_vintage": {
@@ -615,6 +618,7 @@ STYLE_PRESETS: dict = {
             "Prefijo sugerido: 'vintage historical film still, sepia tones, film grain, "
             "period-accurate, aged photograph aesthetic'"),
         "tone": "Narrador clásico de documental histórico, evocador",
+        "insert_sfx": "archivo",
         "music": "nostalgic orchestral, period strings, melancholic piano",
     },
     "moderno_dinamico": {
@@ -627,6 +631,7 @@ STYLE_PRESETS: dict = {
             "Prefijo sugerido: 'modern editorial photography, clean bright lighting, "
             "vibrant color palette, high detail'"),
         "tone": "Narrador cercano y enérgico, ritmo ágil",
+        "insert_sfx": "moderno",
         "music": "upbeat modern electronic, positive energy, driving rhythm",
     },
     "ninguno": {

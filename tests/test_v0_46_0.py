@@ -293,13 +293,19 @@ if ok_render:
           durante > antes + 3, f"antes={antes:.1f} durante={durante:.1f}")
 
 # ---------------------------------------------------------------------------
-# T7 — el 'pop' suena en el instante del inserto
+# T7 — el acento del inserto suena en el instante de la mención
 # ---------------------------------------------------------------------------
+# Desde la v0.57.0 el acento ya no es siempre 'pop': lo elige la paleta
+# (audio.element_sfx), y los efectos que CRECEN arrancan un poco antes para
+# que su cima caiga sobre la tarjeta.
 sfx_scenes = [{"duration": 8.0, "sfx": None,
                "elements": [{"files": ["x.png"], "at": 2.0}]},
               {"duration": 8.0, "sfx": None}]
-s_args, s_filters, s_label = _sfx_graph(sfx_scenes, cfg, TMP, first_input=2)
-check("T7 la pista SFX incluye el pop con el retardo de la mención (2000ms)",
+cfg_pop = {**cfg, "audio": {**cfg["audio"], "element_sfx": "moderno"}}
+s_args, s_filters, s_label = _sfx_graph(sfx_scenes, cfg_pop, TMP,
+                                        first_input=2)
+check("T7 la pista SFX incluye el acento con el retardo de la mención "
+      "(2000ms)",
       s_label == "sfx" and any("adelay=2000|2000" in f for f in s_filters),
       str(s_filters))
 from ytstudio.utils.sfx import SFX_SPECS, ensure_sfx

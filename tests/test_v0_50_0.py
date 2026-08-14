@@ -158,41 +158,22 @@ check("T3e y en el último cuadro el pin está sobre el punto (centro del "
       "recorte, ±8%)", 0.42 < cxr < 0.58, f"cx={cxr:.2f}")
 
 # ---------------------------------------------------------------------------
-# T4 — respaldo local: el pin en su posición geográfica relativa
+# T4 — sin cartografía real NO se dibuja una ficha vacía (v0.57.0)
 # ---------------------------------------------------------------------------
+# Hasta la v0.53 aquí salía una retícula de coordenadas con un punto: no era
+# un mapa y no aportaba nada al video. Ahora el localizador devuelve None y
+# la fase resuelve la mención con una imagen REAL del lugar.
 loc = maps.render_map_frames("El Cairo", *CAIRO, TMP / "cairo_local",
                              card_w=420, accent=ACCENT, allow_web=False)
-check("T4 sin internet hay localizador igualmente (y se declara no-real)",
-      loc["real"] is False and len(loc["files"]) == maps.FRAMES, str(loc["real"]))
-im = Image.open(TMP / "cairo_local" / loc["files"][-1]).convert("RGBA")
-w, h = im.size
-puntos = [(xx, yy) for yy in range(0, int(h * 0.62), 2)
-          for xx in range(0, w, 2)
-          if (lambda p: p[3] > 120 and abs(p[0] - AC[0]) < 40
-              and abs(p[1] - AC[1]) < 40 and abs(p[2] - AC[2]) < 45)(
-                  im.getpixel((xx, yy)))]
-check("T4b el pin se dibuja", len(puntos) > 15, str(len(puntos)))
-if puntos:
-    cx = sum(p[0] for p in puntos) / len(puntos) / w
-    cy = sum(p[1] for p in puntos) / len(puntos) / h
-    # El Cairo: 31.25°E → x≈0.587 del ancho · 30.05°N → y≈0.333 de 180°
-    check("T4c y cae en su longitud relativa correcta (≈0.59 del ancho)",
-          0.52 < cx < 0.66, f"cx={cx:.2f}")
-    check("T4d y en su latitud relativa correcta (hemisferio norte)",
-          0.10 < cy < 0.45, f"cy={cy:.2f}")
-santiago = maps.render_map_frames("Santiago", -33.45, -70.66,
-                                  TMP / "scl", card_w=420, accent=ACCENT,
-                                  allow_web=False)
-im_s = Image.open(TMP / "scl" / santiago["files"][-1]).convert("RGBA")
-pts_s = [(xx, yy) for yy in range(0, int(im_s.size[1] * 0.62), 2)
-         for xx in range(0, im_s.size[0], 2)
-         if (lambda p: p[3] > 120 and abs(p[0] - AC[0]) < 40
-             and abs(p[1] - AC[1]) < 40 and abs(p[2] - AC[2]) < 45)(
-                 im_s.getpixel((xx, yy)))]
-if pts_s and puntos:
-    cxs = sum(p[0] for p in pts_s) / len(pts_s) / im_s.size[0]
-    check("T4e un lugar del hemisferio oeste cae a la IZQUIERDA de El Cairo",
-          cxs < cx, f"{cxs:.2f} vs {cx:.2f}")
+check("T4 sin cartografía real, el localizador NO se inventa una ficha vacía",
+      loc is None, str(loc))
+maps._fetch_tile = lambda *a, **k: None
+sin_teselas = maps.render_map_frames("El Cairo", *CAIRO, TMP / "cairo_down",
+                                     card_w=420, accent=ACCENT, zoom=5,
+                                     allow_web=True)
+check("T4b si el servicio de teselas no responde, tampoco (devuelve None)",
+      sin_teselas is None, str(sin_teselas))
+maps._fetch_tile = fake_tile
 
 # ---------------------------------------------------------------------------
 # T5 — integración en la fase B-roll

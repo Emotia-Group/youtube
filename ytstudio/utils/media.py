@@ -213,6 +213,23 @@ def probe_duration(path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
+def probe_video_size(path: Path) -> tuple[int, int] | None:
+    """(ancho, alto) del primer flujo de video, o None si no se puede leer.
+    Lo usa el montaje para decidir si un clip cabe en el cuadro recortando o
+    hay que componerlo entero sobre fondo desenfocado."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-of", "json", str(path)],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", check=True)
+        st = (json.loads(result.stdout).get("streams") or [{}])[0]
+        w, h = int(st.get("width") or 0), int(st.get("height") or 0)
+        return (w, h) if w > 0 and h > 0 else None
+    except Exception:
+        return None
+
+
 def _segment_mean_db(path: Path, s0: float, s1: float) -> float | None:
     """Volumen medio (dBFS) del tramo [s0, s1] con volumedetect. None si no
     se puede medir."""

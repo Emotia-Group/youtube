@@ -177,16 +177,22 @@ medico_anatomico · arte_desnudo · armas_conflicto · sustancias. En el resto,
 - Si dudas entre ser más literal o más "artístico", elige literal: la
   fidelidad a lo narrado manda sobre la elegancia visual.
 
-TEXTO DENTRO DE LA IMAGEN (image_text): por defecto NINGUNO.
-- Casi siempre image_text va vacío y el broll_prompt dice explícitamente que
-  no haya texto legible; si aparecen periódicos, documentos o pantallas como
-  atrezo, se describen "out of focus, unreadable print" (los generadores
-  escriben letras inventadas y en inglés — texto ilegible que arruina el
-  plano).
-- SOLO cuando la narración depende de que se LEA un texto (un titular, una
-  palabra clave, un letrero), escribe en image_text el texto EXACTO que debe
-  verse (máx. 6 palabras). Máximo 2-3 escenas por video: el programa genera
+TEXTO DENTRO DE LA IMAGEN (image_text): REGLA ESTÁNDAR — si en el plano se ve
+texto, ese texto tiene que ser LEGIBLE y correcto. Nada de letras inventadas.
+- Decide primero si la escena necesita mostrar texto. Si NO lo necesita, el
+  broll_prompt dice explícitamente que no haya texto ni letras en la imagen
+  ("no text, no letters, no signage") y image_text va vacío: es la opción
+  preferida en la mayoría de escenas.
+- Si la escena SÍ muestra texto — un periódico, un titular, un cartel, un
+  documento, un rótulo, una pantalla, una lápida, una portada — entonces
+  image_text es OBLIGATORIO: escribe ahí el texto EXACTO que debe leerse
+  (máx. 6 palabras), correcto y coherente con lo narrado. El programa genera
   esas imágenes con el modelo de mejor tipografía disponible.
+  Está PROHIBIDO pedir texto "borroso" o "ilegible" como salida fácil: si el
+  objeto con texto no aporta nada, cambia el encuadre para que no salga (un
+  primer plano de las manos, el papel de canto) en vez de dejar garabatos.
+- No abuses: el texto legible es para lo que el espectador debe LEER. Si tres
+  escenas seguidas piden titular, quédate con la que de verdad lo necesita.
 - EL IDIOMA LO MANDA LA ESCENA, no la narración (campo image_text_lang):
   · Por defecto, el idioma del video (un titular de prensa, un rótulo
     moderno, un cartel del presente) — jamás en inglés si el video no lo es.
@@ -355,9 +361,10 @@ def _art_direction_pass(llm, project, scenes: list[dict], concept: dict,
         "2-4 frases por prompt; nada genérico.\n"
         "- Lo que se VE corresponde exactamente a lo que se DICE en esa "
         "escena.\n"
-        "- Sin texto ni letras dentro de la imagen (salvo el image_text "
-        "exacto de las escenas que lo definan); sin personas famosas "
-        "reales.\n\n"
+        "- TEXTO: o no hay ninguno en la imagen (dilo en el prompt: 'no text, "
+        "no letters') o el que haya es LEGIBLE y correcto, declarado en "
+        "image_text. Nunca pidas texto borroso, garabateado o ilegible; sin "
+        "personas famosas reales.\n\n"
         "3) AUDITORÍA DE MOVIMIENTO (motion_risk) — los modelos de video IA "
         "fallan con movimientos complejos; clasifica cada escena:\n"
         "- 'alta': personas caminando o gesticulando, manos manipulando "

@@ -13,6 +13,46 @@ from ytstudio.utils.media import (boost_quiet_spans, cut_segment,
 _PACE_FACTOR = {"ligado": 0.0, "normal": 1.0, "amplio": 1.7}
 
 
+def scene_start_in_video(scenes: list[dict], scene: dict) -> float:
+    """Instante EXACTO en que empieza la escena dentro del video montado: la
+    suma de las duraciones anteriores (todas cuantizadas a cuadros enteros, la
+    misma línea de tiempo que usa el montaje)."""
+    t = 0.0
+    for s in scenes:
+        if s is scene or int(s.get("id", -1)) == int(scene.get("id", -2)):
+            return t
+        t += float(s.get("duration") or 0.0)
+    return t
+
+
+def timeline_segment(project, scenes: list[dict], scene: dict, out):
+    """Tramo de la PISTA FINAL de voz (narration_timeline.wav) que suena en
+    esta escena — con las pausas YA ajustadas por el director y la duración
+    exacta de la escena.
+
+    Es el audio que debe mover los labios del personaje. Hasta ahora el
+    lipsync se generaba con `vo_XXX.mp3`, cortado de la grabación ORIGINAL:
+    en cuanto el director recortaba o ampliaba una pausa (79 recortes en un
+    video real), la boca iba por un lado y la voz por otro. Devuelve None si
+    el proyecto no tiene pista de voz (nada que cortar)."""
+    tl = project.get("voice_timeline")
+    if not tl:
+        return None
+    src = project.path("voiceover", tl)
+    if not src.exists():
+        return None
+    start = scene_start_in_video(scenes, scene)
+    dur = float(scene.get("duration") or 0.0)
+    if dur <= 0.05:
+        return None
+    total = probe_duration(src)
+    dur = min(dur, max(0.05, total - start))
+    run_ffmpeg(["-ss", f"{start:.4f}", "-i", str(src), "-t", f"{dur:.4f}",
+                "-vn", "-ac", "1", "-ar", "44100", "-c:a", "pcm_s16le",
+                str(out)], "tramo de voz de la escena")
+    return out
+
+
 def _pace_factor(pace) -> float:
     return _PACE_FACTOR.get((pace or "normal"), 1.0)
 

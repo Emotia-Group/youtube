@@ -4,17 +4,18 @@ Cuando la narración sitúa la historia («cruzó el Sahara», «llegó a El Cai
 un mapa localizador con el pin cayendo sobre el punto exacto vale más que
 cualquier ilustración: el espectador entiende DÓNDE en un segundo.
 
-Dos caminos, con el mismo criterio de siempre:
-1. MAPA REAL: teselas de maps.wikimedia.org (OpenStreetMap, licencia libre
-   ODbL). Se descargan las que cubren el punto, se unen, se tiñen al lenguaje
-   del documental y se marca la ubicación. La atribución a OpenStreetMap se
-   añade sola a la descripción del video.
-2. RESPALDO LOCAL (sin internet o si el servicio no responde): una ficha de
-   coordenadas con retícula y pin en su posición relativa correcta. No es un
-   mapa, pero es un localizador digno — y nunca falla.
+MAPA REAL o NADA: teselas de OpenStreetMap (licencia libre ODbL) servidas por
+Wikimedia. Se descargan las que cubren el punto, se unen, se tiñen al lenguaje
+del documental y se marca la ubicación. La atribución a OpenStreetMap se añade
+sola a la descripción del video.
 
-En ambos casos el resultado es una SECUENCIA de PNG: el pin cae y un anillo
-se expande, y el montaje la reproduce en el instante de la mención.
+Si no hay cartografía real (sin red, servicio caído), este módulo devuelve
+None y el que llama resuelve la mención con una imagen REAL del lugar. Hasta
+la v0.53 se dibujaba aquí una «ficha de coordenadas» con una retícula vacía y
+un punto: no era un mapa ni aportaba nada al video — se ha eliminado.
+
+El resultado es una SECUENCIA de PNG: el pin cae y un anillo se expande, y el
+montaje la reproduce en el instante de la mención.
 """
 from __future__ import annotations
 
@@ -25,6 +26,10 @@ from pathlib import Path
 from ytstudio.utils.media import find_font
 
 TILE_URL = "https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png"
+# Espejos del MISMO mapa (OpenStreetMap): si Wikimedia no responde o limita
+# las peticiones, se prueba el siguiente antes de dar el mapa por perdido.
+TILE_URLS = (TILE_URL,
+             "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
 TILE_PX = 256
 OSM_CREDIT = ("Mapas: © colaboradores de OpenStreetMap (ODbL), "
               "vía Wikimedia Maps")
@@ -44,16 +49,25 @@ def tile_xy(lat: float, lon: float, z: int) -> tuple[float, float]:
     return x, y
 
 
-def _fetch_tile(z: int, x: int, y: int, timeout: float = 12):
+def _fetch_tile(z: int, x: int, y: int, timeout: float = 12,
+                sources: tuple = TILE_URLS):
+    """Una tesela del mapa, probando los espejos en orden. None si ninguno
+    responde (el localizador caerá entonces a una imagen real del lugar)."""
+    import io
+
     from PIL import Image
     n = 2 ** z
     if not (0 <= y < n):
         return None
-    url = TILE_URL.format(z=z, x=x % n, y=y)
-    req = urllib.request.Request(url, headers=_HEADERS)
-    import io
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return Image.open(io.BytesIO(r.read(4_000_000))).convert("RGB")
+    for base in sources:
+        url = base.format(z=z, x=x % n, y=y)
+        req = urllib.request.Request(url, headers=_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return Image.open(io.BytesIO(r.read(4_000_000))).convert("RGB")
+        except Exception:
+            continue
+    return None
 
 
 def fetch_map(lat: float, lon: float, z: int, width: int, height: int):
@@ -75,7 +89,9 @@ def fetch_map(lat: float, lon: float, z: int, width: int, height: int):
             if t is not None:
                 canvas.paste(t, (i * TILE_PX, j * TILE_PX))
                 got += 1
-    if got == 0:
+    # Se exige MAYORÍA de teselas: con dos o tres sueltas el mapa sale a
+    # trozos sobre un fondo liso y parece un error, no cartografía.
+    if got < max(1, (cols * rows) // 2):
         return None
     # recorte centrado EXACTAMENTE en el punto pedido
     px = (fx - x0) * TILE_PX
@@ -98,34 +114,13 @@ def _stylize(img, accent: tuple[int, int, int]):
     return Image.blend(g, veil, 0.12)
 
 
-def _grid_backdrop(size, lat: float, lon: float, accent):
-    """Respaldo sin internet: retícula de meridianos y paralelos con el punto
-    en su posición relativa correcta (proyección equirectangular)."""
-    from PIL import Image, ImageDraw
-    w, h = size
-    img = Image.new("RGB", size, (18, 20, 26))
-    d = ImageDraw.Draw(img)
-    for i in range(1, 8):          # meridianos
-        x = w * i / 8
-        d.line([(x, 0), (x, h)], fill=(44, 48, 58), width=1)
-    for j in range(1, 5):          # paralelos
-        y = h * j / 5
-        d.line([(0, y), (w, y)], fill=(44, 48, 58), width=1)
-    d.line([(0, h / 2), (w, h / 2)], fill=(70, 74, 86), width=2)  # ecuador
-    return img
-
-
-def _point_xy(size, lat: float, lon: float) -> tuple[int, int]:
-    w, h = size
-    return int(w * (float(lon) + 180.0) / 360.0), int(h * (90.0 - float(lat)) / 180.0)
-
-
 def render_map_frames(place: str, lat: float, lon: float, out_dir: Path, *,
                       card_w: int, accent: str = "E8C46B", zoom: int = 5,
-                      allow_web: bool = True) -> dict:
-    """Secuencia animada del localizador. Devuelve
-    {'files': [nombres], 'real': bool} — 'real' dice si el mapa es
-    cartografía de verdad o el respaldo local."""
+                      allow_web: bool = True) -> dict | None:
+    """Secuencia animada del localizador sobre cartografía REAL. Devuelve
+    {'files': [nombres], 'real': True} o **None** si no se pudo traer el mapa
+    — en ese caso la mención se resuelve con una imagen real del lugar, nunca
+    con una retícula vacía."""
     from PIL import Image, ImageDraw
     out_dir.mkdir(parents=True, exist_ok=True)
     ac = tuple(int(str(accent).lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
@@ -137,13 +132,10 @@ def render_map_frames(place: str, lat: float, lon: float, out_dir: Path, *,
             base = fetch_map(lat, lon, zoom, mw, mh)
         except Exception:
             base = None
-    real = base is not None
-    if real:
-        base = _stylize(base, ac)
-        px, py = mw // 2, mh // 2          # el mapa está centrado en el punto
-    else:
-        base = _grid_backdrop((mw, mh), lat, lon, ac)
-        px, py = _point_xy((mw, mh), lat, lon)
+    if base is None:
+        return None
+    base = _stylize(base, ac)
+    px, py = mw // 2, mh // 2              # el mapa está centrado en el punto
 
     label = (place or "").strip()[:34]
     coords = (f"{abs(lat):.1f}°{'N' if lat >= 0 else 'S'}  "
@@ -194,7 +186,7 @@ def render_map_frames(place: str, lat: float, lon: float, out_dir: Path, *,
         p = out_dir / f"f_{i:02d}.png"
         canvas.save(p)
         files.append(p.name)
-    return {"files": files, "real": real}
+    return {"files": files, "real": True}
 
 
 def _font_or_default(size: int, bold: bool):

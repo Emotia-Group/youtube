@@ -13,12 +13,13 @@ from pathlib import Path
 from ytstudio.config import ROOT
 from ytstudio.utils.media import run_ffmpeg
 
-KINDS = ("whoosh", "riser", "boom", "pop", "papel", "latido")
+KINDS = ("whoosh", "riser", "boom", "pop", "papel", "latido",
+         "clic", "aire", "cuerda", "sello")
 
 # Duración de cada efecto sintetizado y cómo se alinea con el corte de escena:
 # whoosh/riser terminan EN el corte (anticipan); boom/papel/latido suenan EN
-# el corte; pop es el acento sutil de los INSERTOS documentales (suena en la
-# mención, no en el corte).
+# el corte; pop, clic, aire, cuerda y sello son los acentos de los INSERTOS
+# documentales (suenan en la mención, no en el corte).
 SFX_SPECS = {
     "whoosh": {"dur": 1.0, "before_cut": 0.85},
     "riser": {"dur": 2.4, "before_cut": 2.4},
@@ -26,7 +27,58 @@ SFX_SPECS = {
     "pop": {"dur": 0.4, "before_cut": 0.0},
     "papel": {"dur": 0.9, "before_cut": 0.15},
     "latido": {"dur": 1.6, "before_cut": 0.0},
+    "clic": {"dur": 0.35, "before_cut": 0.0},
+    "aire": {"dur": 1.4, "before_cut": 0.35},
+    "cuerda": {"dur": 1.8, "before_cut": 0.3},
+    "sello": {"dur": 0.8, "before_cut": 0.0},
 }
+
+# PALETAS del acento de los INSERTOS documentales (fotos de archivo, cifras,
+# mapas). Antes TODOS sonaban con el mismo 'pop' — un acento de app que no
+# pega con un documental histórico. Cada paleta da un sonido distinto según
+# QUÉ entra en pantalla, así el video no repite el mismo golpe 20 veces.
+INSERT_PALETTES: dict[str, dict[str, str]] = {
+    "archivo": {"photo": "papel", "video": "papel", "stat": "clic",
+                "map": "aire"},
+    "sobrio": {"photo": "aire", "video": "aire", "stat": "clic",
+               "map": "aire"},
+    "epico": {"photo": "cuerda", "video": "cuerda", "stat": "cuerda",
+              "map": "aire"},
+    "oficina": {"photo": "sello", "video": "sello", "stat": "clic",
+                "map": "clic"},
+    "moderno": {"photo": "pop", "video": "pop", "stat": "pop", "map": "pop"},
+    "ninguno": {},
+}
+
+PALETTE_LABELS = {
+    "auto": "Automático — según el estilo del video",
+    "archivo": "Archivo — roce de papel y tic de proyector (documental)",
+    "sobrio": "Sobrio — un soplo de aire, casi imperceptible",
+    "epico": "Épico — cuerdas breves que crecen",
+    "oficina": "Registro — sello y clic de mecanismo",
+    "moderno": "Moderno — 'pop' de app (el de siempre)",
+    "ninguno": "Sin sonido — los insertos entran mudos",
+}
+
+
+def insert_kind(el: dict, palette: str) -> str | None:
+    """Efecto que acompaña a UN inserto documental, según la paleta elegida.
+    None = ese inserto entra mudo."""
+    table = INSERT_PALETTES.get(palette or "archivo")
+    if table is None:            # nombre de efecto suelto ('papel', 'boom'…)
+        return palette if palette in SFX_SPECS else None
+    if not table:
+        return None
+    tipo = (el.get("tipo") or "").lower()
+    if tipo == "mapa":
+        key = "map"
+    elif tipo in ("cifra", "fecha"):
+        key = "stat"
+    elif el.get("mode") == "video":
+        key = "video"
+    else:
+        key = "photo"
+    return table.get(key)
 
 
 def _library_track(kind: str) -> Path | None:
@@ -58,6 +110,30 @@ def _synthesize(kind: str, out: Path) -> Path:
         expr = ("(random(0)-0.5)*1.4*exp(-13*t)"
                 "+(random(0)-0.5)*1.1*exp(-16*max(0\\,t-0.28))")
         post = "highpass=f=1200,lowpass=f=7000"
+    elif kind == "clic":
+        # Tic de mecanismo (avance de proyector de diapositivas): un golpe
+        # seco y corto de madera — el acento más discreto para una cifra.
+        expr = ("0.8*sin(2*PI*1600*t)*exp(-90*t)"
+                "+0.5*(random(0)-0.5)*exp(-70*t)")
+        post = "highpass=f=600,lowpass=f=6000"
+    elif kind == "aire":
+        # Soplo de aire suave que entra y se va: presencia sin percusión,
+        # para documentales sobrios donde un 'pop' suena a aplicación.
+        expr = ("(random(0)-0.5)*1.2*exp(-3.0*pow(t-0.55\\,2)*6)")
+        post = "highpass=f=280,lowpass=f=1800"
+    elif kind == "cuerda":
+        # Cuerdas breves que crecen y se apagan (quinta grave + octava):
+        # el acento épico, sin percusión.
+        expr = ("0.45*sin(2*PI*220*t)*(1-exp(-4*t))*exp(-1.6*t)"
+                "+0.30*sin(2*PI*330*t)*(1-exp(-3*t))*exp(-1.8*t)"
+                "+0.18*sin(2*PI*440*t)*(1-exp(-2.5*t))*exp(-2.2*t)")
+        post = "highpass=f=120,lowpass=f=3000"
+    elif kind == "sello":
+        # Sello de caucho sobre un expediente: golpe apagado + roce corto.
+        expr = ("0.85*sin(2*PI*120*t)*exp(-26*t)"
+                "+0.45*(random(0)-0.5)*exp(-30*t)"
+                "+0.25*(random(0)-0.5)*exp(-22*max(0\\,t-0.12))")
+        post = "lowpass=f=3200"
     elif kind == "latido":
         # Latido (lub-dub): dos golpes graves con la separación real del
         # corazón — tensión sostenida sin música añadida.

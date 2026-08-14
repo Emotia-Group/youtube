@@ -9,6 +9,73 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.57.0 — 2026-08-14
+Los seis detalles que encontraste en el video de prueba. Dos de ellos eran
+fallos de verdad en el personaje con lipsync — y el segundo explicaba por qué
+«la mayoría de las escenas» sonaban a destiempo.
+
+- 🧑 EL ENCUADRE DEL PERSONAJE, ARREGLADO DE RAÍZ (creías haberlo arreglado, y
+  con razón): el reencuadre de la foto al formato del video **existía, pero
+  solo se aplicaba a las escenas cuyo lipsync FALLABA**. Las que salían bien
+  seguían generándose con tu foto 9:16 tal cual, y el montaje tenía que
+  recortarlas hasta el mentón. Ahora la foto se adapta al formato **antes** de
+  generar ningún clip, y es esa la que se le entrega al modelo: los clips
+  nacen ya en 16:9. Si no hay modelo de identidad disponible, el montaje
+  compone el clip ENTERO sobre su propio fondo desenfocado — la cara no se
+  corta ni en el peor caso (antes ese respaldo solo existía para imágenes
+  fijas, no para clips).
+- 🎙 Y LA SINCRONÍA CON TUS PAUSAS: el clip del personaje se generaba con el
+  tramo de tu grabación **ORIGINAL**, no con el de la pista final. Como el
+  director te ajustó 79 pausas, la boca iba por un lado y la voz por otro en
+  casi todas las escenas habladas. Ahora el audio que mueve los labios se
+  corta de la **pista que de verdad se oye**, con la duración exacta de la
+  escena. Además, un clip de lipsync más corto que su escena ya **no se
+  ralentiza** (eso desincronizaba por sí solo): se congela el último cuadro.
+- 🔁 Y LOS CLIPS VIEJOS SE DETECTAN: cada clip guarda la firma de la foto y el
+  audio con que se hizo. Al «Rehacer desde Imágenes», los que se generaron
+  con la foto sin adaptar o con el audio anterior se rehacen (con aviso: son
+  los únicos que cuestan); los demás se conservan.
+- 🔤 TEXTO LEGIBLE COMO ESTÁNDAR (lo que pediste): hasta ahora el ruteo a
+  gpt-image-1 solo miraba el texto que el director declaraba, y la norma que
+  tenía era «pide texto borroso e ilegible» — justo lo que ves como defecto.
+  Ahora: (1) se detecta que la escena muestra un objeto escrito aunque el
+  director no lo declare (periódico, cartel, documento, lápida, pizarra…) y
+  esa imagen se genera con el modelo de mejor tipografía; (2) toda petición
+  de «unreadable/blurred text» del prompt se **invierte** a texto nítido y
+  legible; (3) al director se le prohíbe pedir texto ilegible: o no hay texto
+  en el plano, o el texto es correcto y legible; (4) el control con visión
+  ahora reporta el **texto inventado** como defecto y lo manda regenerar.
+- 🔊 EL SONIDO DE LOS INSERTOS, A TU GUSTO: todos entraban con el mismo «pop»
+  de aplicación. Ahora hay **paletas** (⚙ Configuración → Audio): *archivo*
+  (roce de papel + tic de proyector), *sobrio* (un soplo de aire), *épico*
+  (cuerdas breves), *registro* (sello y clic), *moderno* (el pop de siempre) y
+  *sin sonido*. En «Automático» manda el estilo del video, y dentro de cada
+  paleta la foto, la cifra y el mapa suenan **distinto** — no el mismo golpe
+  veinte veces. Cuatro efectos nuevos sintetizados en local (clic, aire,
+  cuerda, sello), sin descargas ni costo.
+- 🔡 SUBTÍTULOS SIN VIÑETAS: cada frase empezaba con «• ». La causa: al
+  transcribir, tu guion se le pasa a Whisper como contexto de vocabulario y
+  **Whisper copia el formato** — con un guion en viñetas, devuelve viñetas. El
+  contexto ahora va limpio (solo palabras) y, por si acaso, se quitan las
+  viñetas del texto Y de cada palabra con sus tiempos. Los guiones de diálogo
+  («—No lo sabía») no se tocan.
+- 🗺 LOCALIZADORES CON MATERIAL REAL: el mapa vacío con coordenadas que viste
+  en «Nueva Inglaterra» era el respaldo local — una retícula con un punto que
+  no aporta nada. **Se ha eliminado.** Ahora, si no hay cartografía real (el
+  servicio de teselas no respondió), la mención se resuelve con una **imagen
+  real del lugar** (tu banco → foto libre de Wikimedia → ilustración de época
+  si autorizaste `elements_ai`) y, si tampoco la hay, el inserto simplemente
+  no se pone. Además se prueban dos servidores de teselas antes de rendirse y
+  se exige mayoría de teselas (un mapa a trozos parecía un error).
+
+Batería nueva (`tests/test_v0_57_0.py`, 38 comprobaciones con clips, pistas
+de voz y montajes reales de ffmpeg). Total: **59 baterías en verde**.
+
+> Este punto UNE las dos líneas de trabajo que iban por separado: el
+> creador de videos (que se quedó en la v0.53.0) y la Torre de Control
+> (v0.54.0-v0.56.0). A partir de aquí hay un solo programa y una sola
+> versión: `actualizar.bat` o `pull.bat` te traen las dos cosas.
+
 ## v0.56.0 — 2026-08-13
 La Torre de Control aprende a **reportar** (Fase 3, la última del plan): el
 panel deja de esperar a que tú revises 20 canales y te dice qué mirar hoy.

@@ -29,6 +29,7 @@ from ytstudio.catalog import (CATALOG, FORMATS, LANGUAGES,
                               SHORT_TEMPLATES, STYLE_PRESETS, key_status)
 from ytstudio.config import ROOT, load_config
 from ytstudio.pipeline import PHASE_LABELS, PHASE_ORDER, PHASES, run_pipeline
+from ytstudio.utils.sfx import PALETTE_LABELS
 from ytstudio.project import (DIRS, PROJECTS_DIR, Project, read_json_tolerant,
                              slugify)
 
@@ -905,6 +906,8 @@ def api_get_config() -> dict:
         "short_templates": {k: {"label": v["label"], "hint": v["hint"]}
                             for k, v in SHORT_TEMPLATES.items()},
         "overlay_font_families": OVERLAY_FONT_FAMILIES,
+        "insert_sfx_options": [{"id": k, "label": v}
+                               for k, v in PALETTE_LABELS.items()],
         "overlay_branding_presets": OVERLAY_BRANDING_PRESETS,
         "keys": key_status(),
         "version": get_version(),
@@ -924,7 +927,7 @@ _UI_CONFIG_PATHS = (
     ("style", "preset"),
     ("video", "target_minutes"), ("video", "width"), ("video", "height"),
     ("video", "burn_subtitles"), ("video", "scene_seconds"),
-    ("audio", "music_db"), ("audio", "duck"),
+    ("audio", "music_db"), ("audio", "duck"), ("audio", "element_sfx"),
     ("providers",),  # el usuario elige proveedores/modelos
     ("migrations",),  # marcas de migraciones ya aplicadas (ver _apply_migrations)
 )
