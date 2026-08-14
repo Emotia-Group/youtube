@@ -64,6 +64,9 @@ nav.main button[aria-current="true"]{color:var(--a700);border-bottom-color:var(-
 .seg button{font-family:var(--heading);font-size:12px;background:transparent;border:0;color:var(--n700);padding:6px 11px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--divider)}
 .seg button[aria-pressed="true"]{background:var(--a100);color:var(--a700)}
+/* Tarjetas de plataforma de «proyecto nuevo»: la elección más importante del
+   video (proporción, duración, subtítulos) merece verse de un vistazo. */
+.fmtcard[aria-pressed="true"]{border-color:var(--accent);background:var(--a100);color:var(--a800)}
 main{padding:0}
 .wrap{padding:26px 30px}
 .split{display:grid;gap:0}
@@ -313,30 +316,90 @@ function viewProyectos() {
 function viewNuevo() {
   const formats = Object.entries(S.cfg?.formats || { long: { label: 'Video largo' } });
   const presets = Object.entries(S.cfg?.style_presets || {});
-  const st = { format: 'long', preset: presets[0]?.[0] };
+  const plantillas = Object.entries(S.cfg?.short_templates || {});
+  const misEstilos = S.lib?.styles || [];
+  const misCanales = S.lib?.channels || [];
+  const st = { format: 'long', preset: presets[0]?.[0], style_id: '', short_template: 'libre' };
   const err = el('div', { class: 'muted', style: 'font-size:13px' });
   const nombre = el('input', { class: 'input', placeholder: 'alejandro-magno' });
   const texto = el('textarea', { class: 'input', rows: '7', placeholder: 'Escribe el tema o pega el material de partida…' });
-  const segFmt = el('div', { class: 'seg' }, formats.map(([k, f]) => el('button', { 'aria-pressed': String(k === st.format), onclick: e => { st.format = k; for (const b of segFmt.children) b.setAttribute('aria-pressed', String(b === e.target)); } }, f.label || k)));
-  const segPreset = el('div', { class: 'seg', style: 'flex-wrap:wrap' }, presets.map(([k, p]) => el('button', { 'aria-pressed': String(k === st.preset), onclick: e => { st.preset = k; for (const b of segPreset.children) b.setAttribute('aria-pressed', String(b === e.target)); } }, (p && (p.label || p.name)) || k)));
+
+  // TARJETAS DE PLATAFORMA: la primera decisión del video es para dónde es,
+  // porque cambia la proporción, la duración y hasta los subtítulos.
+  const bloqueTpl = el('div', { class: 'hide' });
+  const tarjetas = formats.map(([k, f]) => el('button', {
+    class: 'fmtcard btn', 'data-fmt': k, 'aria-pressed': String(k === st.format),
+    style: 'text-align:left;padding:12px 14px;line-height:1.45;height:auto;white-space:normal',
+    onclick: () => pickFormat(k),
+  }, f.label || k));
+  const rejilla = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px' }, tarjetas);
+  // El <select> oculto mantiene la compatibilidad de lo que se envía al crear.
+  const selFormato = el('select', { id: 'np-format', style: 'display:none' },
+    formats.map(([k]) => el('option', { value: k }, k)));
+
+  function pickFormat(k) {
+    st.format = k;
+    selFormato.value = k;
+    for (const t of tarjetas) t.setAttribute('aria-pressed', String(t.dataset.fmt === k));
+    toggleTplSel();
+  }
+  function toggleTplSel() {
+    // Las plantillas narrativas solo aplican a los formatos cortos.
+    bloqueTpl.classList.toggle('hide', st.format === 'long' || !plantillas.length);
+  }
+
+  const selTpl = el('select', { id: 'np-template', class: 'input', style: 'width:auto',
+    onchange: e => { st.short_template = e.target.value; } },
+    plantillas.map(([k, t]) => el('option', { value: k, selected: k === 'libre' ? 'selected' : null }, t.label || k)));
+  const notaTpl = el('div', { class: 'muted', style: 'font-size:12px;margin-top:5px;line-height:1.5' });
+  selTpl.addEventListener('change', () => {
+    notaTpl.textContent = (S.cfg?.short_templates?.[selTpl.value] || {}).hint || '';
+  });
+  bloqueTpl.append(el('label', { class: 'f' }, 'Plantilla narrativa del corto'), selTpl, notaTpl);
+
+  // TUS estilos guardados, agrupados por canal, además de los de fábrica.
+  const selEstilo = el('select', { class: 'input', style: 'width:auto', onchange: e => { st.style_id = e.target.value; } },
+    el('option', { value: '' }, 'Ninguno — usar solo el estilo visual de abajo'),
+    misCanales.map(c => {
+      const hijos = misEstilos.filter(s => s.channel_id === c.id);
+      return hijos.length ? el('optgroup', { label: c.name || c.id },
+        hijos.map(s => el('option', { value: s.id }, s.name || s.id))) : null;
+    }).filter(Boolean),
+    (() => {
+      const sueltos = misEstilos.filter(s => !s.channel_id || !misCanales.some(c => c.id === s.channel_id));
+      return sueltos.length ? el('optgroup', { label: 'Sin canal' }, sueltos.map(s => el('option', { value: s.id }, s.name || s.id))) : null;
+    })());
+
   const crear = async (runAfter) => {
     err.textContent = '';
     try {
-      const body = { slug: nombre.value.trim(), text: texto.value.trim(), format: st.format, style_preset: st.preset };
+      const body = { slug: nombre.value.trim(), text: texto.value.trim(),
+                     format: st.format, style_preset: st.preset };
+      if (st.style_id) body.style_id = st.style_id;
+      if (st.format !== 'long') body.short_template = st.short_template;
       const r = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       if (runAfter) await api(`/api/projects/${r.slug}/run`, { method: 'POST', body: JSON.stringify({}) });
       await loadProjects();
       go('corrida', r.slug);
     } catch (e) { err.textContent = e.message; }
   };
-  return el('div', { class: 'wrap', style: 'max-width:760px' },
+  const segPreset = el('div', { class: 'seg', style: 'flex-wrap:wrap' }, presets.map(([k, p]) => el('button', { 'aria-pressed': String(k === st.preset), onclick: e => { st.preset = k; for (const b of segPreset.children) b.setAttribute('aria-pressed', String(b === e.target)); } }, (p && (p.label || p.name)) || k)));
+  toggleTplSel();
+  return el('div', { class: 'wrap', style: 'max-width:820px' },
     el('div', { class: 'kicker' }, 'Paso 1 de 1 · el resto lo decide el sistema'),
-    el('h1', { style: 'font-size:34px;margin-top:10px' }, '¿De qué trata el video?'),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, '¿Para dónde es este video?'),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin-top:10px;max-width:66ch' },
+      'Es la primera decisión porque cambia todo lo demás: la proporción de la imagen, la duración objetivo, el ritmo de las escenas y si los subtítulos van incrustados.'),
     el('div', { style: 'display:flex;flex-direction:column;gap:20px;margin-top:22px' },
+      el('div', {}, rejilla, selFormato),
+      bloqueTpl,
       el('div', {}, el('label', { class: 'f' }, 'Nombre del proyecto'), nombre),
       el('div', {}, el('label', { class: 'f' }, 'Tema o material'), texto),
-      el('div', {}, el('label', { class: 'f' }, 'Formato'), segFmt),
-      presets.length ? el('div', {}, el('label', { class: 'f' }, 'Estilo visual'), segPreset) : null,
+      misEstilos.length ? el('div', {},
+        el('label', { class: 'f' }, 'Tu estilo guardado (canal)'), selEstilo,
+        el('div', { class: 'muted', style: 'font-size:12px;margin-top:5px;line-height:1.5' },
+          'Aplica la identidad de uno de tus canales: dirección visual, tono, música, ritmo y branding de rótulos.')) : null,
+      presets.length ? el('div', {}, el('label', { class: 'f' }, 'Estilo visual de fábrica'), segPreset) : null,
       el('div', { style: 'display:flex;gap:10px;align-items:center;border-top:1px solid var(--divider);padding-top:16px' },
         el('button', { class: 'btn btn-primary', onclick: () => crear(true) }, 'Crear y generar'),
         el('button', { class: 'btn', onclick: () => crear(false) }, 'Solo crear'),
@@ -464,26 +527,197 @@ function viewGuion() {
     el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' }, 'Guardar invalida escenas, voz y montaje: el sistema los rehace desde aquí.'));
 }
 
+// FORMULARIO DE ESTILO. Un estilo guarda la identidad de un canal —dirección
+// visual, tono, música, ritmo, fórmula narrativa y branding de rótulos— para
+// no volver a pagar el análisis en cada video. En el rediseño no había forma
+// de crear ni editar ninguno: las tarjetas eran decorativas.
+function styleForm(estilo) {
+  const e = estilo || {};
+  const campos = {};
+  const canales = (S.lib?.channels || []);
+  const fuentes = S.cfg?.overlay_font_families || {};
+  const presets = S.cfg?.overlay_branding_presets || {};
+
+  const texto = (k, label, hint, filas) => {
+    const n = filas
+      ? el('textarea', { class: 'input', rows: String(filas), value: e[k] || '' })
+      : el('input', { class: 'input', value: e[k] ?? '' });
+    if (filas) n.value = e[k] || '';
+    campos[k] = () => n.value.trim();
+    return el('div', {}, el('label', { class: 'f' }, label), n,
+      hint ? el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px;line-height:1.5' }, hint) : null);
+  };
+  const color = (k, label) => {
+    const hex = el('input', { class: 'input', style: 'width:110px', placeholder: 'E8C46B', value: e[k] || '' });
+    campos[k] = () => hex.value.trim().replace(/^#/, '');
+    return el('div', {}, el('label', { class: 'f' }, label),
+      el('div', { style: 'display:flex;gap:8px;align-items:center' }, hex,
+        el('span', { class: 'muted', style: 'font-size:12px' }, 'color en hexadecimal, sin #')));
+  };
+  const lista = (k, label, opciones, hint) => {
+    const s = el('select', { class: 'input', style: 'width:auto' },
+      opciones.map(o => el('option', { value: o.v, selected: (e[k] || '') === o.v ? 'selected' : null }, o.t)));
+    campos[k] = () => s.value || null;
+    return el('div', {}, el('label', { class: 'f' }, label), s,
+      hint ? el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px' }, hint) : null);
+  };
+
+  const nombre = el('input', { class: 'input', value: e.name || '', placeholder: 'Documental de naturaleza' });
+  const canalSel = el('select', { class: 'input', style: 'width:auto' },
+    el('option', { value: '' }, 'Sin canal'),
+    canales.map(c => el('option', { value: c.id, selected: e.channel_id === c.id ? 'selected' : null }, c.name || c.id)));
+
+  const bloqueFuente = lista('overlay_font_family', 'Tipografía de los rótulos',
+    [{ v: '', t: 'Por defecto del programa' }, ...Object.entries(fuentes).map(([k, f]) => ({ v: k, t: f.label }))],
+    Object.values(fuentes).map(f => f.hint).filter(Boolean)[0] ? 'Cada familia da un aire distinto al video.' : '');
+  const bloqueEstilo = lista('overlay_style', 'Diseño del rótulo',
+    [{ v: '', t: 'Por defecto (documental)' },
+     { v: 'documental', t: 'Documental — placa oscura sobria' },
+     { v: 'minimal', t: 'Minimal — sin placa, solo filete' },
+     { v: 'bold', t: 'Bold — placa del color de acento, máxima presencia' }]);
+  const acento = color('overlay_accent', 'Color de acento');
+  const textoCol = color('overlay_text_color', 'Color del texto');
+
+  const aplicarPreset = k => {
+    const p = presets[k]; if (!p) return;
+    const set = (sel, val) => { const n = sel.querySelector('select, input'); if (n) n.value = val || ''; };
+    set(bloqueFuente, p.overlay_font_family);
+    set(bloqueEstilo, p.overlay_style);
+    set(acento, p.overlay_accent);
+    set(textoCol, p.overlay_text_color);
+  };
+
+  const cuerpo = el('div', { style: 'display:flex;flex-direction:column;gap:16px' },
+    el('div', {}, el('label', { class: 'f' }, 'Nombre del estilo'), nombre),
+    el('div', {}, el('label', { class: 'f' }, 'Canal al que pertenece'), canalSel),
+    texto('visual_description', 'Dirección visual', 'Cómo se ven las imágenes: luz, paleta, tipo de plano, textura.', 3),
+    texto('prompt_prefix', 'Prefijo para las imágenes', 'Se antepone a cada descripción que se manda al modelo de imagen.', 2),
+    texto('palette', 'Paleta', 'Colores dominantes, separados por comas.'),
+    texto('tone', 'Tono de la narración', 'Cómo habla el narrador: sobrio, épico, cercano…', 2),
+    texto('music_mood', 'Ánimo de la música'),
+    texto('music_description', 'Descripción de la música', '', 2),
+    texto('formula', 'Fórmula narrativa', 'La estructura que repite el canal: gancho, desarrollo, giro, cierre.', 3),
+    el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px' },
+      texto('scene_seconds', 'Segundos por escena'),
+      lista('transition', 'Transición',
+        [{ v: '', t: 'Automática' }, { v: 'fade', t: 'Fundido' }, { v: 'none', t: 'Corte' }])),
+    el('div', { style: 'border-top:1px solid var(--divider);padding-top:16px' },
+      el('div', { class: 'kicker' }, 'Branding de los rótulos'),
+      Object.keys(presets).length ? el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px' },
+        Object.entries(presets).map(([k, p]) => el('button', { class: 'btn btn-sm', onclick: () => aplicarPreset(k) }, p.label))) : null,
+      el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px' },
+        bloqueFuente, bloqueEstilo, acento, textoCol)));
+
+  const err = el('div', { class: 'muted', style: 'font-size:13px' });
+  const guardar = async () => {
+    const body = { name: nombre.value.trim(), channel_id: canalSel.value || null };
+    for (const [k, leer] of Object.entries(campos)) body[k] = leer();
+    if (body.scene_seconds === '') body.scene_seconds = null;
+    if (!body.name) { err.textContent = 'El estilo necesita un nombre.'; return; }
+    try {
+      if (e.id) await api(`/api/styles/${e.id}`, { method: 'POST', body: JSON.stringify(body) });
+      else await api('/api/styles', { method: 'POST', body: JSON.stringify(body) });
+      ov.remove(); await loadLibrary();
+    } catch (x) { err.textContent = x.message; }
+  };
+  const ov = overlay(e.id ? 'Editar estilo' : 'Estilo nuevo',
+    el('div', {}, cuerpo,
+      el('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:20px;border-top:1px solid var(--divider);padding-top:16px' },
+        el('button', { class: 'btn btn-primary', onclick: guardar }, 'Guardar estilo'),
+        e.id ? el('button', { class: 'btn', onclick: async () => {
+          if (!confirm(`¿Borrar el estilo «${e.name}»? Los videos ya hechos con él no se tocan.`)) return;
+          try { await api(`/api/styles/${e.id}`, { method: 'DELETE' }); ov.remove(); await loadLibrary(); }
+          catch (x) { err.textContent = x.message; }
+        } }, 'Borrar') : null,
+        err)), 780);
+  return ov;
+}
+
+function channelForm(canal) {
+  const c = canal || {};
+  const nombre = el('input', { class: 'input', value: c.name || '', placeholder: 'Historia en 10 minutos' });
+  const desc = el('textarea', { class: 'input', rows: '3' });
+  desc.value = c.description || '';
+  const err = el('div', { class: 'muted', style: 'font-size:13px' });
+  const guardar = async () => {
+    const body = { name: nombre.value.trim(), description: desc.value.trim() };
+    if (!body.name) { err.textContent = 'El canal necesita un nombre.'; return; }
+    try {
+      if (c.id) await api(`/api/channels/${c.id}`, { method: 'POST', body: JSON.stringify(body) });
+      else await api('/api/channels', { method: 'POST', body: JSON.stringify(body) });
+      ov.remove(); await loadLibrary();
+    } catch (x) { err.textContent = x.message; }
+  };
+  const ov = overlay(c.id ? 'Editar canal' : 'Canal nuevo',
+    el('div', { style: 'display:flex;flex-direction:column;gap:16px' },
+      el('div', {}, el('label', { class: 'f' }, 'Nombre del canal'), nombre),
+      el('div', {}, el('label', { class: 'f' }, 'Descripción'), desc),
+      el('div', { style: 'display:flex;gap:10px;align-items:center;border-top:1px solid var(--divider);padding-top:16px' },
+        el('button', { class: 'btn btn-primary', onclick: guardar }, 'Guardar canal'),
+        c.id ? el('button', { class: 'btn', onclick: async () => {
+          if (!confirm(`¿Borrar el canal «${c.name}»? Sus estilos quedan sin canal, no se borran.`)) return;
+          try { await api(`/api/channels/${c.id}`, { method: 'DELETE' }); ov.remove(); await loadLibrary(); }
+          catch (x) { err.textContent = x.message; }
+        } }, 'Borrar') : null,
+        err)), 560);
+  return ov;
+}
+
+function styleCard(s) {
+  return el('div', { class: 'card', style: 'padding:15px 16px;cursor:pointer;border-color:var(--accent)', onclick: () => styleForm(s) },
+    el('div', { class: 'kicker', style: 'color:var(--a700)' }, 'estilo'),
+    el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:5px' }, s.name || s.id),
+    el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin-top:6px' },
+      (s.visual_description || s.tone || 'sin descripción').slice(0, 110)),
+    el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap' },
+      s.overlay_accent ? el('span', { class: 'tag tag-quiet' }, '#' + s.overlay_accent) : null,
+      s.scene_seconds ? el('span', { class: 'tag tag-quiet' }, s.scene_seconds + ' s/escena') : null,
+      s.source_project ? el('span', { class: 'tag tag-quiet' }, 'de un proyecto') : null),
+    el('div', { class: 'muted', style: 'font-size:11px;margin-top:10px' }, 'Pulsa para editarlo'));
+}
+
 function viewCanales() {
   if (!S.lib) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando canales…'));
   const channels = S.lib.channels || [], styles = S.lib.styles || [];
+  const botones = el('div', { style: 'display:flex;gap:8px' },
+    el('button', { class: 'btn btn-primary', onclick: () => channelForm() }, 'Canal nuevo'),
+    el('button', { class: 'btn', onclick: () => styleForm() }, 'Estilo nuevo'));
+
   if (!channels.length && !styles.length) return el('div', { class: 'center' },
     el('div', { style: 'max-width:520px' },
       el('div', { class: 'kicker' }, 'Sin canales guardados'),
       el('h1', { style: 'font-size:30px;margin-top:12px;line-height:1.25' }, 'Un canal recuerda voz, tono y dirección de imagen'),
-      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, 'Guarda el estilo de un proyecto terminado y los siguientes videos saldrán iguales sin volver a configurar nada.')));
+      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, 'Guarda el estilo de un proyecto terminado —o créalo aquí a mano— y los siguientes videos saldrán iguales sin volver a configurar nada.'),
+      el('div', { style: 'display:flex;gap:8px;justify-content:center;margin-top:20px' },
+        el('button', { class: 'btn btn-primary', onclick: () => channelForm() }, 'Crear el primer canal'),
+        el('button', { class: 'btn', onclick: () => styleForm() }, 'Crear un estilo suelto'))));
+
+  // Los estilos se agrupan BAJO su canal; los que no tienen canal van al final.
+  const grupos = [...channels.map(c => ({ canal: c, hijos: styles.filter(s => s.channel_id === c.id) })),
+                  { canal: null, hijos: styles.filter(s => !s.channel_id || !channels.some(c => c.id === s.channel_id)) }]
+                 .filter(g => g.canal || g.hijos.length);
+
   return el('div', { class: 'wrap' },
-    el('div', { class: 'kicker' }, `${channels.length} canales · ${styles.length} estilos`),
-    el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Canales y estilos'),
-    el('div', { class: 'grid4', style: 'margin-top:22px' },
-      channels.map(c => el('div', { class: 'card', style: 'padding:16px' },
-        el('div', { style: 'font-family:var(--heading);font-size:19px' }, c.name || c.id),
-        el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:6px' }, c.description || 'sin descripción'),
-        el('div', { class: 'mono muted', style: 'margin-top:10px' }, styles.filter(s => s.channel_id === c.id).length + ' estilos'))),
-      styles.map(s => el('div', { class: 'card', style: 'padding:16px;border-color:var(--accent)' },
-        el('div', { class: 'kicker', style: 'color:var(--a700)' }, 'estilo'),
-        el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:5px' }, s.name || s.id),
-        el('div', { class: 'muted', style: 'font-size:13px;margin-top:6px' }, [s.language, s.format, s.preset].filter(Boolean).join(' · ') || '—')))));
+    el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap' },
+      el('div', {},
+        el('div', { class: 'kicker' }, `${channels.length} canales · ${styles.length} estilos`),
+        el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Canales y estilos')),
+      botones),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin:14px 0 0' },
+      'Un canal agrupa estilos; un estilo guarda la dirección visual, el tono, la música, el ritmo y el branding de los rótulos. Al crear un video eliges uno y arrancas con la identidad ya puesta, sin volver a pagar el análisis.'),
+    el('div', { style: 'margin-top:26px;display:flex;flex-direction:column;gap:30px' },
+      grupos.map(g => el('div', {},
+        el('div', { style: 'display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--divider);padding-bottom:8px' },
+          el('h2', { style: 'font-size:23px' }, g.canal ? (g.canal.name || g.canal.id) : 'Estilos sin canal'),
+          el('span', { class: 'mono muted' }, `${g.hijos.length} estilo(s)`),
+          el('span', { style: 'flex:1' }),
+          g.canal ? el('button', { class: 'btn btn-sm btn-ghost', onclick: () => channelForm(g.canal) }, 'Editar canal') : null),
+        g.canal?.description ? el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:8px' }, g.canal.description) : null,
+        g.hijos.length
+          ? el('div', { class: 'grid4', style: 'margin-top:16px' }, g.hijos.map(styleCard))
+          : el('div', { class: 'muted', style: 'font-size:13px;margin-top:14px' },
+              'Todavía sin estilos. ',
+              el('a', { href: '#', onclick: ev => { ev.preventDefault(); styleForm({ channel_id: g.canal?.id }); } }, 'Crear uno para este canal'))))));
 }
 
 function viewBiblioteca() {
