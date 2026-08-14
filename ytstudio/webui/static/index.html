@@ -4,15 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ytstudio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+<!-- SIN TIPOGRAFÍAS DE INTERNET. ytstudio es un programa LOCAL: se usa sin
+     conexión y no debe pedirle nada a servidores ajenos. Cargar Cormorant y
+     Lora desde Google bloqueaba el arranque hasta que la petición fallaba, y
+     en un equipo sin internet el texto salía igualmente con la tipografía de
+     respaldo. Aquí se declaran directamente las familias del sistema que dan
+     ese mismo aire editorial: serif de título con carácter y serif de lectura
+     cómoda, presentes en Windows, Mac y Linux. -->
 <style>
 :root{
   --bg:#f3f2f2; --surface:#eae9e9; --text:#201f1d; --divider:#d8d5d2;
   --n300:#e4e1de; --n500:#8f8a83; --n600:#7a756e; --n700:#5d5952; --n800:#3a3733; --n900:#201f1d;
   --accent:#b68235; --a100:#f6efe4; --a200:#ecdcc4; --a700:#8f6526; --a800:#6d4d1d;
-  --heading:"Cormorant Garamond",Georgia,serif; --body:"Lora",Georgia,serif;
+  --heading:"Cormorant Garamond","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:"Lora",Georgia,"Times New Roman",serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 html[data-theme="dark"]{
@@ -44,7 +49,9 @@ h1,h2,h3{font-family:var(--heading);font-weight:400;margin:0;letter-spacing:-0.0
 /* Los desplegables NO pueden ser transparentes: el navegador pinta la lista
    con su propio fondo y, en modo claro, el texto quedaba blanco sobre blanco
    (ilegible). Fondo y color explícitos, en el select y en cada opción. */
-select.input{background:var(--surface);color:var(--text);appearance:auto}
+/* max-width evita que una opción larga («Documental cinematográfico») se
+   desborde sobre el campo de al lado en la rejilla de ajustes. */
+select.input{background:var(--surface);color:var(--text);appearance:auto;max-width:100%}
 select.input option{background:var(--surface);color:var(--text)}
 label.f{display:block;font:10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n600);margin-bottom:6px}
 table{width:100%;border-collapse:collapse;font-size:14px}
