@@ -208,9 +208,9 @@ function go(screen, slug) {
     const own = { proyectos: ['proyectos', 'nuevo', 'corrida', 'guion', 'escenas', 'personajes', 'metadatos'], canales: ['canales'], biblioteca: ['biblioteca'], ajustes: ['ajustes'] }[b.dataset.go];
     b.setAttribute('aria-current', String(own.includes(screen)));
   }
-  $('#crumb').textContent = ['corrida', 'guion', 'escenas', 'personajes', 'metadatos'].includes(screen) ? (S.detail?.display_name || S.slug || '') : '';
+  $('#crumb').textContent = ['corrida', 'material', 'guion', 'escenas', 'personajes', 'metadatos'].includes(screen) ? (S.detail?.display_name || S.slug || '') : '';
   render();
-  if (['escenas', 'personajes', 'metadatos'].includes(screen) && !S.detail) pollRun();
+  if (['material', 'escenas', 'personajes', 'metadatos'].includes(screen) && !S.detail) pollRun();
   if (screen === 'corrida') { pollRun(); S.timer = setInterval(pollRun, 2500); }
   if (screen === 'canales') loadLibrary();
   if (screen === 'guion') loadScript();
@@ -273,7 +273,7 @@ async function pollRun() {
 function render() {
   const v = $('#view'); v.textContent = '';
   if (S.fail && !S.cfg) { v.append(viewFallo()); return; }
-  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
+  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, material: viewMaterial, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
   try { v.append(fn()); }
   catch (e) { v.append(viewFallo(e.message)); }
 }
@@ -1315,7 +1315,7 @@ function viewAjustes() {
 }
 
 function tabBar(active) {
-  const tabs = [['corrida', 'Corrida'], ['guion', 'Guion'], ['escenas', 'Escenas'], ['personajes', 'Personajes'], ['metadatos', 'Metadatos']];
+  const tabs = [['corrida', 'Corrida'], ['material', 'Material'], ['guion', 'Guion'], ['escenas', 'Escenas'], ['personajes', 'Personajes'], ['metadatos', 'Metadatos']];
   return el('div', { style: 'display:flex;gap:2px;margin-top:14px;border-bottom:1px solid var(--divider)' },
     tabs.map(([k, label]) => el('button', {
       class: 'btn btn-ghost btn-sm',
@@ -1462,6 +1462,84 @@ function viewPersonajes() {
           } catch (e) { alert(e.message); }
         } }, 'Guardar personaje'))),
     el('div', { class: 'muted', style: 'font-size:13px;margin-top:14px' }, 'Tras cambiar el elenco, rehaz desde «Escenas» para que el director lo use.'));
+}
+
+// MATERIAL del proyecto: tu narración grabada, tu guion, tu B-roll propio,
+// enlaces de referencia y las fotos del personaje. Es por donde EMPIEZA el
+// trabajo de quien narra sus propios videos, y en el rediseño no existía:
+// no había forma de subir la voz.
+const CATS_MATERIAL = [
+  ['voz', 'Narración (tu voz)', 'audio/*', 'La grabación que manda: las escenas se cortan a su medida y los subtítulos se sincronizan a tu palabra exacta.'],
+  ['guion', 'Guion o notas', '.txt,.md,.pdf,.docx,.doc,.rtf', 'Si ya tienes guion, súbelo: no se reinventa. También sirven notas sueltas.'],
+  ['broll', 'B-roll propio', 'image/*,video/*', 'Nómbralos scene_003.jpg o 03_batalla.mp4 y van a ESA escena. Tu material siempre gana sobre lo generado.'],
+  ['personaje', 'Fotos del personaje', 'image/*', 'Para que el personaje narre en cámara con lipsync, y para mantener su cara igual en todas sus escenas.'],
+  ['reaccion', 'Video de reacción', 'video/*', 'Se compone sobre el contenido (croma o burbuja).'],
+];
+
+function viewMaterial() {
+  const d = S.detail;
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando…'));
+  const assets = d.assets || [];
+  const msg = el('span', { class: 'muted', style: 'font-size:13px' });
+
+  const subir = (categoria) => pickFile(
+    CATS_MATERIAL.find(c => c[0] === categoria)?.[2] || '',
+    async files => {
+      if (!files.length) return;
+      msg.textContent = 'Subiendo…';
+      try {
+        await api(`/api/projects/${S.slug}/assets`, { method: 'POST',
+          body: JSON.stringify({ files: files.map(f => ({ ...f, category: categoria })) }) });
+        await pollRun(); render();
+      } catch (e) { msg.textContent = e.message; }
+    });
+
+  const enlace = el('input', { class: 'input', placeholder: 'https://www.youtube.com/watch?v=…' });
+  const addEnlace = async () => {
+    const url = enlace.value.trim();
+    if (!url) return;
+    msg.textContent = 'Registrando el enlace…';
+    try {
+      await api(`/api/projects/${S.slug}/assets`, { method: 'POST',
+        body: JSON.stringify({ files: [{ name: 'referencia.txt', category: 'referencia',
+          data_base64: btoa(unescape(encodeURIComponent(url))) }] }) });
+      enlace.value = ''; await pollRun(); render();
+    } catch (e) { msg.textContent = e.message; }
+  };
+
+  return el('div', { class: 'wrap' },
+    projHeader('material', 'Material'),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin-top:16px' },
+      'Todo lo que aportas tú. Al añadir o quitar material, el análisis vuelve a empezar desde la primera fase — es lo correcto, porque cambia la base del video.'),
+    el('div', { style: 'display:flex;flex-direction:column;gap:22px;margin-top:24px' },
+      CATS_MATERIAL.map(([cat, titulo, , ayuda]) => {
+        const mios = assets.filter(a => a.category === cat);
+        return el('div', {},
+          el('div', { style: 'display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--divider);padding-bottom:7px' },
+            el('h3', { style: 'font-size:19px' }, titulo),
+            el('span', { class: 'mono muted' }, String(mios.length)),
+            el('span', { style: 'flex:1' }),
+            el('button', { class: 'btn btn-sm', onclick: () => subir(cat) }, 'Añadir')),
+          el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin-top:8px;max-width:70ch' }, ayuda),
+          mios.length ? el('div', { style: 'margin-top:10px' }, mios.map(a =>
+            el('div', { style: 'display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--divider)' },
+              el('span', { class: 'mono', style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, a.file || a.name || `#${a.id}`),
+              el('button', { class: 'btn btn-sm btn-ghost', title: 'Quitar', onclick: async () => {
+                if (!confirm(`¿Quitar «${a.file || a.id}» del proyecto?`)) return;
+                try { await api(`/api/projects/${S.slug}/assets/${a.id}`, { method: 'DELETE' }); await pollRun(); render(); }
+                catch (e) { msg.textContent = e.message; }
+              } }, '×')))) : null);
+      }),
+      el('div', {},
+        el('div', { style: 'border-bottom:1px solid var(--divider);padding-bottom:7px' },
+          el('h3', { style: 'font-size:19px' }, 'Enlace de referencia (YouTube)')),
+        el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin:8px 0 10px;max-width:70ch' },
+          'El programa aprende el ritmo de los cortes, el estilo visual y la fórmula narrativa del video que le pases. Uno bueno vale más que tres regulares.'),
+        el('div', { style: 'display:flex;gap:8px' }, enlace,
+          el('button', { class: 'btn', onclick: addEnlace }, 'Añadir enlace')),
+        assets.filter(a => a.category === 'referencia').map(a =>
+          el('div', { class: 'mono muted', style: 'padding:6px 0' }, a.file || a.url || `#${a.id}`))),
+      msg));
 }
 
 function viewMetadatos() {
