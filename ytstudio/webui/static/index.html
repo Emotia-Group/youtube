@@ -78,6 +78,13 @@ main{padding:0}
 .phase .n{font:10px var(--mono);color:var(--a700)}
 .phase.todo .n{color:var(--n500)}
 .phase.todo .nm{color:var(--n600)}
+/* Pipeline COMPACTO: en un corto, la mitad de las fases duran segundos y no
+   merecen una fila entera; se muestran como una línea fina. */
+.phase.mini{padding:5px 18px;font-size:12.5px;opacity:.75}
+.phase.mini .nm{font-size:12.5px}
+/* Marco de teléfono para el video final vertical: sin él, un Reel se veía
+   estirado a todo el ancho de la columna. */
+.vframe{margin:0 auto;max-width:340px;border:9px solid var(--n800);border-radius:22px;overflow:hidden;background:#000}
 .card{border:1px solid var(--divider);border-radius:4px}
 .warn{border:1px solid var(--accent);border-left:3px solid var(--accent);padding:14px 16px}
 .center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px}
@@ -101,6 +108,10 @@ main{padding:0}
   <span id="crumb" class="muted" style="font-family:var(--heading);font-size:17px"></span>
   <span style="flex:1"></span>
   <span id="ver" class="mono muted"></span>
+  <div class="seg" id="ayuda">
+    <button id="btn-manual" title="Guía completa de uso del programa">📖 Manual de uso</button>
+    <button id="btn-eventos" title="Todo lo que ha hecho el programa, para diagnosticar un problema">Log de eventos</button>
+  </div>
   <div class="seg" id="theme">
     <button data-theme="light" aria-pressed="true">Claro</button>
     <button data-theme="dark" aria-pressed="false">Oscuro</button>
@@ -179,6 +190,8 @@ $('#theme').addEventListener('click', e => { const b = e.target.closest('button'
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) go(b.dataset.go); });
 $('#new').addEventListener('click', () => go('nuevo'));
 $('#retry').addEventListener('click', boot);
+$('#btn-manual').addEventListener('click', showManual);
+$('#btn-eventos').addEventListener('click', showEvents);
 
 function go(screen, slug) {
   S.screen = screen;
@@ -334,6 +347,8 @@ function viewNuevo() {
   }, f.label || k));
   const rejilla = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px' }, tarjetas);
   // El <select> oculto mantiene la compatibilidad de lo que se envía al crear.
+  // <select id="np-format" style="display:none"> — el desplegable oculto que
+  // conserva la compatibilidad de lo que se envía al crear el proyecto.
   const selFormato = el('select', { id: 'np-format', style: 'display:none' },
     formats.map(([k]) => el('option', { value: k }, k)));
 
@@ -412,12 +427,17 @@ function viewCorrida() {
   const phases = S.cfg?.phases || [];
   const cur = run.phase;
   const list = el('div', {});
-  phases.forEach((p, i) => {
-    const status = d.phases?.[p.name];
-    const on = cur === p.name;
-    const row = el('div', { class: 'phase' + (on ? ' on' : status === 'done' ? '' : ' todo') },
+  // PIPELINE COMPACTO en los cortos: estas fases duran segundos y no merecen
+  // una fila entera compitiendo con las que de verdad tardan y cuestan.
+  const light = new Set(['ingest', 'metadata', 'publish', 'subtitles', 'music']);
+  const esCorto = (d.format || 'long') !== 'long';
+  phases.forEach((ph, i) => {
+    const status = d.phases?.[ph.name];
+    const on = cur === ph.name;
+    const mini = esCorto && !on && light.has(ph.name);
+    const row = el('div', { class: 'phase' + (mini ? ' mini' : '') + (on ? ' on' : status === 'done' ? '' : ' todo') },
       el('span', { class: 'n' }, String(i + 1).padStart(2, '0')),
-      el('span', { class: 'nm' }, p.label || p.name),
+      el('span', { class: 'nm' }, ph.label || ph.name),
       el('span', { class: 'mono muted' }, on ? `${run.percent ?? 0} %` : status === 'done' ? 'listo' : status === 'failed' ? 'falló' : 'espera'));
     list.append(row);
     if (on) {
@@ -446,8 +466,14 @@ function viewCorrida() {
 
   const usage = d.usage_report || {};
   const total = usage.total_usd ?? usage.total ?? usage.usd;
-  const video = d.final_video ? el('video', { src: `/files/${S.slug}/${d.final_video}`, controls: '', style: 'width:100%;display:block' })
-    : el('div', { class: 'plate', style: 'aspect-ratio:16/9;display:flex;align-items:flex-end;padding:12px' },
+  // El video final se ve en su proporción REAL: un vertical dentro de un marco
+  // de teléfono en vez de estirado a lo ancho de la columna.
+  const asp = aspectOf(d);
+  const video = d.final_video
+    ? el('div', { class: asp.vert ? 'vframe' : '', style: asp.vert ? 'max-height:72vh' : '' },
+        el('video', { src: `/files/${S.slug}/${d.final_video}`, controls: '',
+          style: `width:100%;display:block;aspect-ratio:${asp.w}/${asp.h}` }))
+    : el('div', { class: 'plate', style: `aspect-ratio:${asp.w}/${asp.h};display:flex;align-items:flex-end;padding:12px${asp.vert ? ';max-height:72vh;margin:0 auto' : ''}` },
       el('span', { class: 'mono muted', style: 'background:var(--bg);padding:4px 6px' }, run.running ? 'montando…' : 'sin video todavía'));
 
   const acciones = el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
@@ -578,7 +604,7 @@ function styleForm(estilo) {
   const acento = color('overlay_accent', 'Color de acento');
   const textoCol = color('overlay_text_color', 'Color del texto');
 
-  const aplicarPreset = k => {
+  const applyBrandingPreset = k => {
     const p = presets[k]; if (!p) return;
     const set = (sel, val) => { const n = sel.querySelector('select, input'); if (n) n.value = val || ''; };
     set(bloqueFuente, p.overlay_font_family);
@@ -604,7 +630,7 @@ function styleForm(estilo) {
     el('div', { style: 'border-top:1px solid var(--divider);padding-top:16px' },
       el('div', { class: 'kicker' }, 'Branding de los rótulos'),
       Object.keys(presets).length ? el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px' },
-        Object.entries(presets).map(([k, p]) => el('button', { class: 'btn btn-sm', onclick: () => aplicarPreset(k) }, p.label))) : null,
+        Object.entries(presets).map(([k, p]) => el('button', { class: 'btn btn-sm', onclick: () => applyBrandingPreset(k) }, p.label))) : null,
       el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px' },
         bloqueFuente, bloqueEstilo, acento, textoCol)));
 
@@ -720,16 +746,87 @@ function viewCanales() {
               el('a', { href: '#', onclick: ev => { ev.preventDefault(); styleForm({ channel_id: g.canal?.id }); } }, 'Crear uno para este canal'))))));
 }
 
+// BANCO DE ELEMENTOS: tu material propio (personajes, lugares, entidades,
+// mapas, stickers). Cuando la narración menciona a alguien o algo y hay una
+// ficha aquí, aparece como inserto sobre el B-roll — y es GRATIS, frente a
+// ilustrarlo con IA. El nombre del archivo es lo que se busca.
+async function bankUpload(categoria) {
+  pickFile('image/*,video/*', async files => {
+    try {
+      for (const f of files) await api('/api/elements', { method: 'POST', body: JSON.stringify({ category: categoria, file: f }) });
+      S.elements = await api('/api/elements'); render();
+    } catch (e) { alert(e.message); }
+  });
+}
+
+async function bankDelete(categoria, archivo) {
+  if (!confirm(`¿Quitar «${archivo}» del banco?`)) return;
+  try {
+    await api(`/api/elements/${categoria}/${encodeURIComponent(archivo)}`, { method: 'DELETE' });
+    S.elements = await api('/api/elements'); render();
+  } catch (e) { alert(e.message); }
+}
+
+function renderBank() {
+  const b = S.elements;
+  if (!b) { api('/api/elements').then(r => { S.elements = r; render(); }).catch(() => {}); return el('div', { class: 'kicker' }, 'Cargando el banco…'); }
+  const cats = b.categories || [];
+  const total = cats.reduce((n, c) => n + ((b.items || {})[c] || []).length, 0);
+  return el('div', {},
+    el('div', { style: 'display:flex;align-items:baseline;gap:12px;flex-wrap:wrap' },
+      el('h2', { style: 'font-size:26px' }, 'Banco de elementos'),
+      el('span', { class: 'mono muted' }, `${total} archivo(s)`)),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:72ch;margin:10px 0 0' },
+      'Tu material propio para los insertos. Cuando la narración menciona a alguien o algo que está aquí, aparece sobre el B-roll sin costo — en vez de ilustrarlo con IA. El nombre del archivo es la clave: «elon-musk.jpg» encuentra la mención «Elon Musk». Acepta imágenes y clips cortos.'),
+    el('div', { style: 'margin-top:20px;display:flex;flex-direction:column;gap:24px' },
+      cats.map(c => {
+        const items = (b.items || {})[c] || [];
+        return el('div', {},
+          el('div', { style: 'display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--divider);padding-bottom:7px' },
+            el('h3', { style: 'font-size:19px;text-transform:capitalize' }, c),
+            el('span', { class: 'mono muted' }, `${items.length}`),
+            el('span', { style: 'flex:1' }),
+            el('button', { class: 'btn btn-sm', onclick: () => bankUpload(c) }, 'Añadir archivos')),
+          items.length
+            ? el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:14px' },
+                items.map(it => {
+                  const nombre = it.file || it.name || String(it);
+                  const ruta = encodeURIComponent(nombre);
+                  const url = `/elements/${c}/${ruta}`;
+                  const esVideo = /\.(mp4|webm|mov|m4v)$/i.test(nombre);
+                  return el('figure', { style: 'margin:0' },
+                    // Los clips se previsualizan como VIDEO (se reproducen al
+                    // pasar el ratón); las imágenes, como imagen. `ruta` sale
+                    // de encodeURIComponent, así que no puede romper el
+                    // atributo. El marcado es <video src="/elements/…">.
+                    esVideo
+                      ? el('div', {
+                          html: `<video src="/elements/${c}/${ruta}" muted loop playsinline style="width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--divider);border-radius:3px"></video>`,
+                          onmouseenter: e => e.target.querySelector('video')?.play().catch(() => {}),
+                          onmouseleave: e => e.target.querySelector('video')?.pause(),
+                        })
+                      : el('img', { src: url, loading: 'lazy',
+                          style: 'width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--divider);border-radius:3px' }),
+                    el('figcaption', { style: 'margin-top:5px;display:flex;gap:6px;align-items:baseline' },
+                      el('span', { class: 'mono muted', style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: nombre }, nombre),
+                      el('button', { class: 'btn btn-sm btn-ghost', style: 'padding:2px 6px', title: 'Quitar del banco', onclick: () => bankDelete(c, nombre) }, '×')));
+                }))
+            : el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:12px' }, 'Vacío todavía.'));
+      })));
+}
+
 function viewBiblioteca() {
   const done = S.projects.filter(p => p.done === p.total);
-  if (!done.length) return el('div', { class: 'center' },
-    el('div', { style: 'max-width:480px' },
-      el('div', { class: 'kicker' }, 'Biblioteca vacía'),
-      el('h1', { style: 'font-size:30px;margin-top:12px;line-height:1.25' }, 'Aquí quedan los videos terminados'),
-      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, 'Cuando una corrida llega a la fase final, el video, su miniatura y sus metadatos aparecen en esta lista.')));
+  // El BANCO se muestra siempre, aunque todavía no haya videos terminados:
+  // llenarlo es justo lo primero que conviene hacer, y rinde para siempre.
   return el('div', { class: 'wrap' },
     el('div', { class: 'kicker' }, `${done.length} videos terminados`),
     el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Biblioteca'),
+    el('div', { style: 'margin-top:30px' }, renderBank()),
+    el('div', { style: 'margin-top:38px;border-top:1px solid var(--divider);padding-top:26px' },
+      el('h2', { style: 'font-size:26px' }, 'Videos terminados'),
+      !done.length ? el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin-top:10px;max-width:66ch' },
+        'Cuando una corrida llega a la fase final, el video, su miniatura y sus metadatos aparecen aquí.') : null),
     el('div', { class: 'grid4', style: 'margin-top:22px' }, done.map(p => el('figure', { style: 'margin:0;cursor:pointer', onclick: () => go('corrida', p.slug) },
       thumb(p, 230),
       el('figcaption', { style: 'margin-top:8px;line-height:1.5' },
@@ -749,10 +846,17 @@ function aspectOf(p) {
 // Ficha visual de un proyecto: su MINIATURA de verdad si ya existe, y si no
 // una placa con el motivo. Antes siempre salía la placa decorativa, así que
 // todos los proyectos se veían iguales y no había forma de reconocerlos.
+function thumbStyle(p, base) {
+  const a = aspectOf(p);
+  const w = a.vert ? Math.round((base || 230) * 0.62)
+          : (a.w === a.h ? Math.round((base || 230) * 0.8) : (base || 230));
+  return `width:${w}px;height:auto;aspect-ratio:${a.w}/${a.h};object-fit:cover;border:1px solid var(--divider);border-radius:3px`;
+}
+
 function thumb(p, ancho) {
   const a = aspectOf(p);
   const w = a.vert ? Math.round((ancho || 230) * 0.62) : (a.w === a.h ? Math.round((ancho || 230) * 0.8) : (ancho || 230));
-  const estilo = `width:${w}px;height:auto;aspect-ratio:${a.w}/${a.h};object-fit:cover;border:1px solid var(--divider);border-radius:3px`;
+  const estilo = thumbStyle(p, ancho);
   if (p.thumbnail && p.slug) return el('img', { src: `/files/${p.slug}/${p.thumbnail}?v=${p.done || 0}`, loading: 'lazy', style: estilo, alt: p.display_name || p.slug });
   return el('div', { class: 'plate', style: `width:${w}px;aspect-ratio:${a.w}/${a.h};display:flex;align-items:center;justify-content:center` },
     el('span', { class: 'kicker', style: 'background:var(--bg);padding:3px 7px' },
@@ -855,6 +959,101 @@ async function showChangelog() {
   catch (e) { alert('No se pudo leer el registro de cambios: ' + e.message); return; }
   overlay('Novedades de cada versión',
     el('div', { html: mdToHtml(md), style: 'font-size:14px' }), 760);
+}
+
+// VISOR DEL MANUAL, con índice lateral y buscador. El manual es largo y en
+// Markdown: sin índice no se navega y sin tablas renderizadas se lee fatal.
+// Avisa además si el manual se quedó atrás respecto al programa, porque
+// entonces puede describir algo que ya cambió.
+// Sin tildes y en minúsculas: nadie escribe «híbrido» con tilde en un
+// buscador, y sin esto la búsqueda no encontraba nada y parecía rota.
+function sinTildes(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function filterManual(q, cuerpo, toc, vacio) {
+  const t = sinTildes(q).trim();
+  let visibles = 0;
+  for (const sec of cuerpo.querySelectorAll('[data-sec]')) {
+    const oculta = !!t && !sinTildes(sec.textContent).includes(t);
+    sec.classList.toggle('hide', oculta);
+    if (!oculta) visibles++;
+  }
+  for (const a of toc.querySelectorAll('a')) {
+    const destino = cuerpo.querySelector(`[data-sec="${a.dataset.sec}"]`);
+    a.classList.toggle('hide', !!destino && destino.classList.contains('hide'));
+  }
+  if (vacio) vacio.classList.toggle('hide', visibles > 0);
+}
+
+// LOG DE EVENTOS: lo que ha hecho el programa, en orden. Es lo primero que
+// hay que mirar —y lo que hay que mandar— cuando algo sale mal.
+async function showEvents() {
+  let r;
+  try { r = await api('/api/events?limit=400'); }
+  catch (e) { alert('No se pudo leer el log: ' + e.message); return; }
+  const eventos = r.events || [];
+  const cuerpo = el('div', { class: 'log', style: 'max-height:none' });
+  const pintar = (q) => {
+    const t = (q || '').toLowerCase();
+    cuerpo.replaceChildren(...eventos
+      .filter(e => !t || `${e.message} ${e.level} ${e.project || ''}`.toLowerCase().includes(t))
+      .map(e => el('div', { style: 'display:grid;grid-template-columns:130px 60px 1fr;gap:10px;padding:3px 0;border-bottom:1px solid var(--divider)' },
+        el('span', { class: 'muted' }, e.ts || ''),
+        el('span', { style: `color:${e.level === 'error' ? 'var(--a700)' : 'var(--n600)'}` }, e.level || ''),
+        el('span', {}, [e.project ? `[${e.project}] ` : '', e.message || ''].join('')))));
+  };
+  pintar('');
+  overlay('Log de eventos',
+    el('div', {},
+      el('div', { style: 'display:flex;gap:10px;align-items:center;margin-bottom:12px' },
+        el('input', { class: 'input', placeholder: 'Filtrar…', oninput: e => pintar(e.target.value) }),
+        el('a', { class: 'btn btn-sm', href: '/api/events/download' }, 'Descargar')),
+      el('p', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin:0 0 12px' },
+        'Si algo falla, descarga este archivo y compártelo: cuenta qué hizo el programa paso a paso.'),
+      cuerpo), 900);
+}
+
+async function showManual() {
+  let r;
+  try { r = await api('/api/manual'); }
+  catch (e) { alert('No se pudo abrir el manual: ' + e.message); return; }
+  const stale = r.manual_version && r.program_version && r.manual_version !== r.program_version;
+
+  // El contenido se parte por secciones de primer/segundo nivel, para poder
+  // filtrar y saltar de una a otra.
+  const bloques = [];
+  let actual = { titulo: 'Inicio', md: [] };
+  for (const linea of String(r.content || '').split('\n')) {
+    if (/^##? /.test(linea.trim())) { bloques.push(actual); actual = { titulo: linea.replace(/^#+\s*/, '').trim(), md: [linea] }; }
+    else actual.md.push(linea);
+  }
+  bloques.push(actual);
+
+  const cuerpo = el('div', { style: 'font-size:14px' });
+  const toc = el('nav', { class: 'man-toc', style: 'position:sticky;top:0;align-self:start;max-height:64vh;overflow:auto;padding-right:14px;border-right:1px solid var(--divider);display:flex;flex-direction:column;gap:2px' });
+  bloques.forEach((b, i) => {
+    if (!b.md.join('').trim()) return;
+    cuerpo.append(el('section', { 'data-sec': String(i), id: `man-${i}`, html: mdToHtml(b.md.join('\n')) }));
+    toc.append(el('a', { href: `#man-${i}`, 'data-sec': String(i),
+      style: 'font-size:12.5px;line-height:1.5;padding:3px 0;color:var(--n700)',
+      onclick: ev => { ev.preventDefault(); cuerpo.querySelector(`#man-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+      b.titulo));
+  });
+
+  const vacio = el('div', { class: 'muted hide', style: 'font-size:13px;padding:20px 0' },
+    'Ninguna sección menciona eso. Prueba con una palabra más corta.');
+  const buscador = el('input', { class: 'input', placeholder: 'Buscar en el manual…',
+    oninput: e => filterManual(e.target.value, cuerpo, toc, vacio) });
+
+  overlay('Manual de uso',
+    el('div', {},
+      stale ? el('div', { class: 'warn', style: 'margin-bottom:14px;font-size:13px;line-height:1.6' },
+        `El manual está en la versión ${r.manual_version} y el programa en la ${r.program_version}: puede describir algo que ya cambió.`) : null,
+      buscador,
+      el('div', { style: 'display:grid;grid-template-columns:210px 1fr;gap:22px;margin-top:16px' },
+        toc, el('div', {}, vacio, cuerpo))),
+    980);
 }
 
 // Casilla SÍ/NO con su explicación debajo. Muchos ajustes del programa son
@@ -1153,10 +1352,18 @@ function viewEscenas() {
   const sel = (id, field, options, current) => el('select', { class: 'input', style: 'width:auto;font-size:12px;padding:5px 8px', onchange: ev => mark(id, field, ev.target.value) },
     options.map(o => el('option', { value: o, selected: o === current ? 'selected' : null }, o)));
 
+  // La imagen de cada escena, en la PROPORCIÓN REAL del proyecto: en un Reel
+  // el storyboard se ve vertical, no recortado a 16:9.
+  const p = d;
   const rows = scenes.map(s => {
     const manual = (d.manual_broll || {})[String(s.id)];
+    const img = s.broll_image
+      ? el('img', { src: `/files/${S.slug}/06_broll/${s.broll_image}?v=${d.done || 0}`,
+          loading: 'lazy', style: thumbStyle(p) })
+      : el('div', { class: 'plate', style: `width:120px;aspect-ratio:${aspectOf(p).w}/${aspectOf(p).h}` });
     return el('tr', {},
       el('td', { class: 'mono', style: 'color:var(--a700)' }, String(s.id).padStart(3, '0')),
+      el('td', { style: 'width:150px;padding-right:12px' }, img),
       el('td', { style: 'max-width:340px' },
         el('div', { style: 'font-size:13px;line-height:1.55' }, (s.narration || s.text || s.description || '').slice(0, 150) || '—'),
         el('div', { class: 'mono muted', style: 'margin-top:4px' }, [s.shot, s.broll_type, s.duration ? `${Number(s.duration).toFixed(1)} s` : null].filter(Boolean).join(' · '))),
