@@ -76,7 +76,8 @@ class ReplicateMusic:
         # MusicGen genera hasta ~30s; se generan y loopean
         raw = out.with_suffix(".raw.mp3")
         charge = {"provider": "replicate", "label": "pista de música",
-                  "qty": 1, "unit": "pista", "usd": pricing.music_cost_mid()}
+                  "qty": 1, "unit": "pista",
+                  "usd": pricing.music_cost_mid("replicate")}
         run_and_download(self.client, self.model, {
             "prompt": f"{mood} instrumental background music for a documentary video, "
                       "no vocals, seamless loop",
@@ -89,6 +90,61 @@ class ReplicateMusic:
                    "loop música", timeout=300)
         raw.unlink(missing_ok=True)
         return out  # el gasto ya quedó anotado al terminar la predicción
+
+
+class ElevenLabsMusic:
+    """Música con LICENCIA COMERCIAL CERRADA.
+
+    Para un canal que monetiza, la licencia pesa más que el último punto de
+    calidad: Suno y Udio suenan mejor, pero a mediados de 2026 no tienen API
+    pública y sus términos comerciales seguían en litigio por los datos de
+    entrenamiento. ElevenLabs Music cerró la licencia antes de lanzar y sí
+    expone API — es el único relevo defendible de MusicGen para este uso.
+
+    Genera la pista de la duración pedida de una vez (sin el loop de 30 s que
+    necesita MusicGen), así que la banda sonora no se repite."""
+
+    MAX_SECONDS = 300     # tope por pista de la API; más allá se loopea
+
+    def __init__(self, cfg: dict):
+        import os
+        self.api_key = os.environ["ELEVENLABS_API_KEY"]
+
+    def generate(self, mood: str, seconds: float, out: Path) -> Path:
+        import json
+        import urllib.request
+
+        from ytstudio import pricing, usage
+        usd = pricing.music_cost_mid("elevenlabs")
+        usage.check_budget(usd, "una pista de música de ElevenLabs")
+        want = min(float(seconds), float(self.MAX_SECONDS))
+        body = json.dumps({
+            "prompt": f"{mood} instrumental background score for a "
+                      "documentary film, no vocals, cinematic, subtle",
+            "music_length_ms": int(want * 1000),
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.elevenlabs.io/v1/music", data=body,
+            headers={"xi-api-key": self.api_key,
+                     "Content-Type": "application/json"})
+        raw = out.with_suffix(".raw.mp3")
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                raw.write_bytes(resp.read())
+        except Exception as e:
+            raw.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"ElevenLabs Music no pudo generar la pista ({e}). Revisa "
+                "ELEVENLABS_API_KEY y que tu plan incluya música.") from e
+        usage.record("elevenlabs", "pista de música", 1, "pista", usd)
+        usage.add_spend(usd)
+        # Si el video es más largo que el tope de la API, se loopea el sobrante
+        run_ffmpeg(["-stream_loop", "-1", "-i", str(raw), "-vn",
+                    "-t", f"{seconds:.2f}",
+                    "-c:a", "libmp3lame", "-q:a", "4", str(out)],
+                   "música ElevenLabs", timeout=300)
+        raw.unlink(missing_ok=True)
+        return out
 
 
 class MockMusic:

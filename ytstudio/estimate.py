@@ -9,11 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ytstudio.pricing import (IMG_COST, IMG_SECONDS, MUSIC_COST,
-                              STT_PER_MIN, TOKENS_PER_WORD, TTS_PER_M_CHARS,
+from ytstudio.pricing import (IMG_COST, IMG_SECONDS, TOKENS_PER_WORD,
                               VIDEO_COST_5S, VIDEO_SECONDS,
                               VISION_TOKENS_PER_IMAGE, WORDS_PER_MINUTE,
-                              llm_price)
+                              llm_price, music_cost_range, stt_per_min)
 
 
 def _llm_price(cfg: dict) -> tuple[float, float]:
@@ -166,17 +165,23 @@ def estimate(project, cfg: dict) -> dict:
 
     # --- Voz -----------------------------------------------------------------
     if voice_assets:
-        # narración propia → Whisper (transcripción con tiempos)
+        # narración propia → transcripción con tiempos por palabra
         audio_min = video_minutes  # aproximación: dura ~ lo que el video
-        stt_cost = STT_PER_MIN if stt_name == "openai" else 0.0
-        add("Voz (tu narración + Whisper)",
+        stt_cost = stt_per_min(stt_name) if stt_name != "mock" else 0.0
+        stt_tag = {"openai": "Whisper", "assemblyai": "AssemblyAI"}.get(
+            stt_name, stt_name)
+        add(f"Voz (tu narración + {stt_tag})",
             f"transcripción de ~{audio_min:.0f} min",
             audio_min * stt_cost * 0.8, audio_min * stt_cost * 1.5,
             0.5, 2, phases={"voiceover": 1.0})
-    elif tts_name == "openai":
+    elif tts_name in ("openai", "cartesia"):
+        from ytstudio.pricing import tts_cost_range
         chars = video_minutes * WORDS_PER_MINUTE * 6.2
-        add("Voz en off (OpenAI TTS)", f"~{int(chars):,} caracteres".replace(",", " "),
-            chars * TTS_PER_M_CHARS[0] / 1e6, chars * TTS_PER_M_CHARS[1] / 1e6,
+        rate = tts_cost_range(tts_name)
+        tag = "OpenAI TTS" if tts_name == "openai" else "Cartesia Sonic"
+        add(f"Voz en off ({tag})",
+            f"~{int(chars):,} caracteres".replace(",", " "),
+            chars * rate[0] / 1e6, chars * rate[1] / 1e6,
             n_scenes * 3 / 60, n_scenes * 8 / 60, phases={"voiceover": 1.0})
     elif tts_name == "elevenlabs":
         add("Voz en off (ElevenLabs)", "se descuenta de tu plan", 0, 0,
@@ -190,8 +195,8 @@ def estimate(project, cfg: dict) -> dict:
     # --- Imágenes ------------------------------------------------------------
     perf = cfg.get("performance", {})
     from ytstudio.pricing import effective_image_model
-    # El modelo REAL (OpenAI ignora el 'model' del config y usa gpt-image-1):
-    # así el precio, el tiempo y la etiqueta describen lo que va a pasar.
+    # El modelo REAL (OpenAI ignora un 'model' que no sea suyo y usa el de la
+    # casa): así el precio, el tiempo y la etiqueta describen lo que va a pasar.
     img_model = effective_image_model(img_name,
                                       prov.get("images", {}).get("model", ""))
     if n_ai_images and img_name in IMG_COST:
@@ -211,6 +216,22 @@ def estimate(project, cfg: dict) -> dict:
         if img_name == "replicate":
             notes.append("Replicate con menos de $5 de crédito limita a 6 "
                          "imágenes/min: el tiempo puede alargarse.")
+        # MODO HÍBRIDO: el escalado se cobra aparte, una vez por imagen
+        if prov.get("images", {}).get("upscale"):
+            from ytstudio.pricing import (upscale_cost_range,
+                                          upscale_seconds_range)
+            up_model = prov["images"].get("upscale_model",
+                                          "nightmareai/real-esrgan")
+            uc = upscale_cost_range(up_model)
+            us = upscale_seconds_range(up_model)
+            add(f"Escalado ({up_model.split('/')[-1]})",
+                f"{n_ai_images} imágenes a resolución de entrega",
+                n_ai_images * uc[0], n_ai_images * uc[1],
+                n_ai_images * us[0] / 60 / iw, n_ai_images * us[1] / 60 / iw,
+                phases={"broll": 1.0})
+            notes.append("Modo híbrido activo: generar barato y escalar sale "
+                         "muy por debajo de generar con un modelo caro, a "
+                         "cambio de algo menos de microtextura.")
     elif n_ai_images:
         add("Imágenes", f"{n_ai_images} placeholders (modo vista previa)",
             0, 0, 0.2, 1, phases={"broll": 1.0})
@@ -221,14 +242,20 @@ def estimate(project, cfg: dict) -> dict:
         vid_model = prov.get("videogen", {}).get("model", "")
         vc = video_cost_range(vid_model)
         vs = video_seconds_range(vid_model)
-        long_clips = 1 if scene_secs > 7.5 else 0
-        cost_lo = n_video_scenes * vc[0] * (2 if long_clips else 1)
-        cost_hi = n_video_scenes * vc[1] * 2
+        # Los segundos que de verdad se van a pedir (Kling 5/10, Veo 4/6/8):
+        # así el tope de gasto cuenta lo mismo que se pagará.
+        from ytstudio.providers.videogen import clip_duration_for
+        clip_secs = clip_duration_for(vid_model, scene_secs)
+        factor = clip_secs / 5.0
+        cost_lo = n_video_scenes * vc[0] * factor
+        cost_hi = n_video_scenes * vc[1] * factor
         vw = max(1, int(perf.get("parallel_video", 2)))
         vid_tag = vid_model.split("/")[-1] if vid_model else "Kling"
+        from ytstudio.pricing import has_native_audio
+        audio_tag = " · con audio nativo" if has_native_audio(vid_model) else ""
         add(f"Video IA ({vid_tag} vía Replicate)",
-            f"{n_video_scenes} clips de {'10' if scene_secs > 7.5 else '5'} s "
-            f"· {vw} en paralelo",
+            f"{n_video_scenes} clips de {clip_secs} s "
+            f"· {vw} en paralelo{audio_tag}",
             cost_lo, cost_hi,
             n_video_scenes * vs[0] / 60 / vw,
             n_video_scenes * vs[1] / 60 / vw, phases={"broll": 1.0})
@@ -266,9 +293,10 @@ def estimate(project, cfg: dict) -> dict:
     if music_name == "library":
         add("Música (tu biblioteca)", "selección con IA incluida arriba",
             0, 0, 0.1, 0.5, phases={"music": 1.0})
-    elif music_name == "replicate":
-        add("Música (MusicGen)", "1 pista generada", *MUSIC_COST, 1, 3,
-            phases={"music": 1.0})
+    elif music_name in ("replicate", "elevenlabs"):
+        tag = "MusicGen" if music_name == "replicate" else "ElevenLabs Music"
+        add(f"Música ({tag})", "1 pista generada",
+            *music_cost_range(music_name), 1, 3, phases={"music": 1.0})
     else:
         add("Música", f"proveedor '{music_name}'", 0, 0, 0.1, 0.5,
             phases={"music": 1.0})
@@ -276,8 +304,8 @@ def estimate(project, cfg: dict) -> dict:
     # --- Enlaces de referencia -------------------------------------------------
     if links:
         ref_max = float((cfg.get("reference") or {}).get("max_minutes", 12))
-        stt_hi = (len(links) * ref_max * STT_PER_MIN
-                  if stt_name == "openai" else 0.0)
+        stt_hi = (len(links) * ref_max * stt_per_min(stt_name)
+                  if stt_name != "mock" else 0.0)
         add("Videos de referencia (enlaces)",
             f"{len(links)} enlace(s): descarga + análisis"
             f" (Whisper solo si no hay subtítulos)",

@@ -178,8 +178,8 @@ check("T6 replicate respeta el modelo configurado",
       effective_image_model("replicate", "black-forest-labs/flux-1.1-pro")
       == "black-forest-labs/flux-1.1-pro", "")
 flux = img_cost_range("replicate", "black-forest-labs/flux-1.1-pro")
-gpt = img_cost_range("openai", "gpt-image-1")
-check("T6b 83 imágenes ≈ $3.3-4.2 con FLUX (contra $5.8-20.8 con gpt-image-1)",
+gpt = img_cost_range("openai", "gpt-image-2")
+check("T6b 83 imágenes ≈ $3.3-4.2 con FLUX (contra hasta ~$17 con GPT Image 2)",
       3.0 < 83 * flux[0] < 4.0 and 83 * flux[1] < 5.0
       and 83 * gpt[1] > 15.0,
       f"FLUX ${83*flux[0]:.2f}-${83*flux[1]:.2f}, "

@@ -187,7 +187,7 @@ from ytstudio import pricing
 
 check("llm_price conocido", pricing.llm_price("claude-opus-4-8") == (5.0, 25.0))
 check("llm_price desconocido cae al default", pricing.llm_price("modelo-random") == pricing.LLM_DEFAULT_PRICE)
-check("img_cost_mid coherente con IMG_COST", abs(pricing.img_cost_mid("openai") - 0.16) < 0.001)
+check("img_cost_mid coherente con IMG_COST", abs(pricing.img_cost_mid("openai") - 0.12) < 0.001)
 check("stt_cost proporcional a minutos", abs(pricing.stt_cost(10) - 0.06) < 1e-6)
 
 shutil.rmtree(WORK, ignore_errors=True)

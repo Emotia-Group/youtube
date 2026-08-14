@@ -25,15 +25,35 @@ def _rate_limit_wait(exc: Exception, attempt: int) -> float | None:
 
 
 class OpenAIImages:
-    # gpt-image-1 solo admite estos tamaños; se elige por orientación del video
+    # La familia gpt-image solo admite estos tamaños; se elige por orientación
     _VALID = {"1024x1024", "1536x1024", "1024x1536", "auto"}
-    MODEL = "gpt-image-1"     # el modelo es fijo: el 'model' del config no aplica
+    # gpt-image-1 SE APAGA el 23 de octubre de 2026: el modelo por defecto pasa
+    # a ser gpt-image-2, que además renderiza mejor el texto dentro de la
+    # imagen (que es justo para lo que usamos este proveedor) y sale más
+    # barato en calidad media. Se puede fijar otro con providers.images.model,
+    # pero solo valen modelos de OpenAI: un slug de Replicate se ignora.
+    MODEL = "gpt-image-2"
+    _VALID_QUALITY = {"low", "medium", "high", "auto"}
     RATE_RETRIES = 6          # reintentos ante límite de peticiones
+    # Valores por defecto A NIVEL DE CLASE: el proveedor sigue siendo usable
+    # aunque se construya sin pasar por __init__ (así lo hacen las baterías de
+    # pruebas, que sustituyen el SDK y no tienen clave de API).
+    model = MODEL
+    quality = "medium"
 
     def __init__(self, cfg: dict):
         from openai import OpenAI
+        from ytstudio import pricing
         self.client = OpenAI()
-        want = str(cfg["providers"]["images"].get("size", "")).lower()
+        icfg = cfg["providers"]["images"]
+        self.model = pricing.effective_image_model(
+            "openai", str(icfg.get("model", "")))
+        # La CALIDAD manda el precio en gpt-image-2 mucho más que el tamaño
+        # (de medio centavo a ~$0.21 por imagen). 'medium' es el punto donde
+        # el texto ya sale limpio sin pagar el máximo.
+        q = str(icfg.get("quality", "medium")).lower()
+        self.quality = q if q in self._VALID_QUALITY else "medium"
+        want = str(icfg.get("size", "")).lower()
         self.size = self._normalize(want, cfg)
 
     @staticmethod
@@ -62,7 +82,7 @@ class OpenAIImages:
 
         from ytstudio import pricing, usage
         from ytstudio.progress import notify
-        usd = pricing.img_cost_mid("openai", self.MODEL)
+        usd = pricing.img_cost_mid("openai", self.model)
         usage.check_budget(usd, "una imagen de OpenAI")
 
         # LÍMITE DE PETICIONES: gpt-image-1 admite MUY pocas imágenes por
@@ -74,7 +94,8 @@ class OpenAIImages:
         for attempt in range(1, self.RATE_RETRIES + 1):
             try:
                 result = self.client.images.generate(
-                    model=self.MODEL, prompt=prompt, size=self.size, n=1,
+                    model=self.model, prompt=prompt, size=self.size, n=1,
+                    quality=self.quality,
                 )
                 break
             except Exception as e:
@@ -85,7 +106,7 @@ class OpenAIImages:
                 if attempt == self.RATE_RETRIES:
                     raise RuntimeError(
                         "OpenAI está limitando las imágenes de este proyecto "
-                        f"({self.MODEL}) y no cedió tras {self.RATE_RETRIES} "
+                        f"({self.model}) y no cedió tras {self.RATE_RETRIES} "
                         "esperas. Las imágenes ya generadas se conservan: "
                         "reanuda con «Rehacer desde Imágenes» dentro de un "
                         "rato, baja performance.parallel_images, o sube el "
@@ -97,7 +118,7 @@ class OpenAIImages:
                 time.sleep(wait)
         # El cobro ocurre al responder la API: se anota AQUÍ, antes de tocar
         # el disco, para que ningún fallo posterior deje gasto invisible.
-        usage.record("openai", "imagen", 1, "img", usd)
+        usage.record("openai", f"imagen ({self.model})", 1, "img", usd)
         usage.add_spend(usd)
         out.write_bytes(base64.b64decode(result.data[0].b64_json))
         return out
@@ -129,6 +150,103 @@ class ReplicateImages:
             "output_format": "jpg", "safety_tolerance": self.safety,
         }, out, charge=charge)
         return out
+
+
+class ReplicateUpscale:
+    """ESCALADO: sube la resolución de una imagen YA generada.
+
+    Es la pieza del MODO HÍBRIDO, la ruta de ahorro más grande del programa:
+    generar el B-roll con un modelo barato (FLUX schnell, ~$0.003) y subirlo
+    después a resolución de entrega (~$0.002) cuesta una fracción de generar
+    con FLUX 1.1 Pro (~$0.045) — del orden de $0.50 contra $4.50 en un
+    documental de 100 escenas.
+
+    Lo que el escalado NO hace es inventar la microtextura y el detalle de
+    iluminación que distinguen a un modelo caro: recupera resolución, no
+    calidad de origen. Por eso el modo híbrido se aplica al B-roll de relleno
+    y el config permite dejar las escenas clave en el modelo bueno.
+
+    Si el escalado falla, la imagen ORIGINAL se conserva y el video sigue
+    adelante: nunca es motivo para tumbar una fase ya pagada.
+    """
+
+    def __init__(self, cfg: dict):
+        import replicate
+        self.client = replicate
+        icfg = cfg.get("providers", {}).get("images", {}) or {}
+        self.model = icfg.get("upscale_model", "nightmareai/real-esrgan")
+        self.target_w = int(cfg.get("video", {}).get("width", 1920))
+
+    def _scale_for(self, img: Path) -> int:
+        """Factor entero mínimo que alcanza el ancho del video (2, 3 o 4), o 0
+        si la imagen YA da la talla. Pedir 4x sobre una imagen que casi cabe es
+        pagar y esperar de más; escalar una que ya cabe es tirar el dinero."""
+        try:
+            from PIL import Image
+            with Image.open(img) as im:
+                w = im.width
+        except Exception:
+            return 0        # sin poder medirla, no se arriesga un gasto
+        if w <= 0 or w >= self.target_w:
+            return 0
+        import math
+        return max(2, min(4, math.ceil(self.target_w / w)))
+
+    def upscale(self, img: Path) -> Path:
+        """Escala la imagen EN SU SITIO. Devuelve siempre una ruta usable:
+        la escalada si salió bien, la original si no. Las imágenes que ya
+        llegan a la resolución del video se dejan intactas y NO se cobran —
+        eso incluye los respaldos locales y el B-roll propio del creador."""
+        from ytstudio import pricing
+        from ytstudio.progress import notify
+        from ytstudio.providers.replicate_util import run_and_download
+        scale = self._scale_for(img)
+        if not scale:
+            return img
+        big = img.with_name(img.stem + "_up" + img.suffix)
+        charge = {"provider": "replicate",
+                  "label": f"escalado x{scale} ({self.model.split('/')[-1]})",
+                  "qty": 1, "unit": "img",
+                  "usd": pricing.upscale_cost_mid(self.model)}
+        try:
+            with open(img, "rb") as f:
+                # net_retries bajo: si el escalado no sale, la imagen original
+                # ya sirve — no merece la pena retener la fase por ella.
+                run_and_download(self.client, self.model,
+                                 {"image": f, "scale": scale},
+                                 big, charge=charge, net_retries=2)
+        except Exception as e:
+            notify(f"⚠ No se pudo escalar {img.name} ({e}); se conserva la "
+                   "imagen original.")
+            big.unlink(missing_ok=True)
+            return img
+        if not big.exists() or big.stat().st_size == 0:
+            big.unlink(missing_ok=True)
+            return img
+        big.replace(img)
+        return img
+
+
+def get_upscaler(cfg: dict):
+    """Escalador, o None si está apagado o falta el token de Replicate."""
+    import os
+    icfg = cfg.get("providers", {}).get("images", {}) or {}
+    if not icfg.get("upscale"):
+        return None
+    from ytstudio.progress import notify
+    if not os.environ.get("REPLICATE_API_TOKEN"):
+        notify("⚠ El escalado está activado pero falta REPLICATE_API_TOKEN: "
+               "las imágenes se usan a su resolución original.")
+        return None
+    try:
+        return ReplicateUpscale(cfg)
+    except Exception as e:
+        # El escalado es una MEJORA opcional (típico: falta `pip install
+        # replicate`). Sin él el video sale igual, solo que a la resolución
+        # de origen — nunca es motivo para tumbar la fase de imágenes.
+        notify(f"⚠ El escalado no se pudo preparar ({e}): las imágenes se "
+               "usan a su resolución original.")
+        return None
 
 
 # Modelos de CONSISTENCIA DE IDENTIDAD (escenas con personajes del elenco):

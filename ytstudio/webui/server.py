@@ -394,7 +394,7 @@ def api_save_keys(body: dict) -> dict:
     """Guarda claves de API en .env (merge línea a línea) y en el proceso."""
     import os
     allowed = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY",
-               "REPLICATE_API_TOKEN"}
+               "REPLICATE_API_TOKEN", "CARTESIA_API_KEY", "ASSEMBLYAI_API_KEY"}
     updates = {k: v.strip() for k, v in (body.get("keys") or {}).items()
                if k in allowed and isinstance(v, str) and v.strip()}
     if not updates:
@@ -963,7 +963,13 @@ def _apply_migrations(cfg: dict) -> dict:
     gpt-image-1 (~$0.07-0.25/img y un límite de 5 img/min que frenaba la
     fase) a Replicate FLUX 1.1 Pro (~$0.04/img, sin ese cuello de botella).
     gpt-image-1 sigue entrando SOLO en las escenas con texto legible, a las
-    que el director rutea por su cuenta."""
+    que el director rutea por su cuenta.
+
+    models_retired_v0_58: los proveedores APAGARON algunos modelos con fecha
+    (Imagen 4 Fast el 17/08/2026, gpt-image-1 el 23/10/2026). Un config que
+    los nombre no es una preferencia que respetar: es una avería esperando a
+    ocurrir a mitad de la fase de imágenes, con parte del proyecto ya pagado.
+    Se sustituyen por su relevo, una sola vez, y se avisa por consola."""
     done = list(cfg.get("migrations") or [])
     if "images_replicate_v0_45" not in done:
         img = (cfg.get("providers") or {}).get("images") or {}
@@ -972,6 +978,20 @@ def _apply_migrations(cfg: dict) -> dict:
             img["model"] = "black-forest-labs/flux-1.1-pro"
             cfg.setdefault("providers", {})["images"] = img
         done.append("images_replicate_v0_45")
+    if "models_retired_v0_58" not in done:
+        from ytstudio.pricing import retirement
+        img = (cfg.get("providers") or {}).get("images") or {}
+        for key in ("model", "ref_model"):
+            info = retirement(str(img.get(key, "")))
+            if not info:
+                continue
+            fecha, relevo = info
+            print(f"  ⚠ «{img[key]}» dejó de existir el {fecha}: tu "
+                  f"configuración pasa a «{relevo}». Puedes cambiarlo en "
+                  "⚙ Configuración.")
+            img[key] = relevo
+            cfg.setdefault("providers", {})["images"] = img
+        done.append("models_retired_v0_58")
     cfg["migrations"] = done
     return cfg
 

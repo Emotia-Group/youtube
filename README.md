@@ -81,7 +81,7 @@ La UI web local permite hacer todo sin tocar la terminal:
 - **Revisar y editar el guion** antes de producir (al guardar se regeneran las fases posteriores)
 - **Ver el storyboard** escena por escena: imagen de B-roll, narración, prompt, animación y audio de la voz
 - **Previsualizar el video final**, la miniatura y los metadatos, con descargas directas
-- **Módulo de integraciones** (⚙ Configuración): selecciona proveedor y modelo para cada categoría — Claude (Opus/Sonnet/Haiku), ElevenLabs/OpenAI/Edge TTS con selector de voces en español, FLUX/gpt-image-1/Recraft/SD 3.5 para imágenes, Kling/Wan/Hailuo/LTX para video generativo, MusicGen/biblioteca para música — con indicador de qué claves de API están disponibles
+- **Módulo de integraciones** (⚙ Configuración): selecciona proveedor y modelo para cada categoría — Claude (Opus/Sonnet/Haiku), ElevenLabs/Cartesia/OpenAI/Edge TTS con selector de voces en español, FLUX 1.1 y 2/GPT Image 2/Ideogram/Recraft/SD 3.5 para imágenes (con MODO HÍBRIDO: generar barato y escalar, hasta −90 %), Veo 3.1 con audio nativo/Kling/Wan/Hailuo/LTX para video generativo, ElevenLabs Music/MusicGen/biblioteca para música — con indicador de qué claves de API están disponibles
 
 ## Uso por línea de comandos
 
@@ -159,11 +159,11 @@ batería, la comprobación exacta y el valor medido que falló.
 | Categoría | Opciones | Notas |
 |---|---|---|
 | `llm` | `anthropic` / `mock` | Claude (`claude-opus-4-8`) para concepto, guion, escenas, metadatos y análisis visual |
-| `tts` | `elevenlabs` / `openai` / `edge` / `mock` | `edge` es gratuito (voces neuronales, ej. `es-MX-JorgeNeural`) |
-| `stt` | `openai` (Whisper) / `mock` | Notas de voz y video de referencia |
-| `images` | `openai` (gpt-image-1) / `replicate` (FLUX) / `mock` | B-roll y base de la miniatura |
-| `videogen` | `replicate` (Kling/Wan) / `none` | Video IA solo para las N escenas clave (`max_scenes`); el resto usa Ken Burns |
-| `music` | `library` / `replicate` (MusicGen) / `mock` | `library` usa `assets/music/` (nombra archivos por mood) |
+| `tts` | `elevenlabs` / `cartesia` / `openai` / `edge` / `mock` | `cartesia` cuesta ~1/10 que ElevenLabs y su gasto sí entra en el tope; `edge` es gratuito (voces neuronales, ej. `es-MX-JorgeNeural`) |
+| `stt` | `openai` (Whisper) / `assemblyai` (más barato y mejores tiempos por palabra) / `mock` | Notas de voz y video de referencia |
+| `images` | `openai` (GPT Image 2) / `replicate` (FLUX) / `mock` | B-roll y base de la miniatura |
+| `videogen` | `replicate` (Veo 3.1/Kling/Wan) / `none` | Video IA solo para las N escenas clave (`max_scenes`); el resto usa Ken Burns. Veo 3.1 es el único que trae audio nativo |
+| `music` | `library` / `elevenlabs` / `replicate` (MusicGen) / `mock` | `library` usa `assets/music/` (nombra archivos por mood); `elevenlabs` es la opción con licencia comercial cerrada |
 
 Ajustes clave en `config.yaml`: idioma (`language`), duración objetivo
 (`video.target_minutes`), subtítulos quemados o pista soft
@@ -217,7 +217,7 @@ rutas del paquete final para subirlo manualmente.
 |---|---|---|
 | Guion + concepto + escenas + metadatos | Claude Opus | ~$1–3 |
 | Voz en off (~1 500 palabras) | ElevenLabs / OpenAI TTS / edge | ~$1–2 / ~$0.20 / gratis |
-| B-roll (~35 imágenes) | FLUX / gpt-image-1 | ~$1.5–3 |
+| B-roll (~35 imágenes) | FLUX / GPT Image 2 | ~$1.5–3 (~$0.2 en modo híbrido) |
 | Video IA (opcional, por escena de 5 s) | Kling | ~$0.15–0.5 c/u |
 | Música | biblioteca local / MusicGen | gratis / centavos |
 

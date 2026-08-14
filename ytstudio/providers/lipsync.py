@@ -13,6 +13,10 @@ from pathlib import Path
 # input mapping por modelo: (clave_imagen, clave_audio, extras)
 _MODEL_INPUTS = {
     "bytedance/omni-human": ("image", "audio", {}),
+    "bytedance/omni-human-1.5": ("image", "audio", {}),
+    # Hedra Character-3 se sitúa entre Sonic y OmniHuman: la mitad de precio
+    # que OmniHuman con calidad claramente por encima de Sonic.
+    "hedra/character-3": ("image", "audio", {"aspect_ratio": "16:9"}),
     "zsxkib/sonic": ("image", "audio", {"dynamic_scale": 1.0}),
     "cjwbw/sadtalker": ("source_image", "driven_audio", {"still": True,
                                                          "preprocess": "full"}),

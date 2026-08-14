@@ -60,6 +60,21 @@ CATALOG: dict = {
                          "de tu biblioteca de ElevenLabs.",
             },
             {
+                "name": "cartesia",
+                "label": "Cartesia Sonic — la más barata con calidad de narración",
+                "env": "CARTESIA_API_KEY",
+                "voices": [
+                    {"id": "5c5ad5e7-1020-476b-8b91-fdcbe9cc313c",
+                     "label": "Narrador neutro (multilingüe)"},
+                ],
+                "notes": "~$11 por millón de caracteres frente a ~$120 de "
+                         "ElevenLabs: la narración de un video de 10 min pasa "
+                         "de ~$1.08 a ~$0.10. Cobra POR USO, así que su gasto "
+                         "sí entra en el tope de presupuesto (el de ElevenLabs, "
+                         "al ir por plan, queda invisible). Pega cualquier "
+                         "voice_id de tu cuenta de Cartesia.",
+            },
+            {
                 "name": "openai",
                 "label": "OpenAI TTS (gpt-4o-mini-tts)",
                 "env": "OPENAI_API_KEY",
@@ -114,7 +129,16 @@ CATALOG: dict = {
         "config_path": ["providers", "stt"],
         "options": [
             {"name": "openai", "label": "Whisper (OpenAI)", "env": "OPENAI_API_KEY",
-             "notes": "Transcribe notas de voz y el audio de videos de referencia."},
+             "notes": "Transcribe notas de voz y el audio de videos de "
+                      "referencia. Límite de 25MB por archivo (se comprime "
+                      "solo si hace falta)."},
+            {"name": "assemblyai", "label": "AssemblyAI — más barato y mejores tiempos",
+             "env": "ASSEMBLYAI_API_KEY",
+             "notes": "$0.0025/min frente a $0.006 de Whisper, y marcas de "
+                      "tiempo por palabra más finas — que es de lo que viven "
+                      "las respiraciones, el recorte de pausas y la sincronía "
+                      "de subtítulos y rótulos. Sin límite de 25MB: sube la "
+                      "narración entera."},
             {"name": "mock", "label": "Mock", "env": None,
              "notes": "Transcripción de ejemplo."},
         ],
@@ -128,35 +152,50 @@ CATALOG: dict = {
                 "label": "Replicate — FLUX y otros",
                 "env": "REPLICATE_API_TOKEN",
                 "models": [
+                    {"id": "black-forest-labs/flux-2-pro",
+                     "label": "FLUX 2 Pro (~$0.055-0.075/img) — ✚ el sucesor: más detalle y coherencia que el 1.1 · ✖ el más caro, y COBRA POR MEGAPÍXEL (una imagen de 4MP vale 4x)"},
+                    {"id": "black-forest-labs/flux-2-flash",
+                     "label": "FLUX 2 Flash (~$0.015-0.025/img) — ✚ la familia FLUX 2 a precio de saldo, rápido · ✖ menos detalle fino que el Pro"},
                     {"id": "black-forest-labs/flux-1.1-pro",
-                     "label": "FLUX 1.1 Pro (~$0.04/img) — ✚ el mejor fotorrealismo cinematográfico · ✖ el más caro y no el más rápido"},
+                     "label": "FLUX 1.1 Pro (~$0.04/img) — ✚ el mejor fotorrealismo cinematográfico probado, la referencia de la casa · ✖ ya no es el más nuevo"},
                     {"id": "black-forest-labs/flux-dev",
                      "label": "FLUX dev (~$0.025/img) — ✚ calidad muy cercana al Pro por menos · ✖ algo menos fiable en manos/texto"},
                     {"id": "black-forest-labs/flux-schnell",
                      "label": "FLUX schnell (~$0.003/img) — ✚ 10x más barato y casi instantáneo, ideal para PRUEBAS · ✖ menos detalle fino y microtexturas"},
                     {"id": "bytedance/sdxl-lightning-4step",
                      "label": "SDXL Lightning (~$0.0015/img) — ✚ casi gratis, 1-2s por imagen · ✖ calidad claramente inferior; solo borradores"},
-                    {"id": "google/imagen-4-fast",
-                     "label": "Imagen 4 Fast (~$0.02/img) — ✚ rápido y muy bueno con TEXTO dentro de la imagen · ✖ look menos 'cine' que FLUX"},
+                    {"id": "ideogram-ai/ideogram-v3-turbo",
+                     "label": "Ideogram v3 Turbo (~$0.03/img) — ✚ tipografía excelente y barato, relevo de Imagen 4 Fast · ✖ look menos 'cine' que FLUX"},
                     {"id": "recraft-ai/recraft-v3",
                      "label": "Recraft v3 (~$0.04/img) — ✚ ilustración/diseño gráfico de primera · ✖ no busca fotorrealismo"},
                     {"id": "stability-ai/stable-diffusion-3.5-large",
                      "label": "SD 3.5 Large (~$0.065/img) — ✚ estética alternativa artística · ✖ más caro que FLUX Pro y menos consistente"},
                 ],
-                "notes": "FLUX 1.1 Pro es la referencia para el look documental. Estrategia "
-                         "de AHORRO: prueba la estructura del video con schnell/Lightning "
-                         "(centavos) y regenera solo la versión final con Pro. Replicate "
+                "notes": "FLUX 1.1 Pro es la referencia para el look documental. AHORRO "
+                         "MÁXIMO: enciende el ESCALADO más abajo y genera con schnell — "
+                         "las 100 imágenes de un documental bajan de ~$4.50 a ~$0.50, a "
+                         "cambio de algo menos de microtextura. Estrategia clásica: prueba "
+                         "la estructura con schnell/Lightning (centavos) y regenera solo la "
+                         "versión final con Pro. Replicate "
                          "regala corridas de PRUEBA limitadas en varios modelos "
                          "(colección «try for free») — sirven para probar, no para "
                          "producción continua: al agotarlas pide crédito.",
             },
             {
                 "name": "openai",
-                "label": "OpenAI gpt-image-1",
+                "label": "OpenAI GPT Image",
                 "env": "OPENAI_API_KEY",
-                "models": [{"id": "gpt-image-1",
-                            "label": "gpt-image-1 (~$0.07-0.25/img) — ✚ el que mejor obedece prompts complejos · ✖ caro, lento y look menos fotográfico"}],
-                "notes": "Excelente seguimiento del prompt; look menos fotográfico que FLUX.",
+                "models": [
+                    {"id": "gpt-image-2",
+                     "label": "GPT Image 2 (~$0.03-0.21/img según calidad) — ✚ el MEJOR texto dentro de la imagen, sin tinte amarillo, 2K nativo · ✖ caro en calidad alta y lento"},
+                    {"id": "gpt-image-1",
+                     "label": "gpt-image-1 (~$0.07-0.25/img) — ⚠ SE APAGA el 23 de octubre de 2026: solo por compatibilidad"},
+                ],
+                "notes": "Es el modelo al que se rutean SOLAS las escenas con "
+                         "texto legible (carteles, periódicos, lápidas). "
+                         "gpt-image-1 se apaga el 23/10/2026 — GPT Image 2 es "
+                         "su relevo y además lee mejor. El campo «calidad» de "
+                         "abajo manda el precio más que el tamaño.",
             },
             {"name": "mock", "label": "Mock (tarjetas placeholder)", "env": None,
              "models": [], "notes": "Degradados con el texto del prompt, para previews."},
@@ -167,9 +206,34 @@ CATALOG: dict = {
              "hint": "Genera guiándose por las fotos de referencia del personaje "
                      "(misma cara en todo el video). Opciones: google/nano-banana "
                      "(~$0.04/img, multi-referencia, recomendado) · "
+                     "google/nano-banana-pro (~$0.13-0.24/img: mantiene la "
+                     "identidad de HASTA 5 personajes a la vez y es el mejor en "
+                     "consistencia — para escenas de elenco numeroso) · "
                      "bytedance/seedream-4 (multi-referencia, gran fidelidad) · "
                      "black-forest-labs/flux-kontext-pro (look FLUX, 1 sola "
                      "referencia). Requiere REPLICATE_API_TOKEN."},
+            {"key": "quality", "type": "text",
+             "label": "Calidad de GPT Image (solo proveedor OpenAI)",
+             "hint": "low · medium (recomendado) · high · auto. En GPT Image 2 "
+                     "la calidad manda el precio mucho más que el tamaño: de "
+                     "medio centavo a ~$0.21 por imagen. En 'medium' el texto "
+                     "ya sale limpio sin pagar el máximo."},
+            {"key": "upscale", "type": "bool",
+             "label": "MODO HÍBRIDO: escalar las imágenes tras generarlas",
+             "hint": "La mayor palanca de ahorro del programa. Generas con un "
+                     "modelo barato (FLUX schnell, ~$0.003) y el escalado sube "
+                     "la imagen a la resolución del video por ~$0.002: las 100 "
+                     "imágenes de un documental pasan de ~$4.50 a ~$0.50. Lo "
+                     "que el escalado NO hace es inventar la microtextura de un "
+                     "modelo caro — recupera resolución, no calidad de origen. "
+                     "Las imágenes que ya dan la talla (tu B-roll, los "
+                     "respaldos) se saltan solas y no se cobran."},
+            {"key": "upscale_model", "type": "text",
+             "label": "Modelo de escalado",
+             "hint": "nightmareai/real-esrgan (~$0.002/img, recomendado) · "
+                     "philz1337x/clarity-upscaler (~$0.015, más detalle "
+                     "inventado) · recraft-ai/recraft-crisp-upscale (~$0.008, "
+                     "bordes limpios). Requiere REPLICATE_API_TOKEN."},
         ],
     },
     "videogen": {
@@ -181,8 +245,16 @@ CATALOG: dict = {
                 "label": "Replicate — Kling / Wan / Hailuo / LTX",
                 "env": "REPLICATE_API_TOKEN",
                 "models": [
+                    {"id": "google/veo-3.1-fast",
+                     "label": "Veo 3.1 Fast (~$0.75/clip 5s) — ✚ ÚNICO CON AUDIO NATIVO: el clip llega con su propio ambiente sincronizado · ✖ 3-5x el precio de Kling"},
+                    {"id": "google/veo-3.1",
+                     "label": "Veo 3.1 (~$2/clip 5s) — ✚ 4K nativo, el mejor lipsync del mercado, audio incluido · ✖ carísimo: solo para el gancho o el clímax"},
+                    {"id": "google/veo-3.1-lite",
+                     "label": "Veo 3.1 Lite (~$0.25-0.35/clip 5s) — ✚ 1080p a precio de Kling con marca Google · ✖ sin audio nativo en este tramo"},
+                    {"id": "kwaivgi/kling-v3.0",
+                     "label": "Kling 3.0 (~$0.45-0.70/clip 5s) — ✚ mucho mejor seguimiento del sujeto y consistencia de movimiento que la v2 · ✖ más caro que la v2.1"},
                     {"id": "kwaivgi/kling-v2.1",
-                     "label": "Kling v2.1 (~$0.25-0.50/clip 5s) — ✚ el look más cinematográfico · ✖ el más caro y tarda 3-6 min/clip"},
+                     "label": "Kling v2.1 (~$0.25-0.50/clip 5s) — ✚ el look más cinematográfico de la familia Kling · ✖ caro y tarda 3-6 min/clip"},
                     {"id": "kwaivgi/kling-v1.6-standard",
                      "label": "Kling v1.6 standard (~$0.13-0.35/clip) — ✚ buen balance costo/calidad · ✖ movimiento algo menos fluido que v2.1"},
                     {"id": "wan-video/wan-2.2-i2v-a14b",
@@ -195,9 +267,12 @@ CATALOG: dict = {
                      "label": "LTX Video (~$0.04-0.10/clip) — ✚ el más rápido (~30s) y el más barato · ✖ calidad visiblemente menor; solo pruebas"},
                 ],
                 "notes": "Anima las escenas clave (gancho/clímax) partiendo de la imagen "
-                         "de la escena. AHORRO: prueba con Seedance Lite/LTX y genera la "
-                         "final con Kling; o usa Ken Burns (gratis) — para documental "
-                         "largo casi no se nota. Controla cuántas escenas con max_scenes.",
+                         "de la escena. NOVEDAD: Veo 3.1 devuelve el clip CON SONIDO "
+                         "propio, sincronizado con lo que se ve — el resto llega mudo y el "
+                         "ambiente se sintetiza aparte. AHORRO: prueba con Seedance "
+                         "Lite/LTX y genera la final con Kling; o usa Ken Burns (gratis) — "
+                         "para documental largo casi no se nota. Controla cuántas escenas "
+                         "con max_scenes.",
             },
             {"name": "none", "label": "Ninguno — Ken Burns sobre imágenes (recomendado para videos largos)",
              "env": None, "models": [],
@@ -224,13 +299,18 @@ CATALOG: dict = {
                      "label": "OmniHuman (~$0.10-0.16/seg) — ✚ calidad CINE: gestos, cuerpo y emoción, sirve hasta con dibujos · ✖ el más caro y tarda minutos por clip"},
                     {"id": "zsxkib/sonic",
                      "label": "Sonic (~$0.02-0.05/seg) — ✚ buen punto medio de calidad · ✖ modelo de un autor independiente: puede cambiar de nombre o desaparecer en Replicate sin aviso (si falla con «no encontrado», prueba SadTalker u OmniHuman)"},
+                    {"id": "hedra/character-3",
+                     "label": "Hedra Character-3 (~$0.05-0.09/seg) — ✚ LA MITAD que OmniHuman con calidad muy por encima de Sonic: el punto dulce · ✖ menos control fino del gesto"},
+                    {"id": "bytedance/omni-human-1.5",
+                     "label": "OmniHuman 1.5 (~$0.13-0.18/seg) — ✚ movimiento de cámara dirigido por prompt (paneo, acercamiento) · ✖ el más caro y el más lento (~2 min por clip)"},
                 ],
                 "notes": "Sube la IMAGEN del personaje (categoría 🧑 Personaje) y tu "
                          "voz: el personaje narra en cámara con lipsync y el director "
                          "lo intercala con B-roll según el % de presencia que elijas. "
                          "OJO AL COSTO: se cobra por SEGUNDO de personaje en pantalla "
                          "(un video de 2 min al 30% ≈ 36 s de lipsync). Estrategia: "
-                         "itera con SadTalker y genera la versión final con OmniHuman. "
+                         "itera con SadTalker y genera la versión final con Hedra (mitad "
+                         "de precio que OmniHuman) u OmniHuman si quieres el techo. "
                          "Si un modelo falla con «no encontrado», Replicate puede "
                          "haberlo renombrado/retirado: prueba otro de la lista o "
                          "busca el nombre exacto en replicate.com/collections/lipsync.",
@@ -249,6 +329,18 @@ CATALOG: dict = {
                 "env": "REPLICATE_API_TOKEN",
                 "models": [{"id": "meta/musicgen", "label": "MusicGen stereo-large"}],
                 "notes": "Genera música original según el mood del concepto (sin copyright).",
+            },
+            {
+                "name": "elevenlabs",
+                "label": "ElevenLabs Music — licencia comercial limpia",
+                "env": "ELEVENLABS_API_KEY",
+                "models": [],
+                "notes": "La opción defendible para un canal que MONETIZA: cerró "
+                         "su licencia comercial antes de lanzar. Suno y Udio "
+                         "suenan mejor, pero a 2026 no tienen API pública y sus "
+                         "términos seguían en litigio por los datos de "
+                         "entrenamiento. Genera la pista de la duración pedida de "
+                         "una vez, sin el loop de 30 s de MusicGen.",
             },
             {
                 "name": "library",
@@ -648,7 +740,7 @@ STYLE_PRESETS: dict = {
 def key_status() -> dict:
     """Qué claves de API están definidas en el entorno (para la UI)."""
     keys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY",
-            "REPLICATE_API_TOKEN"]
+            "REPLICATE_API_TOKEN", "CARTESIA_API_KEY", "ASSEMBLYAI_API_KEY"]
     return {k: bool(os.environ.get(k)) for k in keys}
 
 

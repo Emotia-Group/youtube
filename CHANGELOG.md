@@ -9,6 +9,61 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.58.0 — 2026-08-14
+Dos modelos que el programa usaba tenían fecha de apagado — uno de ellos en
+tres días — y ninguno avisaba. Además, la revisión del mercado dejó tres
+formas concretas de gastar menos sin bajar la calidad.
+
+- ⚠ DOS AVERÍAS CON FECHA, EVITADAS. **Imagen 4 Fast se apaga el 17 de agosto**
+  (estaba en la lista de modelos de la interfaz) y **gpt-image-1, el 23 de
+  octubre**. El segundo era el grave: no era una opción más, era el **único**
+  soporte de las escenas con TEXTO LEGIBLE (carteles, periódicos, lápidas) —
+  ese día esa función se habría quedado sin nada detrás. Ahora el modelo de
+  OpenAI es **GPT Image 2**, que además lee mejor y no tiñe de amarillo. Y el
+  programa lleva un registro de modelos retirados: si tu configuración nombra
+  uno, **te avisa antes de generar** con la fecha y el sustituto, en vez de
+  dejar que la API falle a mitad de fase con el proyecto medio pagado.
+- 💸 MODO HÍBRIDO: LA MAYOR PALANCA DE AHORRO DEL PROGRAMA. Nuevo interruptor
+  en ⚙ Configuración → Imágenes: **escalar las imágenes tras generarlas**. Con
+  FLUX schnell (~$0.003) más el escalado (~$0.002), las ~100 imágenes de un
+  documental de 10 min pasan de **~$4.50 a ~$0.50 — un 90 % menos**. Con la
+  advertencia honesta por delante: el escalado recupera resolución, **no
+  inventa** la microtextura de un modelo caro, así que conviene probarlo con tu
+  tema antes de adoptarlo para la versión final. Las imágenes que ya dan la
+  talla (tu B-roll, los respaldos locales) se saltan solas: activarlo nunca
+  cobra de más por ellas, y si el escalado falla se conserva la original.
+- 🎙 VOZ HASTA 10 VECES MÁS BARATA: **Cartesia Sonic** (~$11 por millón de
+  caracteres frente a ~$120 de ElevenLabs) deja la narración de un video de 10
+  min en **~$0.10 en vez de ~$1.08**. Y algo que no se ve en el precio: al
+  cobrar por uso, su gasto **sí entra en el tope de presupuesto** — el de
+  ElevenLabs, que va contra tu plan, quedaba invisible para el control de
+  costos. Cada proveedor de voz tiene ya su propia tarifa: antes se aplicaba
+  el número de OpenAI a todos, así que elegir uno barato no se notaba.
+- 📝 TRANSCRIPCIÓN MEJOR Y MÁS BARATA: **AssemblyAI** cuesta $0.0025/min contra
+  $0.006 de Whisper, pero el motivo de fondo es otro — da **marcas de tiempo
+  por palabra más finas**, que es de lo que viven las respiraciones, el
+  recorte de pausas y la sincronía de subtítulos y rótulos. Sin el límite de
+  25MB: sube la narración entera sin la copia comprimida.
+- 🔊 VIDEO CON SONIDO PROPIO: **Veo 3.1** es el único modelo que devuelve el
+  clip **con su ambiente ya sincronizado** con lo que se ve; el resto llega
+  mudo y el ambiente se sintetiza aparte. Se añade con sus duraciones reales
+  (4/6/8 s, frente a los 5/10 de Kling) y su pista nativa se guarda junto al
+  clip. El costo de los clips pasa a calcularse **en proporción a los segundos
+  que se piden de verdad**, en vez de saltar al doble al pasar de 7.5 s.
+- 🆕 Y MÁS OPCIONES EN TODAS LAS CATEGORÍAS: **FLUX 2 Pro y Flash** (ojo: FLUX
+  2 cobra por megapíxel), **Ideogram v3 Turbo** como relevo barato de Imagen 4
+  Fast, **Kling 3.0**, **Nano Banana Pro** como modelo de identidad (mantiene
+  hasta **5 personajes** a la vez), **Hedra Character-3** para lipsync (la
+  mitad que OmniHuman con calidad muy por encima de Sonic) y **ElevenLabs
+  Music**, la única opción de música con **licencia comercial cerrada** y API
+  pública — Suno y Udio suenan mejor pero no tienen API y su licencia seguía
+  en litigio. Nuevo campo **calidad** para GPT Image 2, que manda el precio
+  mucho más que el tamaño (de $0.005 a $0.21 por imagen).
+- 📄 Dos informes nuevos en `docs/`: la evaluación de conectar Higgsfield vía
+  MCP (conclusión: no compensa — más caro por imagen y con techo mensual de
+  producción) y el panorama completo de modelos del mercado con sus pros y
+  contras.
+
 ## v0.57.0 — 2026-08-14
 Los seis detalles que encontraste en el video de prueba. Dos de ellos eran
 fallos de verdad en el personaje con lipsync — y el segundo explicaba por qué

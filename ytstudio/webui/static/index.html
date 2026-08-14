@@ -978,7 +978,13 @@ function renderModelPick(catKey){
       <input id="free-${catKey}" value="${esc(curVal)}"></label>`;
   }
   (cat.extra_fields||[]).forEach(f=>{
-    const isTxt=f.type==='text';
+    const isTxt=f.type==='text', isBool=f.type==='bool';
+    if(isBool){
+      html+=`<label class="f"><span>${esc(f.label)}</span>
+        <input type="checkbox" id="extra-${catKey}-${f.key}" ${cur[f.key]?'checked':''}>
+        <span class="muted" style="font-size:12px">${esc(f.hint||'')}</span></label>`;
+      return;
+    }
     html+=`<label class="f"><span>${esc(f.label)}</span>
       <input type="${isTxt?'text':'number'}" id="extra-${catKey}-${f.key}" value="${esc(String(cur[f.key]??(isTxt?'':0)))}">
       <span class="muted" style="font-size:12px">${esc(f.hint||'')}</span></label>`;
@@ -1090,7 +1096,8 @@ async function saveSettings(){
     if(free&&free.value){cfg.providers[catKey][opt.voices?'voice':'model']=free.value}
     (CAT.catalog[catKey].extra_fields||[]).forEach(f=>{
       const el=$(`#extra-${catKey}-${f.key}`);if(!el)return;
-      cfg.providers[catKey][f.key]=f.type==='text'?el.value:(+el.value||0);
+      cfg.providers[catKey][f.key]=f.type==='bool'?el.checked
+        :(f.type==='text'?el.value:(+el.value||0));
     });
   }
   try{await api('/api/config',{method:'PUT',body:JSON.stringify({config:cfg})});

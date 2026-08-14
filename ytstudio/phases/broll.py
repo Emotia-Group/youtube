@@ -1439,7 +1439,7 @@ def run(project, cfg) -> None:
         # con crédito bajo Replicate limita a 6/min: más hilos solo generan 429
         img_workers = min(img_workers, 2)
     elif _img_name == "openai":
-        # gpt-image-1 admite MUY pocas imágenes por minuto (5 en cuentas
+        # la familia gpt-image admite MUY pocas imágenes por minuto (5 en cuentas
         # nuevas): con 4 hilos el 429 es inevitable. Con 2 el ritmo se acerca
         # al límite y los reintentos con espera absorben lo que sobre.
         img_workers = min(img_workers, 2)
@@ -1501,6 +1501,17 @@ def run(project, cfg) -> None:
     from ytstudio.progress import get_sink
     sink = get_sink()
 
+    # MODO HÍBRIDO (providers.images.upscale): generar barato y subir la
+    # resolución después. El escalador se salta solo las imágenes que ya dan
+    # la talla, así que activarlo nunca cobra de más por el B-roll propio del
+    # creador ni por los respaldos locales.
+    from ytstudio.providers.images import get_upscaler
+    upscaler = get_upscaler(cfg)
+    if upscaler is not None:
+        notify(f"⬆ Escalado activado ({upscaler.model.split('/')[-1]}): las "
+               f"imágenes por debajo de {upscaler.target_w}px se suben a la "
+               "resolución del video.")
+
     # Escenas con TEXTO dentro de la imagen: las que el director declaró
     # (image_text) Y las que su prompt describe con un objeto escrito
     # (periódico, cartel, documento, lápida…). En TODAS el texto debe salir
@@ -1513,22 +1524,23 @@ def run(project, cfg) -> None:
         import os as _os
         from ytstudio.providers.images import OpenAIImages
         if isinstance(images, OpenAIImages):
-            text_images = images   # ya es gpt-image-1: no abras un segundo
+            text_images = images   # ya es de OpenAI: no abras un segundo
         elif _os.environ.get("OPENAI_API_KEY"):
             try:
                 text_images = OpenAIImages(cfg)
                 notify(f"🔤 {len(text_ids)} escena(s) muestran texto "
                        f"({', '.join(map(str, text_ids))}): se generan con "
-                       "gpt-image-1 (la mejor tipografía disponible) para que "
-                       "se lea de verdad, en el idioma del guion.")
+                       f"{text_images.model} (la mejor tipografía disponible) "
+                       "para que se lea de verdad, en el idioma del guion.")
             except Exception as e:
-                project.add_warning(f"No se pudo preparar gpt-image-1 para "
-                                    f"las escenas con texto ({e}).")
+                project.add_warning(
+                    "No se pudo preparar el modelo de texto de OpenAI para "
+                    f"las escenas con texto ({e}).")
         if text_images is None:
             project.add_warning(
                 "Escena(s) " + ", ".join(map(str, text_ids)) + " muestran "
                 "texto en la imagen, pero no hay clave de OpenAI "
-                "(gpt-image-1): se usa el modelo estándar con énfasis "
+                "(gpt-image): se usa el modelo estándar con énfasis "
                 "tipográfico. Revisa esas imágenes — los modelos estándar "
                 "suelen deformar las letras. Configura tu OPENAI_API_KEY en "
                 "⚙ Configuración para tipografía de verdad.")
@@ -1601,7 +1613,7 @@ def run(project, cfg) -> None:
                 if not _is_content_error(e):
                     # el ruteo tipográfico es OPCIONAL: nunca tumba la fase
                     project.add_warning(
-                        f"gpt-image-1 falló en la escena {scene['id']} ({e}) "
+                        f"El modelo de texto falló en la escena {scene['id']} ({e}) "
                         "— se usa el modelo estándar para esa imagen.")
                 # y sigue la escalera normal
         # Escena con personajes del elenco → modelo de IDENTIDAD con sus
@@ -1649,11 +1661,19 @@ def run(project, cfg) -> None:
         img = broll_dir / f"scene_{scene['id']:03d}.jpg"
         if not img.exists():  # reanudable
             _gen_one(scene, scene["broll_prompt"], img)
+        # El escalado va FUERA del `if`: si la fase se cortó entre generar y
+        # escalar, al reanudar la imagen ya existe pero se quedó pequeña. Como
+        # `upscale()` se salta gratis lo que ya da la talla, llamarlo siempre
+        # repara ese caso sin cobrar dos veces por lo ya escalado.
+        if upscaler is not None:
+            upscaler.upscale(img)
         # Pantalla dividida: la SEGUNDA mitad tiene su propia imagen
         if scene.get("layout") == "dividida" and scene.get("broll_prompt_b"):
             img_b = broll_dir / f"scene_{scene['id']:03d}_b.jpg"
             if not img_b.exists():
                 _gen_one(scene, scene["broll_prompt_b"], img_b)
+            if upscaler is not None:
+                upscaler.upscale(img_b)
             scene["broll_image_b"] = img_b.name
 
     def _split_pending(s: dict) -> bool:

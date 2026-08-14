@@ -35,6 +35,8 @@ _REQUIRED_KEYS = {
     "elevenlabs": "ELEVENLABS_API_KEY",
     "openai": "OPENAI_API_KEY",
     "replicate": "REPLICATE_API_TOKEN",
+    "cartesia": "CARTESIA_API_KEY",
+    "assemblyai": "ASSEMBLYAI_API_KEY",
 }
 
 
@@ -52,6 +54,7 @@ def get_tts(cfg: dict):
     name = _resolve("tts", cfg["providers"]["tts"]["name"])
     return {
         "elevenlabs": tts.ElevenLabsTTS,
+        "cartesia": tts.CartesiaTTS,
         "openai": tts.OpenAITTS,
         "edge": tts.EdgeTTS,
         "mock": tts.MockTTS,
@@ -61,11 +64,30 @@ def get_tts(cfg: dict):
 def get_stt(cfg: dict):
     from ytstudio.providers import stt
     name = _resolve("stt", cfg["providers"]["stt"]["name"])
-    return {"openai": stt.OpenAISTT, "mock": stt.MockSTT}[name](cfg)
+    return {"openai": stt.OpenAISTT, "assemblyai": stt.AssemblyAISTT,
+            "mock": stt.MockSTT}[name](cfg)
+
+
+def _warn_retired(cfg: dict) -> None:
+    """Aviso ANTES de generar si el config nombra un modelo que su proveedor
+    ya retiró. Sin esto el fallo llega como un error críptico de la API a
+    mitad de la fase de imágenes, con parte del proyecto ya pagado."""
+    from ytstudio import pricing
+    icfg = cfg.get("providers", {}).get("images", {}) or {}
+    for key in ("model", "ref_model"):
+        model = str(icfg.get(key, ""))
+        info = pricing.retirement(model)
+        if not info:
+            continue
+        fecha, relevo = info
+        print(f"  ⚠ imágenes: «{model}» fue retirado por su proveedor el "
+              f"{fecha}. Cambia providers.images.{key} a «{relevo}» en "
+              "⚙ Configuración antes de generar.")
 
 
 def get_images(cfg: dict):
     from ytstudio.providers import images
+    _warn_retired(cfg)
     name = _resolve("images", cfg["providers"]["images"]["name"])
     return {
         "openai": images.OpenAIImages,
@@ -107,5 +129,6 @@ def get_music(cfg: dict):
         return music.LibraryMusic(cfg)
     return {
         "replicate": music.ReplicateMusic,
+        "elevenlabs": music.ElevenLabsMusic,
         "mock": music.MockMusic,
     }[name](cfg)

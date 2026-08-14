@@ -33,6 +33,68 @@ class ElevenLabsTTS:
         return out
 
 
+class CartesiaTTS:
+    """Cartesia Sonic: voz neuronal de pago POR USO, un orden de magnitud más
+    barata que ElevenLabs (~$11 frente a ~$120 por millón de caracteres). Para
+    un canal que produce en volumen es la diferencia entre $54 y $5 al mes.
+
+    Ventaja que no se ve en el precio: al cobrar por uso, su gasto SÍ entra en
+    el libro y en el tope de presupuesto — con ElevenLabs, que cobra por plan,
+    el gasto de voz queda invisible para el control de costos."""
+
+    DEFAULT_VOICE = "5c5ad5e7-1020-476b-8b91-fdcbe9cc313c"  # narrador neutro
+    DEFAULT_MODEL = "sonic-2"
+
+    def __init__(self, cfg: dict):
+        self.api_key = os.environ["CARTESIA_API_KEY"]
+        tcfg = cfg["providers"]["tts"]
+        self.voice = tcfg.get("voice") or self.DEFAULT_VOICE
+        self.model = tcfg.get("model") or self.DEFAULT_MODEL
+        # Cartesia necesita saber el idioma del texto (no lo deduce)
+        self.language = str(cfg.get("language", "es"))[:2]
+
+    def synthesize(self, text: str, out: Path) -> Path:
+        import json
+        import urllib.request
+
+        from ytstudio import pricing, usage
+        usd = pricing.tts_cost(len(text), "cartesia")
+        usage.check_budget(usd, "un tramo de voz de Cartesia")
+        body = json.dumps({
+            "model_id": self.model,
+            "transcript": text,
+            "voice": {"mode": "id", "id": self.voice},
+            "language": self.language,
+            "output_format": {"container": "mp3", "sample_rate": 44100,
+                              "bit_rate": 128000},
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.cartesia.ai/tts/bytes", data=body,
+            headers={"X-API-Key": self.api_key,
+                     "Cartesia-Version": "2024-06-10",
+                     "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                audio = resp.read()
+        except Exception as e:
+            detail = ""
+            body_err = getattr(e, "read", None)
+            if callable(body_err):
+                try:
+                    detail = f" — {body_err().decode('utf-8', 'replace')[:300]}"
+                except Exception:
+                    pass
+            raise RuntimeError(
+                f"Cartesia no pudo sintetizar la voz ({e}){detail}. Revisa "
+                "CARTESIA_API_KEY y que el identificador de voz exista en tu "
+                "cuenta (providers.tts.voice).") from e
+        out.write_bytes(audio)
+        # El cobro ocurre al responder la API: se anota en cuanto hay audio.
+        usage.record("cartesia", "voz TTS", len(text), "caracteres", usd)
+        usage.add_spend(usd)
+        return out
+
+
 class OpenAITTS:
     def __init__(self, cfg: dict):
         from openai import OpenAI
@@ -47,7 +109,7 @@ class OpenAITTS:
             response.stream_to_file(out)
         from ytstudio import pricing, usage
         usage.record("openai", "voz TTS", len(text), "caracteres",
-                    pricing.tts_cost(len(text)))
+                    pricing.tts_cost(len(text), "openai"))
         return out
 
 

@@ -111,7 +111,7 @@ class OpenAISTT:
         from ytstudio import pricing, usage
         minutes = probe_duration(audio) / 60.0
         usage.record("openai", "transcripción de referencia (Whisper)", minutes,
-                    "min", pricing.stt_cost(minutes))
+                    "min", pricing.stt_cost(minutes, "openai"))
         return result.text
 
     def transcribe_segments(self, audio: Path, hint: str = "") -> list[dict]:
@@ -175,7 +175,129 @@ class OpenAISTT:
         from ytstudio import pricing, usage
         minutes = probe_duration(audio) / 60.0
         usage.record("openai", "transcripción (Whisper)", minutes, "min",
-                    pricing.stt_cost(minutes))
+                    pricing.stt_cost(minutes, "openai"))
+        return out
+
+
+class AssemblyAISTT:
+    """AssemblyAI por lotes: $0.0025/min frente a $0.006 de Whisper.
+
+    El motivo de fondo no es el precio (la transcripción es una partida
+    marginal) sino la CALIDAD DE LAS MARCAS DE TIEMPO por palabra, que es de
+    lo que vive todo el sistema de respiraciones, recorte de pausas y sincronía
+    de subtítulos y rótulos (`utils/align.py`). AssemblyAI las da mejor y ya
+    puntuadas, así que aquí no hace falta reponer comas como con Whisper.
+
+    Sin límite de 25MB: el audio se sube entero, sin la copia ligera a 48kbps.
+    """
+
+    is_mock = False
+    BASE = "https://api.assemblyai.com/v2"
+    POLL_SECONDS = 3
+    MAX_WAIT_SECONDS = 3600
+
+    def __init__(self, cfg: dict):
+        import os
+        self.api_key = os.environ["ASSEMBLYAI_API_KEY"]
+        self.language = str(cfg.get("language", "es"))[:2]
+
+    def _headers(self, **extra) -> dict:
+        return {"authorization": self.api_key, **extra}
+
+    def _request(self, url: str, data=None, headers=None, method=None):
+        import json
+        import urllib.request
+        req = urllib.request.Request(url, data=data,
+                                     headers=headers or self._headers(),
+                                     method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            detail = ""
+            body = getattr(e, "read", None)
+            if callable(body):
+                try:
+                    detail = f" — {body().decode('utf-8', 'replace')[:300]}"
+                except Exception:
+                    pass
+            raise RuntimeError(
+                f"AssemblyAI falló en {url.rsplit('/', 1)[-1]} ({e}){detail}. "
+                "Revisa ASSEMBLYAI_API_KEY.") from e
+
+    def _job(self, audio: Path, hint: str = "") -> str:
+        """Sube el audio, encarga la transcripción y espera a que termine.
+        Devuelve el id del trabajo ya completado."""
+        import json
+        import time
+
+        from ytstudio.progress import notify
+        up = self._request(f"{self.BASE}/upload", data=audio.read_bytes(),
+                           headers=self._headers(
+                               **{"content-type": "application/octet-stream"}))
+        body: dict = {"audio_url": up["upload_url"],
+                      "language_code": self.language,
+                      "punctuate": True, "format_text": True}
+        if hint:
+            # Sesga el vocabulario hacia los términos del proyecto (nombres
+            # propios, tecnicismos), igual que el `prompt` de Whisper.
+            terms = [w for w in dict.fromkeys(hint.split()) if len(w) > 3]
+            if terms:
+                body["word_boost"] = terms[:200]
+                body["boost_param"] = "high"
+        job = self._request(f"{self.BASE}/transcript",
+                            data=json.dumps(body).encode(),
+                            headers=self._headers(
+                                **{"content-type": "application/json"}))
+        jid = job["id"]
+        waited = 0
+        while waited < self.MAX_WAIT_SECONDS:
+            info = self._request(f"{self.BASE}/transcript/{jid}")
+            status = info.get("status")
+            if status == "completed":
+                return jid
+            if status == "error":
+                raise RuntimeError(
+                    f"AssemblyAI no pudo transcribir: {info.get('error')}")
+            if waited and waited % 30 == 0:
+                notify(f"🎙 AssemblyAI sigue transcribiendo… ({waited}s)")
+            time.sleep(self.POLL_SECONDS)
+            waited += self.POLL_SECONDS
+        raise RuntimeError(
+            "AssemblyAI no devolvió la transcripción en una hora. Reanuda la "
+            "fase o cambia providers.stt.name a 'openai'.")
+
+    def _charge(self, audio: Path, label: str) -> None:
+        from ytstudio import pricing, usage
+        minutes = probe_duration(audio) / 60.0
+        usage.record("assemblyai", label, minutes, "min",
+                     pricing.stt_cost(minutes, "assemblyai"))
+
+    def transcribe(self, audio: Path, hint: str = "") -> str:
+        jid = self._job(audio, hint)
+        info = self._request(f"{self.BASE}/transcript/{jid}")
+        self._charge(audio, "transcripción de referencia (AssemblyAI)")
+        return info.get("text") or ""
+
+    def transcribe_segments(self, audio: Path, hint: str = "") -> list[dict]:
+        jid = self._job(audio, hint)
+        # `sentences` da la frase COMPLETA con sus palabras cronometradas —
+        # justo la unidad que necesitan los subtítulos y los rótulos.
+        data = self._request(f"{self.BASE}/transcript/{jid}/sentences")
+        out = []
+        for s in data.get("sentences") or []:
+            text = (s.get("text") or "").strip()
+            if not text:
+                continue
+            words = [{"start": float(w["start"]) / 1000.0,
+                      "end": float(w["end"]) / 1000.0,
+                      "text": (w.get("text") or "").strip()}
+                     for w in (s.get("words") or [])
+                     if (w.get("text") or "").strip()]
+            out.append({"start": float(s["start"]) / 1000.0,
+                        "end": float(s["end"]) / 1000.0,
+                        "text": text, "words": words})
+        self._charge(audio, "transcripción (AssemblyAI)")
         return out
 
 

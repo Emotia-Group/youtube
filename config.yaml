@@ -45,21 +45,54 @@ providers:
     name: anthropic
     model: claude-opus-4-8
   tts:
-    name: mock
+    name: mock               # cartesia = la voz de pago por uso más barata
+                             # (~$11/millón de caracteres frente a ~$120 de
+                             # elevenlabs: ~$0.10 por video de 10 min en vez
+                             # de ~$1.08) y, al cobrar por uso, su gasto SÍ
+                             # entra en el tope de presupuesto · elevenlabs =
+                             # la mejor calidad, va contra tu plan · edge =
+                             # gratis · openai = intermedio
     voice: ''
   stt:
-    name: mock
+    name: mock               # assemblyai = 2.4x más barato que whisper
+                             # ($0.0025/min) y con marcas de tiempo por
+                             # palabra más finas, que es de lo que viven las
+                             # respiraciones, el recorte de pausas y la
+                             # sincronía de subtítulos y rótulos · openai =
+                             # Whisper (límite de 25MB por archivo)
   images:
     name: replicate          # FLUX 1.1 Pro: fotorrealismo cine a ~$0.04/img,
-                             # sin el cuello de 5 img/min de gpt-image-1. Las
+                             # sin el cuello de 5 img/min de OpenAI. Las
                              # escenas con TEXTO LEGIBLE van solas a
-                             # gpt-image-1 (con OPENAI_API_KEY). Sin
+                             # GPT Image 2 (con OPENAI_API_KEY). Sin
                              # REPLICATE_API_TOKEN degrada a mock avisando.
     model: black-forest-labs/flux-1.1-pro
+    quality: medium          # SOLO con name: openai. En GPT Image 2 la
+                             # calidad manda el precio mucho más que el
+                             # tamaño: low ≈ $0.005 · medium ≈ $0.03-0.06
+                             # (recomendado: el texto ya sale limpio) ·
+                             # high ≈ hasta $0.21 por imagen
+    upscale: false           # ── MODO HÍBRIDO: LA MAYOR PALANCA DE AHORRO ──
+                             # Genera con un modelo BARATO y sube después la
+                             # resolución. Con model: flux-schnell (~$0.003)
+                             # + escalado (~$0.002), las ~100 imágenes de un
+                             # documental de 10 min pasan de ~$4.50 a ~$0.50
+                             # (-90%). Lo que el escalado NO hace es inventar
+                             # la microtextura y el detalle de iluminación de
+                             # un modelo caro: recupera resolución, no calidad
+                             # de origen. Pruébalo con tu tema antes de
+                             # adoptarlo para la versión final.
+                             # Las imágenes que YA dan la talla (tu B-roll,
+                             # los respaldos locales) se saltan solas: activar
+                             # esto nunca cobra de más por ellas.
+    upscale_model: nightmareai/real-esrgan   # ~$0.002/img (recomendado) ·
+                             # philz1337x/clarity-upscaler ~$0.015 (más
+                             # detalle inventado) · recraft-ai/recraft-crisp-
+                             # upscale ~$0.008 (bordes limpios)
     ref_model: google/nano-banana   # identidad de personajes del elenco:
                                     # genera con sus fotos de referencia
                                     # (misma cara en todas sus escenas)
-    size: 1536x1024          # gpt-image-1 horizontal (16:9); solo aplica a openai
+    size: 1536x1024          # GPT Image horizontal (16:9); solo aplica a openai
     safety_tolerance: 6      # FLUX 1(estricto)-6(permisivo): evita falsos NSFW
                              # en contenido histórico/bélico (solo aplica a FLUX)
     fact_check_retries: 2    # rondas de corrección del control factual: cada
@@ -75,13 +108,26 @@ providers:
   videogen:
     name: none
     model: kwaivgi/kling-v1.6-standard
+                             # google/veo-3.1-fast (~$0.75/clip 5s) es el
+                             # ÚNICO que devuelve el clip CON SU PROPIO
+                             # SONIDO, sincronizado con lo que se ve; los
+                             # demás llegan mudos y el ambiente se sintetiza
+                             # aparte. Reserva Veo para el gancho y el clímax
+                             # (max_scenes 3-5): a 100 escenas sería carísimo
     max_scenes: 0
   lipsync:
     name: replicate           # personaje narrador (imagen + voz → lipsync);
-    model: cjwbw/sadtalker    # económico y fiable por defecto — cambia a
-                              # bytedance/omni-human para calidad cine
+    model: cjwbw/sadtalker    # económico y fiable por defecto — sube a
+                              # hedra/character-3 (~$0.07/s: la mitad que
+                              # OmniHuman con calidad muy por encima de
+                              # Sonic) o a bytedance/omni-human para el techo
   music:
-    name: mock
+    name: mock               # elevenlabs = LICENCIA COMERCIAL LIMPIA, la
+                             # opción defendible para un canal que monetiza
+                             # (Suno y Udio suenan mejor pero no tienen API
+                             # pública y su licencia estaba en litigio) ·
+                             # library = tus pistas, gratis · replicate =
+                             # MusicGen
     model: meta/musicgen
     library_dir: assets/music
     multi_track: true        # con biblioteca local y video largo (>3 min), la

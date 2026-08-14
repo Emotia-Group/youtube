@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.57.0 -->
+<!-- MANUAL_VERSION: 0.58.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -153,7 +153,28 @@ En cada estilo puedes fijar el **branding de rótulos**: tipografía, color de
 acento, color de texto y **diseño del rótulo** (documental / minimal / bold).
 Hay combos de un clic para empezar.
 
-### 3.5 Revisa la estimación
+### 3.5 Decide la calidad de las imágenes (aquí está el 90 % de tu factura)
+Las ~100 imágenes de B-roll son, con diferencia, la partida más cara. Tienes
+tres rutas en ⚙ Configuración → Imágenes:
+
+| Ruta | Coste (100 img) | Cuándo usarla |
+|---|---|---|
+| **Modo híbrido**: FLUX schnell + escalado activado | **~$0.50** | Por defecto para producción en volumen. Prueba primero un video con tu tema |
+| FLUX 1.1 Pro | ~$4.50 | Cuando el video es importante y quieres el techo de fotorrealismo |
+| FLUX schnell sin escalar | ~$0.30 | Solo para validar la ESTRUCTURA; sale a baja resolución |
+
+**Qué es el modo híbrido.** Generas la imagen con un modelo barato y el
+programa le sube la resolución después. Sale un 90 % más barato que generar
+con el modelo caro. **Lo que el escalado no hace es inventar** la microtextura
+y el detalle de iluminación de un modelo caro: recupera resolución, no calidad
+de origen. Se nota más en paisajes y planos amplios que en primeros planos —
+por eso conviene probarlo con tu tema antes de adoptarlo del todo.
+
+Da igual la ruta que elijas: las escenas con **texto legible** (carteles,
+periódicos, lápidas) se generan siempre aparte con el modelo de mejor
+tipografía, y tu B-roll propio nunca se toca ni se cobra.
+
+### 3.6 Revisa la estimación
 Al abrir un proyecto verás **cuánto costará y cuánto tardará**, desglosado por
 fase. El programa además fija un **tope de presupuesto** (estimado × 1.4): si
 la generación intentara pasarse, se detiene sola.
@@ -257,27 +278,43 @@ cierras la ventana negra, se detiene (y podrás reanudar).
 |---|---|
 | Inteligencia (guion, escenas, dirección, insertos, control de calidad) | $1-3 |
 | **Imágenes con FLUX 1.1 Pro** | **$3.3-4.2** |
-| Imágenes con gpt-image-1 | $5.8-20.8 ⚠ |
+| **Imágenes en MODO HÍBRIDO (schnell + escalado)** | **$0.4-0.6** ✅ |
+| Imágenes con GPT Image 2 (calidad media) | $2.5-5.0 |
 | Video IA (18 clips Kling) | $4.7-12.6 ⚠ |
+| Video IA con audio nativo (18 clips Veo 3.1 Fast) | $12.6-15.3 ⚠⚠ |
 | Transcribir tu voz (Whisper, 18 min) | $0.11-0.16 |
+| Transcribir tu voz (AssemblyAI, 18 min) | $0.05 |
+| Voz en off (ElevenLabs, 10 min) | ~$1.08 (o tu plan) |
+| Voz en off (Cartesia, 10 min) | **~$0.10** ✅ |
 | Música, ambiente, insertos, mapas, subtítulos | $0-0.2 |
 
-### 7.2 Las cinco reglas del ahorro
-1. **Prueba con modelos baratos.** En ⚙ Configuración → Imágenes elige
-   **FLUX schnell** (~$0.003/img): un video completo de prueba cuesta
-   centavos. Cuando la estructura te guste, cambia a **FLUX 1.1 Pro** y
-   «Rehacer desde Imágenes».
-2. **El video IA es lo más caro.** `max_scenes: 0` lo apaga. Con 18 clips
+### 7.2 Las seis reglas del ahorro
+1. **El MODO HÍBRIDO es la palanca más grande.** En ⚙ Configuración →
+   Imágenes activa **«escalar las imágenes tras generarlas»** y elige
+   **FLUX schnell**: generas por ~$0.003 y subes la resolución por ~$0.002.
+   Las ~100 imágenes de un documental pasan de **~$4.50 a ~$0.50 (−90 %)**.
+   Lo que el escalado NO hace es inventar la microtextura de un modelo caro:
+   recupera resolución, no calidad de origen. **Pruébalo con tu tema** antes
+   de adoptarlo — en paisajes y planos amplios se nota más que en primeros
+   planos.
+2. **Prueba con modelos baratos.** Aun sin modo híbrido, **FLUX schnell**
+   (~$0.003/img) deja un video de prueba en centavos. Cuando la estructura te
+   guste, cambia a **FLUX 1.1 Pro** y «Rehacer desde Imágenes».
+3. **El video IA es lo más caro.** `max_scenes: 0` lo apaga. Con 18 clips
    pagas más que por las 83 imágenes. Úsalo solo en videos importantes.
-3. **Para en el punto de control.** Corregir el storyboard es gratis.
-4. **Reutiliza estilos** (📚 Biblioteca): evitas re-analizar referencias.
-5. **Llena el banco de elementos**: material gratis, para siempre, y evita que
+4. **Para en el punto de control.** Corregir el storyboard es gratis.
+5. **Reutiliza estilos** (📚 Biblioteca): evitas re-analizar referencias.
+6. **Llena el banco de elementos**: material gratis, para siempre, y evita que
    se ilustre con IA.
 
 ### 7.3 Interruptores de gasto en ⚙ Configuración
 | Ajuste | Efecto |
 |---|---|
 | `providers.images.model` | El que más pesa en la factura |
+| `providers.images.upscale` | **MODO HÍBRIDO**: generar barato y escalar. Hasta −90 % en imágenes |
+| `providers.images.quality` | Solo con OpenAI: en GPT Image 2 la calidad manda el precio (de $0.005 a $0.21/img) |
+| `providers.tts.name` | `cartesia` cuesta ~1/10 que ElevenLabs y su gasto sí entra en el tope |
+| `providers.stt.name` | `assemblyai` es 2.4x más barato que Whisper y da mejores tiempos por palabra |
 | `providers.videogen.max_scenes` | 0 = sin video IA (el mayor ahorro) |
 | `providers.images.fact_check` | Control de calidad con visión (centavos, muy recomendable) |
 | `providers.images.fact_check_retries` | Rondas de corrección (2 por defecto). Cada ronda revisa SOLO lo regenerado; un clip de video infiel nunca se re-paga: baja a su imagen fija |

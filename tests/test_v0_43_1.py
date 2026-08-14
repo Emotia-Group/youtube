@@ -209,14 +209,19 @@ check("T6 la fase limita los hilos también con OpenAI",
 # ---------------------------------------------------------------------------
 from ytstudio.pricing import effective_image_model, img_cost_range
 
-check("T7 con OpenAI el modelo efectivo es gpt-image-1, no el heredado",
+# (v0.58.0: el modelo de OpenAI dejó de ser fijo — gpt-image-1 se apaga el
+# 23/10/2026 y el relevo es gpt-image-2. Lo que esta prueba protege sigue
+# siendo lo mismo: un 'model' heredado de Replicate NO debe falsear el precio.)
+check("T7 con OpenAI el modelo efectivo es el suyo, no el heredado de FLUX",
       effective_image_model("openai", "black-forest-labs/flux-1.1-pro")
-      == "gpt-image-1", "")
+      == "gpt-image-2", "")
+check("T7-bis si pides un modelo de OpenAI concreto, se respeta",
+      effective_image_model("openai", "gpt-image-1") == "gpt-image-1", "")
 c_mal = (0.04, 0.05)                                   # lo que se usaba antes
 c_bien = img_cost_range("openai", "black-forest-labs/flux-1.1-pro")
 check("T7b el precio ya no es el de FLUX", c_bien != c_mal, str(c_bien))
-check("T7c 83 imágenes se estiman en su costo real (~$5.8-$20.8)",
-      abs(83 * c_bien[0] - 5.81) < 0.1 and abs(83 * c_bien[1] - 20.75) < 0.1,
+check("T7c 83 imágenes se estiman en su costo real de OpenAI",
+      abs(83 * c_bien[0] - 2.49) < 0.1 and abs(83 * c_bien[1] - 17.43) < 0.1,
       f"${83*c_bien[0]:.2f}-${83*c_bien[1]:.2f}")
 check("T7d Replicate sigue respetando el modelo que elijas",
       img_cost_range("replicate", "black-forest-labs/flux-schnell") == (0.003, 0.004),
@@ -269,15 +274,19 @@ finally:
         os.environ["OPENAI_API_KEY"] = _prev_key
 img_items = [i for i in est["items"] if i["fase"].startswith("Imágenes IA")]
 check("T8 la estimación nombra el modelo REAL en la etiqueta",
-      bool(img_items) and "gpt-image-1" in img_items[0]["fase"],
+      bool(img_items) and "gpt-image-2" in img_items[0]["fase"],
       str([i["fase"] for i in est["items"]]))
 check("T8b y con paralelismo 2, no 4",
       bool(img_items) and "2 en paralelo" in img_items[0]["detalle"],
       str(img_items[0]["detalle"]) if img_items else "")
 # 'costo' es el par [mínimo, máximo] en dólares
 _costo = img_items[0]["costo"] if img_items else [0, 0]
-check("T8c el costo estimado ya no es el de FLUX (era $3.32-$4.15)",
-      _costo[1] > 15.0 and _costo[0] > 5.0, f"${_costo[0]}-${_costo[1]}")
+# El techo es lo que importa aquí: con FLUX el máximo eran $4.15 y el tope de
+# gasto se calibraba con ese número. GPT Image 2 puede cuadruplicarlo (su
+# calidad 'high' cuesta ~$0.21/img), y el presupuesto tiene que verlo venir.
+# El SUELO ya no sirve de señal: en calidad baja gpt-image-2 baja de FLUX.
+check("T8c el costo estimado refleja el techo real de OpenAI, no el de FLUX",
+      _costo[1] > 15.0 and _costo[1] > 4.15 * 3, f"${_costo[0]}-${_costo[1]}")
 
 # ---------------------------------------------------------------------------
 time.sleep = _real_sleep
