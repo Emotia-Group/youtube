@@ -14,6 +14,7 @@ from pathlib import Path
 
 from ytstudio.phases.scenes import load_scenes
 from ytstudio.utils.media import (filter_path, find_font, probe_duration,
+                                  probe_video_size,
                                   require_ffmpeg, run_ffmpeg)
 
 FADE = 0.3        # fundido corto (corte suave entre escenas)
@@ -75,6 +76,25 @@ def _probe_image_size(path) -> tuple[int, int] | None:
             return im.width, im.height
     except Exception:
         return None
+
+
+def _aspect_off(size: tuple[int, int] | None, w: int, h: int) -> float:
+    """Cuánto se aleja el aspecto de la fuente del de salida (1.0 = idéntico).
+    0.0 cuando no se pudo medir (no fuerza ninguna decisión)."""
+    if not size or not size[0] or not size[1]:
+        return 0.0
+    out_ar, src_ar = w / h, size[0] / size[1]
+    return max(out_ar / src_ar, src_ar / out_ar)
+
+
+def _contain_chain(w: int, h: int) -> str:
+    """Composición ENTERA sobre fondo ampliado y desenfocado (estándar
+    televisivo): nada del sujeto se pierde aunque el aspecto no coincida."""
+    return (f"split=2[cbg][cfg];"
+            f"[cbg]scale={w}:{h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{h},boxblur=32:2[cbb];"
+            f"[cfg]scale={w}:{h}:force_original_aspect_ratio=decrease[cff];"
+            f"[cbb][cff]overlay=(W-w)/2:(H-h)/2")
 
 
 def _still_filter(img_path, animation: str, frames: int, w: int, h: int,
@@ -809,19 +829,30 @@ def _render_scene(scene: dict, project, cfg, out: Path, fade: dict) -> None:
             vid_dur = probe_duration(vid)
         except Exception:
             vid_dur = None
-        if vid_dur and vid_dur < dur - 0.05:
-            # Clip más corto que la escena → cámara lenta sutil hasta cubrirla
-            # (nunca repetir el clip en bucle: el salto se nota y abarata).
-            inputs = ["-i", str(vid)]
-            factor = dur / vid_dur
-            filters.append(
-                f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h},setpts={factor:.5f}*PTS,fps={fps},setsar=1[v0]")
+        inputs = ["-i", str(vid)]
+        # ENCUADRE DEL CLIP: si su aspecto es MUY distinto al del video (la
+        # foto vertical de un personaje animada con lipsync sobre un 16:9), el
+        # recorte de cobertura se comería la cara — se compone entero sobre su
+        # propio fondo desenfocado, igual que las imágenes fijas.
+        if _aspect_off(probe_video_size(vid), w, h) >= _BLURPAD_MISMATCH:
+            fit = _contain_chain(w, h)
         else:
-            inputs = ["-i", str(vid)]
-            filters.append(
-                f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h},fps={fps},setsar=1[v0]")
+            fit = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                   f"crop={w}:{h}")
+        stretch = ""
+        if vid_dur and vid_dur < dur - 0.05:
+            if scene.get("broll_source") == "lipsync":
+                # LIPSYNC: jamás ralentizar — los labios dejarían de coincidir
+                # con la voz (la cámara lenta desincronizaba justo las escenas
+                # donde el personaje habla). Se congela el último cuadro: el
+                # habla queda intacta y el resto de la escena lo sostiene.
+                stretch = ("tpad=stop_mode=clone:stop_duration="
+                           f"{dur - vid_dur + 0.2:.3f},")
+            else:
+                # Clip más corto que la escena → cámara lenta sutil hasta
+                # cubrirla (nunca en bucle: el salto se nota y abarata).
+                stretch = f"setpts={dur / vid_dur:.5f}*PTS,"
+        filters.append(f"[0:v]{fit},{stretch}fps={fps},setsar=1[v0]")
         label = "v0"
     elif (scene.get("layout") == "dividida" and img_b
           and (project.path("broll", img_b)).exists()):
@@ -958,7 +989,16 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
     con asplit + adelay por aparición."""
     if not cfg["audio"].get("sfx", True):
         return [], [], None
-    from ytstudio.utils.sfx import SFX_SPECS, ensure_sfx
+    from ytstudio.utils.sfx import SFX_SPECS, ensure_sfx, insert_kind
+
+    # ACENTO DE LOS INSERTOS: paleta elegida en ⚙ Configuración → Audio. En
+    # 'auto' manda el estilo del video (un documental histórico suena a papel
+    # de archivo, no al 'pop' de una app), y dentro de la paleta cada tipo de
+    # inserto — foto, cifra, mapa — tiene su propio sonido.
+    palette = str(cfg["audio"].get("element_sfx", "auto") or "auto").strip()
+    if palette in ("", "auto"):
+        from ytstudio.catalog import get_style_preset
+        palette = (get_style_preset(cfg) or {}).get("insert_sfx") or "archivo"
 
     events: list[tuple[str, float]] = []  # (tipo, inicio en s)
     t = 0.0
@@ -967,10 +1007,16 @@ def _sfx_graph(scenes: list[dict], cfg: dict, work_dir: Path,
         if kind in SFX_SPECS and t > 0.5:  # sin efecto en el arranque del video
             start = max(0.0, t - SFX_SPECS[kind]["before_cut"])
             events.append((kind, start))
-        # los INSERTOS documentales entran con un 'pop' sutil en la mención
+        # los INSERTOS documentales entran con su acento en la mención
         for el in (s.get("elements") or []):
-            if el.get("files") and el.get("at") is not None:
-                events.append(("pop", t + float(el["at"])))
+            if not (el.get("files") and el.get("at") is not None):
+                continue
+            k = insert_kind(el, palette)
+            if k in SFX_SPECS:
+                # los acentos que CRECEN (aire, cuerda) arrancan antes para
+                # que su cima caiga justo cuando entra la tarjeta
+                events.append((k, max(0.0, t + float(el["at"])
+                                      - SFX_SPECS[k]["before_cut"])))
         t += float(s["duration"])
     if not events:
         return [], [], None

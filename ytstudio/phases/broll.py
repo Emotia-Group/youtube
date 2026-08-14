@@ -3,6 +3,7 @@
 IA la imagen (o clip) de las escenas restantes."""
 from __future__ import annotations
 
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -11,6 +12,57 @@ from ytstudio import prompt_safety as ps
 from ytstudio.phases.scenes import load_scenes, save_scenes
 from ytstudio.providers import get_images, get_llm, get_videogen
 from ytstudio.utils.media import run_ffmpeg
+
+
+# OBJETOS ESCRITOS que aparecen en un prompt de B-roll. Si la escena muestra
+# uno, en pantalla se va a leer algo — y ese algo tiene que ser LEGIBLE: es el
+# estándar de calidad del programa. Estas escenas se rutean al modelo con
+# mejor tipografía aunque el director no haya declarado image_text.
+_TEXT_PROPS = (
+    "newspaper|newsprint|front page|headline|tabloid|gazette|press clipping|"
+    "sign|signage|signboard|storefront|shop window|marquee|billboard|poster|"
+    "placard|banner|plaque|inscription|engraving|epitaph|gravestone|"
+    "tombstone|headstone|document|documents|letter|letters|envelope|telegram|"
+    "manuscript|scroll|parchment|papyrus|contract|certificate|diploma|ledger|"
+    "logbook|register|diary|journal entry|book cover|title page|open book|"
+    "map legend|chart|graph|diagram|blackboard|chalkboard|whiteboard|"
+    "notice|notice board|leaflet|pamphlet|flyer|label|price tag|nameplate|"
+    "screen showing|computer screen|display showing|ticker|stock ticker|"
+    "typewriter page|printed page|handwritten note|note pinned|"
+    "wanted poster|propaganda poster|street name|road sign|shop sign"
+)
+# Con fronteras de palabra («design» no es un letrero, «resigned» tampoco) y
+# admitiendo el plural («newspapers», «signs»).
+_TEXT_PROPS_RE = re.compile(rf"\b(?:{_TEXT_PROPS})s?\b", re.I)
+# La receta ANTERIOR pedía texto ilegible a propósito («out of focus,
+# unreadable print»). Producía justo lo que el creador ve como defecto:
+# garabatos. Se desactiva allá donde aparezca.
+_ILLEGIBLE_RE = re.compile(
+    r"(?:\b(?:blurred|blurry|out of focus|defocused|smudged|indistinct|"
+    r"illegible|unreadable|unintelligible|scribbled|faux|fake|invented|"
+    r"nonsense|gibberish|abstract)\b[\s,]*)+"
+    r"\b(?:text|print|lettering|letters|writing|handwriting|type|typography|"
+    r"words|headline|script|characters)\b",
+    re.I)
+
+
+def _shows_text(scene: dict) -> bool:
+    """¿En esta escena se va a leer algo? Por declaración del director
+    (image_text) o porque su prompt describe un objeto escrito."""
+    if (scene.get("image_text") or "").strip():
+        return True
+    prompt = " ".join(filter(None, (scene.get("broll_prompt"),
+                                    scene.get("broll_prompt_b"))))
+    return bool(_TEXT_PROPS_RE.search(prompt))
+
+
+def _drop_illegible(prompt: str) -> str:
+    """Da la vuelta a las peticiones de texto ilegible/borroso del prompt: en
+    su lugar se pide texto NÍTIDO Y LEGIBLE (sustituir, y no solo borrar,
+    deja la frase bien construida y empuja al generador en la dirección
+    correcta)."""
+    out = _ILLEGIBLE_RE.sub("sharp legible text", prompt or "")
+    return re.sub(r"\s{2,}", " ", out).strip(" ,;")
 
 
 def _user_broll_assets(project) -> list[dict]:
@@ -510,7 +562,9 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
         "anatomía del sujeto, número exacto y disposición de elementos, "
         "ubicación exacta de heridas o marcas, el objeto clave narrado. Una "
         "ilustración parcial o atmosférica NO es infiel; una que CONTRADICE "
-        "lo narrado, SÍ.")
+        "lo narrado, SÍ. Y vigilas un defecto de acabado que arruina la "
+        "calidad: el TEXTO INVENTADO — letras deformes o palabras sin "
+        "sentido en periódicos, carteles, documentos o rótulos.")
     jobs: list[tuple[list[Path], str]] = []
     for start in range(0, len(targets), 6):
         chunk = targets[start:start + 6]
@@ -543,13 +597,22 @@ def _qa_batches(llm, cfg, targets: list[dict], broll_dir: Path,
             "además que el MOVIMIENTO no contradiga lo narrado (un sujeto que "
             "la narración da por muerto no puede aparecer moviéndose, de pie "
             "o con los ojos abiertos).\n"
-            "- problema: una frase concreta con el hecho contradicho (vacía "
-            "si fiel).\n"
+            "- fiel=false TAMBIÉN si en la imagen se lee TEXTO INVENTADO: "
+            "letras deformes, palabras sin sentido o un idioma equivocado en "
+            "un periódico, cartel, documento, lápida o rótulo. Un texto "
+            "correcto y legible está BIEN; un texto tan pequeño o lejano que "
+            "no se distingue como escritura, también.\n"
+            "- problema: una frase concreta con el hecho contradicho o con el "
+            "texto ilegible (vacía si fiel).\n"
             "- prompt_corregido: SOLO si fiel=false — el prompt completo EN "
             "INGLÉS para regenerar la imagen, manteniendo el estilo del "
             "original pero codificando los hechos de forma REDUNDANTE e "
             "inequívoca (número exacto repetido, especie en cada mención, "
-            "estado sin vida explícito, ubicación exacta). Vacío si fiel.")
+            "estado sin vida explícito, ubicación exacta). Si el problema era "
+            "el texto: o pides el texto EXACTO y legible que debe leerse "
+            f"(en {lang}, bien escrito), o reencuadras para que ese objeto "
+            "escrito no salga — nunca 'blurred/unreadable text'. Vacío si "
+            "fiel.")
         jobs.append((images, prompt))
     if not jobs:
         return verdicts
@@ -614,6 +677,7 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
     credits: set[str] = set()
     sin_fuente: list[str] = []
     ilustradas: list[str] = []
+    mapas: list[str] = []          # sin cartografía real: cayeron a imagen
     concept = project.get("concept") or {}
     prefix_ai = ((concept.get("visual_style") or {}).get("prompt_prefix")
                  or "cinematic documentary still")
@@ -635,6 +699,58 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
             ai_budget[0] -= 1
             return True
 
+    def _foto_insert(s, el, consulta: str, *, ai_prompt: str | None = None,
+                     categorias=elib.CATEGORIES, motivo: str = "") -> bool:
+        """Tarjeta de ARCHIVO para una mención: banco propio → foto libre de
+        Wikimedia → ilustración IA (si el creador la autorizó). Devuelve si se
+        resolvió; el que no se resuelve sale del plan (mejor nada que un
+        adorno vacío)."""
+        sid = s["id"]
+        src = elib.bank_lookup(consulta, categorias)
+        # CLIP DE VIDEO del banco: se copia al proyecto y se compone como
+        # inserto en movimiento (el montaje lo escala y enmarca).
+        if src is not None and elib.is_video(src):
+            clip = eldir / f"clip_{sid:03d}{src.suffix.lower()}"
+            shutil.copyfile(src, clip)
+            el["files"] = [clip.name]
+            el["mode"] = "video"
+            return True
+        credit = None
+        if src is None and permitir_web:
+            got = elib.wiki_photo(consulta, lang_code, eldir)
+            if got:
+                src, credit = got["file"], got["credit"]
+        if src is None and _reservar_ia():
+            # ÚLTIMO recurso, y solo si el creador lo autorizó: una
+            # ilustración editorial generada (cuesta lo que una imagen del
+            # B-roll). El presupuesto se comparte entre todos los insertos.
+            try:
+                ai = eldir / f"ai_{sid:03d}.jpg"
+                images.generate(
+                    ai_prompt or (f"editorial documentary illustration of "
+                                  f"{consulta}, {prefix_ai}, muted palette, "
+                                  "no text, no letters, no watermark"), ai)
+                src = ai
+                ilustradas.append(f"{consulta} (escena {sid})")
+            except Exception:
+                src = None
+                with ai_lock:      # el fallo devuelve el cupo al presupuesto
+                    ai_budget[0] += 1
+        if src is None:
+            sin_fuente.append(f"{consulta} ({motivo + ', ' if motivo else ''}"
+                              f"escena {sid})")
+            el["files"] = []
+            return False
+        card = eldir / f"card_{sid:03d}.png"
+        elib.render_photo_card(src, el.get("etiqueta", ""), card, card_w,
+                               accent)
+        el["files"] = [card.name]
+        el["mode"] = "photo"
+        if credit:
+            el["credit"] = credit
+            credits.add(credit)
+        return True
+
     def _uno(s, el):
         sid = s["id"]
         if el.get("files") and all((eldir / f).exists() for f in el["files"]):
@@ -648,10 +764,9 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
             el["mode"] = "stat"
             return
         if tipo == "mapa":
-            # LOCALIZADOR: cartografía real de OpenStreetMap centrada en las
-            # coordenadas del lugar (o ficha de coordenadas si no hay red),
-            # con el pin cayendo sobre el punto. Un archivo propio del banco
-            # con ese nombre sigue teniendo prioridad.
+            # LOCALIZADOR: cartografía REAL de OpenStreetMap centrada en las
+            # coordenadas del lugar, con el pin cayendo sobre el punto. Un
+            # archivo propio del banco con ese nombre tiene prioridad.
             propio = elib.bank_lookup(el.get("consulta", ""), ("mapas",))
             if propio is not None and not elib.is_video(propio):
                 card = eldir / f"card_{sid:03d}.png"
@@ -662,63 +777,36 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
                 return
             lugar = el.get("consulta", "").replace(" location map", "").strip()
             coords = elib.geo_lookup(lugar, lang_code) if permitir_web else None
-            if coords is None:
-                sin_fuente.append(f"{lugar} (mapa, escena {sid})")
-                el["files"] = []
-                return
-            res = mapslib.render_map_frames(
-                el.get("etiqueta") or lugar, coords[0], coords[1],
-                eldir / f"map_{sid:03d}", card_w=card_w, accent=accent,
-                zoom=int(cfg["video"].get("elements_map_zoom", 5)),
-                allow_web=permitir_web)
-            el["files"] = [f"map_{sid:03d}/{n}" for n in res["files"]]
-            el["mode"] = "stat"      # secuencia animada, como las cifras
-            if res["real"]:
+            res = None
+            if coords is not None:
+                res = mapslib.render_map_frames(
+                    el.get("etiqueta") or lugar, coords[0], coords[1],
+                    eldir / f"map_{sid:03d}", card_w=card_w, accent=accent,
+                    zoom=int(cfg["video"].get("elements_map_zoom", 5)),
+                    allow_web=permitir_web)
+            if res is not None:
+                el["files"] = [f"map_{sid:03d}/{n}" for n in res["files"]]
+                el["mode"] = "stat"   # secuencia animada, como las cifras
                 el["credit"] = mapslib.OSM_CREDIT
                 credits.add(mapslib.OSM_CREDIT)
+                return
+            # SIN CARTOGRAFÍA REAL (sin coordenadas, sin red o el servicio de
+            # teselas no respondió): antes salía una ficha de coordenadas con
+            # una retícula VACÍA, que no aporta nada al video. Ahora la
+            # mención cae a una imagen REAL del lugar — el retrato del sitio o
+            # su mapa histórico en Wikimedia — y, si tampoco la hay, el
+            # inserto desaparece.
+            mapas.append(f"{lugar} (escena {sid})")
+            _foto_insert(
+                s, el, lugar, motivo="mapa",
+                categorias=("mapas", "lugares"),
+                ai_prompt=(f"emblematic period-accurate view of {lugar}, "
+                           f"wide establishing shot of its most recognizable "
+                           f"landscape or landmark, {prefix_ai}, muted "
+                           "palette, no text, no letters, no labels, no "
+                           "watermark"))
             return
-        src = elib.bank_lookup(el.get("consulta", ""))
-        # CLIP DE VIDEO del banco: se copia al proyecto y se compone como
-        # inserto en movimiento (el montaje lo escala y enmarca).
-        if src is not None and elib.is_video(src):
-            clip = eldir / f"clip_{sid:03d}{src.suffix.lower()}"
-            shutil.copyfile(src, clip)
-            el["files"] = [clip.name]
-            el["mode"] = "video"
-            return
-        credit = None
-        if src is None and permitir_web:
-            got = elib.wiki_photo(el.get("consulta", ""), lang_code, eldir)
-            if got:
-                src, credit = got["file"], got["credit"]
-        if src is None and _reservar_ia():
-            # ÚLTIMO recurso, y solo si el creador lo autorizó: una
-            # ilustración editorial generada (cuesta lo que una imagen del
-            # B-roll). El presupuesto se comparte entre todos los insertos.
-            try:
-                ai = eldir / f"ai_{sid:03d}.jpg"
-                images.generate(
-                    f"editorial documentary illustration of "
-                    f"{el.get('consulta', '')}, {prefix_ai}, muted palette, "
-                    "no text, no letters, no watermark", ai)
-                src = ai
-                ilustradas.append(f"{el.get('consulta')} (escena {sid})")
-            except Exception:
-                src = None
-                with ai_lock:      # el fallo devuelve el cupo al presupuesto
-                    ai_budget[0] += 1
-        if src is None:
-            sin_fuente.append(f"{el.get('consulta')} (escena {sid})")
-            el["files"] = []
-            return
-        card = eldir / f"card_{sid:03d}.png"
-        elib.render_photo_card(src, el.get("etiqueta", ""), card, card_w,
-                               accent)
-        el["files"] = [card.name]
-        el["mode"] = "photo"
-        if credit:
-            el["credit"] = credit
-            credits.add(credit)
+        _foto_insert(s, el, el.get("consulta", ""))
 
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -736,6 +824,11 @@ def _resolve_elements(project, cfg, scenes: list[dict], broll_dir: Path,
     if ilustradas:
         notify(f"🎨 {len(ilustradas)} inserto(s) sin foto libre se ilustraron "
                "con IA (lo autorizaste con elements_ai).")
+    if mapas:
+        notify("🗺 Sin cartografía real para " + ", ".join(mapas[:4])
+               + (" y más" if len(mapas) > 4 else "")
+               + ": esos localizadores se resuelven con una imagen real del "
+                 "lugar (nunca con una ficha de coordenadas vacía).")
     if sin_fuente:
         project.add_warning(
             "Sin foto de licencia libre para: " + ", ".join(sin_fuente[:6])
@@ -914,20 +1007,66 @@ def _reframe_character_still(img: Path, prompt: str, broll_dir: Path,
         return None
     v = cfg.get("video", {})
     vertical = int(v.get("height", 1080)) > int(v.get("width", 1920))
+    from ytstudio.catalog import aspect_for
     shape = "vertical" if vertical else "wide horizontal"
     full_prompt = (
-        f"{prompt}. Reframe as a {shape} medium shot of this exact person: "
-        "head and shoulders fully visible, centered, looking at the camera, "
-        "same clothing and appearance, natural coherent background")
+        f"{prompt}. Reframe as a {shape} {aspect_for(cfg)} medium shot of "
+        "this exact person: same face, same clothing and same appearance, "
+        "head and shoulders fully inside the frame with natural headroom "
+        "(never crop the top of the head or the chin), subject centered, "
+        "looking at the camera, natural coherent background extended to fill "
+        "the whole frame, no black bars, no letterboxing")
     try:
         notify("🧑 La foto del personaje no coincide con el formato del video: "
                "el director la reencuadra con el modelo de identidad…")
         ref_images.generate_with_refs(full_prompt, [img], dest)
-        return dest if dest.exists() else None
     except Exception as e:
         notify(f"⚠ No se pudo reencuadrar la foto del personaje con IA ({e}) "
                "— se compondrá la foto entera sobre fondo desenfocado.")
         return None
+    if not dest.exists():
+        return None
+    # El reencuadre solo vale si de verdad SALIÓ en el formato del video:
+    # un modelo que devuelve la misma vertical no arregla nada.
+    try:
+        if _aspect_mismatch(dest, cfg) >= _REFRAME_MISMATCH:
+            notify("⚠ El reencuadre del personaje volvió con el mismo formato "
+                   "vertical — se compondrá la foto entera sobre fondo "
+                   "desenfocado (la cara nunca se corta).")
+            dest.unlink(missing_ok=True)
+            return None
+    except Exception:
+        pass
+    return dest
+
+
+def _character_plate(img: Path, prompt: str, broll_dir: Path,
+                     cfg: dict) -> Path:
+    """La foto del personaje LISTA para el formato del video: se copia al
+    proyecto y, si su aspecto no encaja (una foto 9:16 en un video 16:9), se
+    reencuadra con el modelo de identidad. Esta es la imagen que alimenta el
+    lipsync Y la que se ve si el lipsync falla — así el encuadre es el mismo
+    en las dos rutas."""
+    import shutil as _sh
+    dest = broll_dir / f"personaje{img.suffix.lower() or '.jpg'}"
+    if not dest.exists():
+        _sh.copyfile(img, dest)
+    return _reframe_character_still(dest, prompt, broll_dir, cfg) or dest
+
+
+def _lipsync_signature(plate: Path, audio: Path, scene: dict) -> str:
+    """Huella de las entradas de un clip de lipsync (foto + audio + duración
+    de la escena). Si cambia cualquiera, el clip guardado ya no sirve."""
+    import hashlib
+    h = hashlib.sha1()
+    for p in (plate, audio):
+        try:
+            h.update(p.name.encode("utf-8"))
+            h.update(p.read_bytes())
+        except OSError:
+            h.update(b"?")
+    h.update(f"{float(scene.get('duration') or 0):.3f}".encode())
+    return h.hexdigest()[:16]
 
 
 def _character_image(project, cfg: dict | None = None):
@@ -952,9 +1091,14 @@ def _character_image(project, cfg: dict | None = None):
 def _generate_character_scenes(project, scenes: list[dict], broll_dir,
                                cfg: dict) -> set[int]:
     """Escenas de PERSONAJE (lipsync): el personaje habla el tramo EXACTO de
-    audio de su escena (vo_XXX.mp3, cortado de la pista única de voz). El clip
-    entra al montaje como video MUDO — la voz la pone la pista continua, así
-    que los labios quedan en sincronía sin tocar el motor de tiempos.
+    audio de su escena, cortado de la PISTA FINAL de voz (la que se va a oír,
+    con las pausas ya ajustadas por el director). El clip entra al montaje
+    como video MUDO — la voz la pone la pista continua, así que los labios
+    quedan en sincronía sin tocar el motor de tiempos.
+
+    Y la foto del personaje se adapta al formato del video ANTES de generar
+    los clips: si se entrega una foto 9:16 a un video 16:9, el clip nace
+    vertical y el montaje tendría que recortarlo hasta el mentón.
 
     Degradación limpia: sin proveedor/clave, o si un clip falla, esa escena
     usa la imagen fija del personaje con Ken Burns (y se avisa)."""
@@ -977,21 +1121,21 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
             "(categoría 🧑 Personaje en Archivos): se generan como B-roll.")
         return set()
 
+    # LA FOTO SE ADAPTA AL FORMATO **ANTES** DE HABLAR: el lipsync devuelve un
+    # clip con el aspecto de la foto que se le entrega. Con una foto 9:16 en un
+    # video 16:9, TODAS las escenas de personaje salían recortadas al mentón
+    # (el reencuadre existía, pero solo se aplicaba a las que fallaban). Ahora
+    # se reencuadra primero y el clip nace ya en el formato del video.
+    prompt0 = next((s.get("broll_prompt") for s in char_scenes
+                    if s.get("broll_prompt")),
+                   "portrait of the narrator speaking to the camera")
+    plate = _character_plate(img, prompt0, broll_dir, cfg)
+
     def _still_fallback(targets: list[dict]) -> None:
-        import shutil as _sh
-        dest = broll_dir / f"personaje{img.suffix.lower() or '.jpg'}"
-        if not dest.exists():
-            _sh.copyfile(img, dest)
-        # Foto con aspecto muy distinto al video → el director intenta
-        # reencuadrarla con IA (identidad); si no, el montaje la compone
-        # entera sobre fondo desenfocado — la cara nunca se corta.
-        prompt = next((s.get("broll_prompt") for s in targets
-                       if s.get("broll_prompt")),
-                      "portrait of the narrator speaking to the camera")
-        wide = _reframe_character_still(dest, prompt, broll_dir, cfg)
-        use = wide or dest
+        # Si no se pudo reencuadrar, el montaje compone la foto ENTERA sobre
+        # fondo desenfocado — la cara nunca se corta.
         for s in targets:
-            s["broll_image"] = use.name
+            s["broll_image"] = plate.name
             s["broll_type"] = "image"
             s.pop("broll_video", None)
             s["broll_source"] = "lipsync"
@@ -1014,27 +1158,88 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
     usage_items = usage_mod.get_state()
     vo_dir = project.path("voiceover")
     workers = max(1, int(cfg.get("performance", {}).get("parallel_video", 2)))
-    todo = [s for s in char_scenes
-            if not (broll_dir / f"lipsync_{s['id']:03d}.mp4").exists()]
+
+    from ytstudio.progress import get_sink
+    sink = get_sink()
+
+    def _lipsync_audio(s: dict) -> Path:
+        """El audio que mueve los labios: el tramo de la PISTA FINAL de voz
+        que suena en esta escena — con las pausas ya ajustadas por el director
+        y la duración exacta de la escena. Cortar el tramo de la grabación
+        original (vo_XXX.mp3) desincronizaba el personaje en cuanto el
+        director recortaba o ampliaba una pausa. Respaldo: el vo_ de siempre
+        (TTS o proyectos sin pista de voz)."""
+        from ytstudio.phases.voiceover import timeline_segment
+        from ytstudio.utils.media import probe_duration
+        seg = vo_dir / f"lipsync_audio_{s['id']:03d}.wav"
+        fresh = False
+        if seg.exists():
+            # Caché obsoleta: si la escena cambió de duración desde que se
+            # cortó este tramo, el audio ya no es el que sonará.
+            try:
+                fresh = abs(probe_duration(seg)
+                            - float(s.get("duration") or 0)) <= 0.12
+            except Exception:
+                fresh = False
+        if not fresh:
+            try:
+                if timeline_segment(project, scenes, s, seg) is None:
+                    seg = None
+            except Exception:
+                seg = None
+        if seg is not None and seg.exists():
+            return seg
+        vo = vo_dir / f"vo_{s['id']:03d}.mp3"
+        if not vo.exists():
+            raise RuntimeError(f"Falta el audio de la escena {s['id']} "
+                               "(rehaz desde Voz).")
+        return vo
+
+    # FIRMA del clip: con qué foto y con qué audio EXACTO se generó. Un clip
+    # en caché solo vale si su firma coincide — así un clip hecho con la foto
+    # sin reencuadrar o con el audio anterior al ajuste de pausas se rehace en
+    # vez de quedarse desincronizado para siempre. (Se avisa: cuesta.)
+    audios: dict[int, Path] = {}
+    sigs: dict[int, str] = {}
+    for s in char_scenes:
+        try:
+            a = _lipsync_audio(s)
+            audios[s["id"]] = a
+            sigs[s["id"]] = _lipsync_signature(plate, a, s)
+        except Exception:
+            pass   # sin audio: _gen levantará el error con su mensaje claro
+
+    def _cached(s: dict) -> bool:
+        clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
+        sig_f = broll_dir / f"lipsync_{s['id']:03d}.sig"
+        return (clip.exists() and sig_f.exists()
+                and sig_f.read_text(encoding="utf-8").strip()
+                == sigs.get(s["id"], ""))
+
+    todo = [s for s in char_scenes if not _cached(s)]
+    stale = [s for s in todo
+             if (broll_dir / f"lipsync_{s['id']:03d}.mp4").exists()]
+    if stale:
+        notify(f"🔁 {len(stale)} clip(s) de personaje se rehacen: se "
+               "generaron con la foto sin adaptar al formato o con el audio "
+               "anterior al ajuste de pausas del director (por eso el "
+               "encuadre y la sincronía fallaban).")
     if todo:
         notify(f"🧑 Generando {len(todo)} escena(s) de PERSONAJE con lipsync "
                f"({ls.model.split('/')[-1]}, {workers} en paralelo — tarda "
                "minutos por clip)…")
 
-    from ytstudio.progress import get_sink
-    sink = get_sink()
-
     def _gen(s: dict) -> None:
         usage_mod.bind(usage_items)
         _bind_worker_logging(sink)
         clip = broll_dir / f"lipsync_{s['id']:03d}.mp4"
-        if clip.exists():  # reanudable
+        if _cached(s):   # reanudable
             return
-        vo = vo_dir / f"vo_{s['id']:03d}.mp3"
-        if not vo.exists():
-            raise RuntimeError(f"Falta el audio de la escena {s['id']} "
-                               "(rehaz desde Voz).")
-        ls.generate(img, vo, clip, seconds=float(s.get("duration") or 5))
+        audio = audios.get(s["id"]) or _lipsync_audio(s)
+        ls.generate(plate, audio, clip, seconds=float(s.get("duration") or 5))
+        sig = sigs.get(s["id"]) or _lipsync_signature(plate, audio, s)
+        (broll_dir / f"lipsync_{s['id']:03d}.sig").write_text(
+            sig, encoding="utf-8")
 
     failed: list[dict] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1296,11 +1501,14 @@ def run(project, cfg) -> None:
     from ytstudio.progress import get_sink
     sink = get_sink()
 
-    # Escenas con TEXTO LEGIBLE dentro de la imagen (image_text del director):
-    # se rutean al modelo con mejor tipografía disponible. Elección DINÁMICA
-    # por escena — el resto sigue con el modelo configurado (más económico).
+    # Escenas con TEXTO dentro de la imagen: las que el director declaró
+    # (image_text) Y las que su prompt describe con un objeto escrito
+    # (periódico, cartel, documento, lápida…). En TODAS el texto debe salir
+    # LEGIBLE — es el estándar de calidad del programa —, así que se rutean al
+    # modelo con mejor tipografía disponible. Elección DINÁMICA por escena: el
+    # resto sigue con el modelo configurado (más económico).
     text_images = None
-    text_ids = sorted({s["id"] for s in ai_scenes if s.get("image_text")})
+    text_ids = sorted({s["id"] for s in ai_scenes if _shows_text(s)})
     if text_ids:
         import os as _os
         from ytstudio.providers.images import OpenAIImages
@@ -1309,42 +1517,54 @@ def run(project, cfg) -> None:
         elif _os.environ.get("OPENAI_API_KEY"):
             try:
                 text_images = OpenAIImages(cfg)
-                notify(f"🔤 {len(text_ids)} escena(s) con texto legible "
-                       f"({', '.join(map(str, text_ids))}): el director las "
-                       "genera con gpt-image-1 (la mejor tipografía "
-                       "disponible), en el idioma del guion.")
+                notify(f"🔤 {len(text_ids)} escena(s) muestran texto "
+                       f"({', '.join(map(str, text_ids))}): se generan con "
+                       "gpt-image-1 (la mejor tipografía disponible) para que "
+                       "se lea de verdad, en el idioma del guion.")
             except Exception as e:
                 project.add_warning(f"No se pudo preparar gpt-image-1 para "
                                     f"las escenas con texto ({e}).")
         if text_images is None:
             project.add_warning(
-                "Escena(s) " + ", ".join(map(str, text_ids)) + " piden texto "
-                "legible en la imagen, pero no hay clave de OpenAI "
+                "Escena(s) " + ", ".join(map(str, text_ids)) + " muestran "
+                "texto en la imagen, pero no hay clave de OpenAI "
                 "(gpt-image-1): se usa el modelo estándar con énfasis "
                 "tipográfico. Revisa esas imágenes — los modelos estándar "
                 "suelen deformar las letras. Configura tu OPENAI_API_KEY en "
                 "⚙ Configuración para tipografía de verdad.")
 
     def _texted(scene: dict, prompt: str) -> str:
-        """Si la escena define image_text, el prompt exige ESE texto exacto.
+        """Exigencia de TEXTO LEGIBLE, el estándar del programa.
+
+        · Con image_text: el prompt pide ESE texto exacto y ningún otro.
+        · Sin image_text pero con un objeto escrito en el prompt (periódico,
+          cartel, documento): se exige que lo que se lea sean palabras REALES
+          y correctas, y se desactiva cualquier «unreadable/blurred text» que
+          arrastre el prompt (era la vieja receta y producía garabatos).
 
         EL IDIOMA LO MANDA LA ESCENA: por defecto el del video, pero un papiro
         en arameo dentro de un documental en español debe leerse EN ARAMEO —
         forzar el idioma de la narración sería un error histórico visible en
         pantalla. El director lo indica en image_text_lang."""
         txt = (scene.get("image_text") or "").strip()
-        if not txt:
-            return prompt
         idioma = (scene.get("image_text_lang") or "").strip() or lang
         propio = idioma.strip().lower() != lang.strip().lower()
         detalle = (f'in {idioma} script, historically accurate lettering for '
                    'that language, NOT translated and NOT transliterated'
                    if propio else f'written in {idioma}')
-        return (f'{prompt}. The only legible text in the image is exactly '
-                f'"{txt}" ({detalle}), spelled correctly, integrated '
-                "naturally into the scene (headline, sign or document), "
-                "clean professional typography. No other text or letters "
-                "anywhere.")
+        if txt:
+            return (f'{_drop_illegible(prompt)}. The only legible text in the '
+                    f'image is exactly "{txt}" ({detalle}), spelled '
+                    "correctly, integrated naturally into the scene "
+                    "(headline, sign or document), clean professional "
+                    "typography. No other text or letters anywhere.")
+        if not _shows_text(scene):
+            return prompt
+        return (f"{_drop_illegible(prompt)}. Any text visible in the image "
+                f"must be REAL, correctly spelled words {detalle}, sharp and "
+                "fully readable, with clean typography true to the period — "
+                "never invented glyphs, scrambled letters or gibberish. Keep "
+                "it to a few short words.")
 
     def _safe_prompt() -> str:
         """Plano atmosférico del MISMO mundo visual, sin sujetos: pasa
@@ -1372,8 +1592,8 @@ def run(project, cfg) -> None:
         if _categoria != "ninguna":
             encuadradas.append(scene["id"])
         refs = _scene_refs(scene)
-        # Texto legible SIN personajes del elenco → mejor tipografía
-        if scene.get("image_text") and text_images is not None and not refs:
+        # Texto en pantalla SIN personajes del elenco → mejor tipografía
+        if _shows_text(scene) and text_images is not None and not refs:
             try:
                 text_images.generate(prompt, img)
                 return

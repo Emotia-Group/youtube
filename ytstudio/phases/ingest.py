@@ -11,6 +11,7 @@ Categorías de archivos:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from ytstudio.progress import notify
 from ytstudio.providers import get_llm, get_stt
 from ytstudio.utils.extract import extract_text
 from ytstudio.utils.media import extract_audio, extract_frames
+from ytstudio.utils.text import clean_vocab_hint, strip_bullets_segments
 
 AUDIO_EXT = {".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac", ".aac", ".wma"}
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".mpeg", ".mpg", ".m4v"}
@@ -503,7 +505,9 @@ def run(project, cfg) -> None:
         # extracto se pasa a Whisper como contexto — los nombres propios y
         # tecnicismos del material se transcriben bien en vez de convertirse
         # en la palabra frecuente más parecida.
-        vocab_hint = " ".join(p for p in script_parts if p)[:800]
+        # SOLO palabras en el contexto: con viñetas o numeración, Whisper
+        # copia el formato y devuelve cada frase con su «• » delante.
+        vocab_hint = clean_vocab_hint(" ".join(p for p in script_parts if p))[:800]
         if getattr(stt, "is_mock", False):
             # Sin clave de transcripción real (OPENAI_API_KEY / proveedor STT
             # en ⚙ Configuración) el "mock" NO transcribe tu voz: rellena un
@@ -526,6 +530,10 @@ def run(project, cfg) -> None:
         except (TypeError, ValueError):
             pass
         segments = stt.transcribe_segments(clean, **kw)
+        # RED DE SEGURIDAD: si aun así viniera alguna viñeta (un guion muy
+        # marcado, otro proveedor de transcripción), se quita aquí — de estos
+        # textos salen los subtítulos, los rótulos y el guion.
+        segments = strip_bullets_segments(segments)
         # La sincronía fina de subtítulos/rótulos con la voz REAL se corrige
         # en LAZO CERRADO al generar los subtítulos (se mide sobre el
         # resultado y se corrige con esa medición) — corregir aquí los

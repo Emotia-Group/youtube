@@ -117,8 +117,20 @@ audio:
                              # dramática de cada escena (dB de recorrido)
   sfx: true                  # efectos incidentales en los cortes: whoosh, riser,
                              # boom, papel (archivo/documentos) y latido
-                             # (suspenso), más el 'pop' de los insertos
+                             # (suspenso), más el acento de los insertos
   sfx_db: -18                # volumen de los efectos (propios en assets/sfx)
+  element_sfx: auto          # SONIDO DE LOS INSERTOS documentales (la foto de
+                             # archivo, la cifra animada, el mapa). Paletas:
+                             #   auto     · según el estilo del video
+                             #   archivo  · papel + tic de proyector (documental)
+                             #   sobrio   · un soplo de aire, casi imperceptible
+                             #   epico    · cuerdas breves que crecen
+                             #   oficina  · sello y clic de mecanismo
+                             #   moderno  · el 'pop' de app de siempre
+                             #   ninguno  · los insertos entran mudos
+                             # También admite el nombre de un efecto suelto
+                             # (papel, clic, aire, cuerda, sello, pop) para que
+                             # todos suenen igual.
   ambience: true             # CAMA DE AMBIENTE por actos: el director de sonido
                              # elige el fondo de cada tramo (viento, multitud,
                              # sala, lluvia, mar, fuego, tensión) según lo que se

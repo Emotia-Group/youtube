@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from ytstudio.phases.scenes import load_scenes
 from ytstudio.utils.align import flatten_words, video_time_fn
+from ytstudio.utils.text import strip_bullets
 
 
 def _chunks(text: str, max_chars: int, max_lines: int) -> list[str]:
@@ -120,6 +121,12 @@ def build_cues(scenes: list[dict], max_chars: int, max_lines: int,
                             "text": block})
                 offset += dur
             t += scene["duration"]
+    # Ninguna viñeta llega a pantalla: si la transcripción de un proyecto
+    # anterior arrastra el «• » con que Whisper copiaba el formato del guion,
+    # el subtítulo sale limpio igual (los tiempos no se tocan).
+    for c in cues:
+        c["text"] = "\n".join(strip_bullets(ln) for ln in c["text"].split("\n"))
+    cues = [c for c in cues if c["text"].strip()]
     cues.sort(key=lambda c: c["start"])
     # SIN SOLAPES: cada subtítulo termina antes de que empiece el siguiente.
     # Si dos cues se solapaban, ambos se dibujaban a la vez y aparecía una

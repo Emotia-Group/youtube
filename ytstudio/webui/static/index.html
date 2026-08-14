@@ -1049,7 +1049,10 @@ function showSettings(){
       <label class="f"><span>Ducking automático</span>
         <select id="a-duck"><option value="true" ${CFG.audio.duck?'selected':''}>Activado</option>
         <option value="false" ${!CFG.audio.duck?'selected':''}>Desactivado</option></select></label>
-    </div></div>`;
+      <label class="f"><span>Sonido de los insertos (fotos de archivo, cifras, mapas)</span>
+        <select id="a-insfx">${(CAT.insert_sfx_options||[]).map(o=>`<option value="${o.id}" ${(CFG.audio.element_sfx||'auto')===o.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
+    </div>
+    <div class="muted" style="font-size:12px">En «Automático» el acento lo elige el estilo del video, y dentro de cada paleta la foto, la cifra y el mapa suenan distinto (no el mismo golpe 20 veces).</div></div>`;
   cats.forEach(renderModelPick);
 }
 async function saveKeys(){
@@ -1076,6 +1079,7 @@ async function saveSettings(){
   cfg.video.scene_seconds=+$('#v-ritmo').value||6;
   cfg.language=$('#v-lang').value||'es';
   cfg.audio.music_db=+$('#a-db').value; cfg.audio.duck=$('#a-duck').value==='true';
+  cfg.audio.element_sfx=$('#a-insfx')?.value||'auto';
   for(const catKey of Object.keys(CAT.catalog)){
     const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
     if(!sel)continue;

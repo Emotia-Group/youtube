@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.53.0 -->
+<!-- MANUAL_VERSION: 0.54.0 -->
 
 Guía completa para sacarle el máximo provecho al programa **ahorrando tiempo,
 esfuerzo y dinero**. Está escrita para usarse mientras trabajas: busca tu
@@ -319,9 +319,11 @@ global del 8 % de tu grabación.
 | **Texto en su lengua** | Automático | Si la escena muestra un papiro en arameo o una inscripción en latín, el texto se ve EN ESA lengua, no en la de tu narración |
 | **Auditoría de fidelidad** | Automático, gratis | Antes de generar, avisa si un prompt se dejó fuera un hecho de tu narración (la cantidad exacta o el estado sin vida) |
 | **Insertos documentales** | Automático | Foto real, cifra animada o mapa cuando se menciona algo |
-| **Mapas localizadores** | Automático | Pin animado sobre el lugar narrado |
+| **Mapas localizadores** | Automático | Pin animado sobre cartografía REAL; si no la hay, una imagen del lugar (nunca una ficha vacía) |
 | **Cama de ambiente** | Automático | Viento, multitud, sala… según lo que se narra |
 | **Efectos incidentales** | Automático | whoosh, riser, boom, papel, latido |
+| **Acento de los insertos** | ⚙ Configuración → Audio | Paleta de sonido de las tarjetas: archivo, sobrio, épico, registro, moderno o sin sonido |
+| **Texto legible en la imagen** | Automático | Si en la escena se lee algo (periódico, cartel, lápida), se genera con el modelo de mejor tipografía |
 | **Rótulos con diseño** | Estilo del canal | Placa, filete y palabra clave en color |
 | **Elenco de personajes** | Pestaña Personajes | Misma cara en todas sus escenas |
 | **Personaje narrador (lipsync)** | Pestaña Personajes | Tu presentador en cámara |
@@ -347,6 +349,8 @@ Cada carpeta tiene su README con los nombres correctos.
 | El video costó más de lo estimado | Modelo caro o video IA activo | Revisa §7 |
 | Imágenes que no respetan lo narrado | Prompt ambiguo | Deja `fact_check: true`; corrige el storyboard y rehaz desde Imágenes |
 | Falta un inserto | Sin foto de licencia libre | Añade el archivo al banco y rehaz desde Imágenes |
+| El personaje sale recortado o desincronizado | Clips de una versión anterior | «Rehacer desde Imágenes»: se rehacen solo los clips con la foto o el audio antiguos |
+| El sonido de los insertos no pega con el video | Paleta por defecto | ⚙ Configuración → Audio → Sonido de los insertos |
 | Los subtítulos van desfasados | Proyecto de versión antigua | «Rehacer desde Voz» |
 | No arranca / falta ffmpeg | ffmpeg no instalado | Instálalo (en Windows, en `C:\ffmpeg\bin`) |
 

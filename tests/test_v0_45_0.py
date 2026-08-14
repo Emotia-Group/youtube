@@ -153,8 +153,15 @@ import inspect
 from ytstudio.phases import broll as broll_phase
 
 src = inspect.getsource(broll_phase.run)
-check("T5 el director rutea las escenas con image_text a gpt-image-1",
-      's.get("image_text")' in src and "OpenAIImages(cfg)" in src, "")
+check("T5 el director rutea las escenas con texto a gpt-image-1",
+      "_shows_text(s)" in src and "OpenAIImages(cfg)" in src, "")
+check("T5-bis y desde la v0.54.0 detecta el texto aunque el director no lo "
+      "declare (periódico, cartel, documento en el prompt)",
+      broll_phase._shows_text({"image_text": "CRACK"})
+      and broll_phase._shows_text(
+          {"broll_prompt": "a newspaper front page on a wooden desk"})
+      and not broll_phase._shows_text(
+          {"broll_prompt": "a foggy harbour at dawn, no text"}), "")
 check("T5b solo si hay clave de OpenAI; sin ella, aviso honesto",
       'environ.get("OPENAI_API_KEY")' in src
       and "no hay clave de OpenAI" in src, "")
