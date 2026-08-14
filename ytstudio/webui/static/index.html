@@ -1,1466 +1,905 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ytstudio — creador de videos</title>
+<title>ytstudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
 <style>
-  :root{
-    --bg:#0c0e13; --panel:#141821; --panel2:#1a1f2b; --line:#262d3d;
-    --text:#e8eaf0; --muted:#8b93a7; --accent:#f0b429; --accent2:#e8590c;
-    --ok:#37b24d; --err:#f03e3e; --run:#4dabf7;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;height:100vh;display:flex;overflow:hidden}
-  button{font:inherit;cursor:pointer;border:0;border-radius:8px}
-  input,textarea,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;width:100%}
-  input:focus,textarea:focus,select:focus{outline:1px solid var(--accent)}
-  ::placeholder{color:#5a6178}
-  h1{font-size:19px} h2{font-size:16px;margin-bottom:10px} h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
-  .btn{background:var(--accent);color:#141414;font-weight:600;padding:10px 18px}
-  .btn:hover{filter:brightness(1.08)}
-  .btn.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
-  .btn.small{padding:6px 12px;font-size:13px}
-  .btn:disabled{opacity:.45;cursor:not-allowed}
-
-  /* sidebar */
-  #sidebar{width:250px;min-width:250px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
-  #logo{display:flex;align-items:center;gap:9px;margin-bottom:20px;padding:0 4px}
-  #logo .clap{font-size:24px}
-  #logo small{display:block;color:var(--muted);font-size:11px}
-  .navbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;color:var(--text);padding:9px 10px;border-radius:8px;margin-bottom:4px}
-  .navbtn:hover{background:var(--panel2)}
-  .navbtn.active{background:var(--panel2);color:var(--accent)}
-  #projlist{flex:1;overflow-y:auto;margin-top:6px}
-  #verinfo{font-size:11px;color:var(--muted);padding:8px 10px;border-top:1px solid var(--line);margin-top:8px}
-  #verinfo b{color:var(--ok)}
-  #verinfo.stale b{color:var(--err)}
-  .proj{padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px}
-  .proj:hover{background:var(--panel2)}
-  .proj:hover .projactions{opacity:1}
-  .proj.active{background:var(--panel2);outline:1px solid var(--line)}
-  .proj .name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-  .proj .bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
-  .proj .bar i{display:block;height:100%;background:var(--accent)}
-  .proj.running .bar i{background:var(--run)}
-  .proj.haserror .name{color:var(--err)}
-  .projactions{display:flex;gap:2px;opacity:0;flex-shrink:0}
-  .projactions button{background:none;color:var(--muted);padding:2px 5px;font-size:12px;border-radius:5px}
-  .projactions button:hover{background:var(--panel);color:var(--text)}
-  #projtools{margin:2px 0 8px}
-  #projtools input,#projtools select{padding:6px 9px;font-size:12.5px;margin-bottom:5px}
-
-  /* main */
-  #main{flex:1;overflow-y:auto;padding:26px 34px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
-  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .muted{color:var(--muted);font-size:13px}
-  label.f{display:block;margin-bottom:12px}
-  label.f span{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
-
-  .hidden{display:none !important}
-
-  /* progreso en vivo */
-  #progressbar{margin:8px 0 14px}
-  #progressbar .track{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
-  #progressbar .track i{display:block;height:100%;background:var(--run);transition:width .4s ease}
-  #progressbar .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
-
-  /* fases */
-  #phases{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
-  .phase{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
-  .phase.done{border-color:var(--ok);color:var(--ok)}
-  .phase.failed{border-color:var(--err);color:var(--err)}
-  .phase.running{border-color:var(--run);color:var(--run);animation:pulse 1.2s infinite}
-  @keyframes pulse{50%{opacity:.5}}
-  .banner{border:1px solid var(--accent);background:rgba(240,180,41,.08);border-radius:10px;padding:12px 16px;margin:12px 0;font-size:13.5px}
-  .banner b{color:var(--accent)}
-  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:14px 0}
-  .step{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px}
-  .step b{display:block;color:var(--accent);margin-bottom:4px}
-  .radio-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
-  .radio-row label{display:flex;gap:6px;align-items:center;cursor:pointer;font-size:14px}
-  .radio-row input{width:auto}
-  .upcats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin:10px 0}
-  .upcat{background:var(--panel2);border:1px dashed var(--line);border-radius:10px;padding:12px}
-  .upcat b{display:block;margin-bottom:2px}
-  .upcat .hint{font-size:12px;color:var(--muted);margin-bottom:8px;display:block}
-  .upcat input[type=file]{font-size:12.5px;padding:6px}
-  .filechip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 10px;margin-top:6px;font-size:12.5px}
-  .filechip span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .filechip button{background:none;color:var(--err);font-size:15px;padding:0 2px}
-  .keyfield{display:grid;grid-template-columns:220px 1fr auto;gap:10px;align-items:center;margin-bottom:10px}
-
-  /* log */
-  #log{background:#080a0e;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.7 ui-monospace,monospace;max-height:230px;overflow-y:auto;white-space:pre-wrap;display:none}
-
-  /* tabs */
-  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
-  .tab{background:none;color:var(--muted);padding:9px 16px;border-radius:8px 8px 0 0;font-weight:600}
-  .tab.active{color:var(--accent);background:var(--panel)}
-
-  /* storyboard */
-  .scene{display:flex;gap:16px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
-  .scene img{width:240px;height:135px;object-fit:cover;border-radius:8px;background:#000}
-  .scene .num{color:var(--accent);font-weight:700;font-size:13px}
-  .scene audio{width:100%;height:32px;margin-top:8px}
-  .badge{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:11.5px;color:var(--muted);margin-left:6px}
-
-  /* settings */
-  .provcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
-  .keydot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
-  .keydot.on{background:var(--ok)} .keydot.off{background:var(--err)}
-  .preset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;background:var(--panel2)}
-  .preset.sel{border-color:var(--accent);outline:1px solid var(--accent)}
-  .preset b{display:block;margin-bottom:3px}
-  .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-
-  /* selector de plataforma (tarjetas) y previews con aspecto real */
-  .fmtgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:6px 0 10px}
-  .fmtcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 10px;cursor:pointer;text-align:center;transition:border-color .15s}
-  .fmtcard:hover{border-color:var(--accent)}
-  .fmtcard.active{border-color:var(--accent);outline:1px solid var(--accent)}
-  .fmtcard .ic{font-size:26px;display:block;margin-bottom:4px}
-  .fmtcard .nm{font-size:12.5px;font-weight:600;display:block}
-  .fmtcard .as{font-size:11px;color:var(--muted)}
-  .phase.mini{padding:3px 8px;font-size:11px;opacity:.55}
-  .vframe{display:block;margin:0 auto;background:#000;border-radius:16px;border:1px solid var(--line)}
-  #toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:12px 18px;border-radius:10px;display:none;z-index:50}
-  video{width:100%;max-height:520px;border-radius:10px;background:#000}
-  textarea#scripted{min-height:420px;font:14px/1.7 ui-monospace,monospace}
-  a{color:var(--accent)}
+:root{
+  --bg:#f3f2f2; --surface:#eae9e9; --text:#201f1d; --divider:#d8d5d2;
+  --n300:#e4e1de; --n500:#8f8a83; --n600:#7a756e; --n700:#5d5952; --n800:#3a3733; --n900:#201f1d;
+  --accent:#b68235; --a100:#f6efe4; --a200:#ecdcc4; --a700:#8f6526; --a800:#6d4d1d;
+  --heading:"Cormorant Garamond",Georgia,serif; --body:"Lora",Georgia,serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+html[data-theme="dark"]{
+  --bg:#171614; --surface:#211f1c; --text:#f0eee9; --divider:#35322d;
+  --n300:#3b3833; --n500:#726d65; --n600:#8d877e; --n700:#aaa49a; --n800:#d4cfc7; --n900:#f4f1ec;
+  --accent:#c8974a; --a100:#2a2318; --a200:#3b2f1d; --a700:#d8ab61; --a800:#e5bf80;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:var(--a700);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+h1,h2,h3{font-family:var(--heading);font-weight:400;margin:0;letter-spacing:-0.01em}
+::selection{background:var(--a200)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kicker{font:10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n600)}
+.mono{font:11px var(--mono)}
+.muted{color:var(--n700)}
+.btn{font-family:var(--heading);font-size:14px;background:transparent;color:var(--text);border:1px solid var(--divider);border-radius:4px;padding:7px 13px;cursor:pointer;white-space:nowrap;transition:background .12s}
+.btn:hover{background:var(--a100)}
+.btn:active{border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-primary{border-color:var(--accent);color:var(--a700)}
+.btn-ghost{border-color:transparent;color:var(--n700)}
+.btn-sm{font-size:12px;padding:5px 10px}
+.tag{display:inline-block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--accent);color:var(--a700);padding:4px 7px;border-radius:2px;white-space:nowrap}
+.tag-quiet{border-color:var(--divider);color:var(--n600)}
+.input{width:100%;font-family:var(--body);font-size:14px;background:transparent;color:var(--text);border:1px solid var(--divider);border-radius:4px;padding:9px 11px}
+.input:focus{border-color:var(--accent);outline:none}
+/* Los desplegables NO pueden ser transparentes: el navegador pinta la lista
+   con su propio fondo y, en modo claro, el texto quedaba blanco sobre blanco
+   (ilegible). Fondo y color explícitos, en el select y en cada opción. */
+select.input{background:var(--surface);color:var(--text);appearance:auto}
+select.input option{background:var(--surface);color:var(--text)}
+label.f{display:block;font:10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n600);margin-bottom:6px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-family:var(--heading);font-weight:500;font-size:13px;text-align:left;color:var(--n700);border-bottom:1px solid var(--divider);padding:8px 10px 8px 0}
+td{border-bottom:1px solid var(--divider);padding:10px 10px 10px 0}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--a100)}
+.bar{height:2px;background:var(--n300)}
+.bar>i{display:block;height:2px;background:var(--accent)}
+.plate{border:7px solid var(--surface);outline:1px solid var(--divider);background:repeating-linear-gradient(135deg,var(--n300) 0 7px,var(--surface) 7px 14px)}
+header.top{display:flex;align-items:center;gap:16px;padding:12px 22px;border-bottom:1px solid var(--divider);position:sticky;top:0;background:var(--bg);z-index:20;flex-wrap:wrap}
+nav.main{display:flex;gap:2px}
+nav.main button{font-family:var(--heading);font-size:14px;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--n700);padding:6px 10px;cursor:pointer}
+nav.main button:hover{background:var(--a100)}
+nav.main button[aria-current="true"]{color:var(--a700);border-bottom-color:var(--accent)}
+.seg{display:flex;border:1px solid var(--divider);border-radius:4px;overflow:hidden}
+.seg button{font-family:var(--heading);font-size:12px;background:transparent;border:0;color:var(--n700);padding:6px 11px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--divider)}
+.seg button[aria-pressed="true"]{background:var(--a100);color:var(--a700)}
+main{padding:0}
+.wrap{padding:26px 30px}
+.split{display:grid;gap:0}
+.rail{border-left:1px solid var(--divider);padding:18px 20px}
+.railL{border-right:1px solid var(--divider)}
+.phase{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:baseline;padding:9px 18px;border-top:1px solid var(--divider);font-size:14px}
+.phase.on{background:var(--a100);border-left:2px solid var(--accent)}
+.phase.on .nm{font-family:var(--heading);font-size:17px;color:var(--a800)}
+.phase .n{font:10px var(--mono);color:var(--a700)}
+.phase.todo .n{color:var(--n500)}
+.phase.todo .nm{color:var(--n600)}
+.card{border:1px solid var(--divider);border-radius:4px}
+.warn{border:1px solid var(--accent);border-left:3px solid var(--accent);padding:14px 16px}
+.center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px}
+.log{font:11px/1.85 var(--mono);color:var(--n700);max-height:210px;overflow:auto;white-space:pre-wrap}
+.grid4{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px}
+.hide{display:none!important}
+@media (max-width:1100px){.split{grid-template-columns:1fr!important}.rail,.railL{border:0;border-top:1px solid var(--divider)}}
+@media (max-width:640px){.wrap{padding:18px 16px}header.top{padding:10px 14px;gap:10px}nav.main button{padding:8px 8px;min-height:44px}.btn{min-height:44px}}
 </style>
 </head>
 <body>
-
-<div id="sidebar">
-  <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
-  <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
-  <button class="navbtn" onclick="showLibrary()">📺 Canales y estilos</button>
-  <button class="navbtn" onclick="showManual()">📖 Manual de uso</button>
-  <button class="navbtn" onclick="showEvents()">🧾 Log de eventos</button>
-  <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
-  <h3 style="padding:0 6px">Proyectos</h3>
-  <div id="projtools">
-    <input id="projsearch" placeholder="🔎 Buscar…" oninput="PROJQ=this.value;renderProjList()">
-    <select id="projfilter" onchange="PROJFILTER=this.value;renderProjList()">
-      <option value="all">Todos</option>
-      <option value="running">⏳ En curso</option>
-      <option value="done">✔ Completos</option>
-      <option value="error">⚠ Con errores</option>
-    </select>
+<header class="top">
+  <span style="font-family:var(--heading);font-size:21px;color:var(--n900)">ytstudio</span>
+  <span style="width:1px;height:20px;background:var(--divider)"></span>
+  <nav class="main" id="nav">
+    <button data-go="proyectos" aria-current="true">Proyectos</button>
+    <button data-go="canales">Canales</button>
+    <button data-go="biblioteca">Biblioteca</button>
+    <button data-go="ajustes">Ajustes</button>
+  </nav>
+  <span id="crumb" class="muted" style="font-family:var(--heading);font-size:17px"></span>
+  <span style="flex:1"></span>
+  <span id="ver" class="mono muted"></span>
+  <div class="seg" id="theme">
+    <button data-theme="light" aria-pressed="true">Claro</button>
+    <button data-theme="dark" aria-pressed="false">Oscuro</button>
   </div>
-  <div id="projlist"></div>
-  <div id="verinfo"></div>
+  <button class="btn btn-primary" id="new">Nuevo proyecto</button>
+</header>
+
+<div id="offline" class="hide" style="padding:12px 22px;border-bottom:1px solid var(--divider);background:var(--a100)">
+  <span id="offlineTag" class="tag">Sin conexión al motor</span>
+  <span id="offlineMsg" style="margin-left:10px;font-size:14px">No responde el servidor local. La corrida sigue en disco y se retoma al reconectar.</span>
+  <button class="btn btn-sm" id="retry" style="margin-left:10px">Reintentar</button>
 </div>
 
-<div id="main"></div>
-<div id="toast"></div>
+<main id="view"></main>
 
 <script>
-const $=s=>document.querySelector(s);
-const esc=t=>(t??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let CAT=null, CFG=null, current=null, pollTimer=null, view='home';
-
-async function api(path,opts={}){
-  const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});
-  const data=await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(data.error||r.statusText);
-  return data;
-}
-function toast(msg,ms=2800){const t=$('#toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',ms)}
-
-/* ---------- sidebar ---------- */
-let PROJQ='', PROJFILTER='all';
-const fmtDate=ts=>{
-  if(!ts)return'';
-  const d=new Date(ts*1000),now=new Date();
-  return d.toDateString()===now.toDateString()
-    ?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-    :d.toLocaleDateString([],{day:'2-digit',month:'short'});
+const $ = s => document.querySelector(s);
+const el = (t, a = {}, ...kids) => {
+  const n = document.createElement(t);
+  for (const [k, v] of Object.entries(a)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2).toLowerCase(), v);
+    else n.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) n.append(c.nodeType ? c : String(c));
+  return n;
 };
-async function refreshList(){
-  window._allProjects=await api('/api/projects');
-  renderProjList();
-}
-function renderProjList(){
-  let projects=window._allProjects||[];
-  const q=PROJQ.trim().toLowerCase();
-  if(q)projects=projects.filter(p=>(p.display_name||p.slug).toLowerCase().includes(q));
-  if(PROJFILTER==='running')projects=projects.filter(p=>p.running);
-  else if(PROJFILTER==='done')projects=projects.filter(p=>p.done===p.total&&p.total>0);
-  else if(PROJFILTER==='error')projects=projects.filter(p=>p.has_error);
-  $('#projlist').innerHTML=projects.map(p=>`
-    <div class="proj ${p.slug===current?'active':''} ${p.running?'running':''} ${p.has_error?'haserror':''}" onclick="openProject('${p.slug}')">
-      <div style="display:flex;align-items:center;gap:4px">
-        <div class="name">${p.running?'⏳ ':p.has_error?'⚠ ':''}${esc(p.display_name||p.slug)}</div>
-        <div class="projactions" onclick="event.stopPropagation()">
-          <button title="Duplicar" onclick="duplicateProject('${p.slug}')">⧉</button>
-          <button title="Renombrar" onclick="renameProject('${p.slug}')">✎</button>
-          <button title="Borrar" onclick="deleteProjectFromList('${p.slug}')">🗑</button>
-        </div>
-      </div>
-      <div class="muted">${p.done}/${p.total} fases${p.created_at?' · '+fmtDate(p.created_at):''}</div>
-      <div class="bar"><i style="width:${100*p.done/p.total}%"></i></div>
-    </div>`).join('')||`<div class="muted" style="padding:8px">${q||PROJFILTER!=='all'?'Sin resultados':'Sin proyectos aún'}</div>`;
-}
-async function duplicateProject(slug){
-  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
-  const suggested=`${proj?(proj.display_name||slug):slug} (copia)`;
-  const name=prompt('Nombre para la copia:',suggested);
-  if(name===null)return;  // cancelado
-  const trimmed=name.trim();
-  if(!trimmed){toast('Ponle un nombre a la copia');return}
-  try{
-    const r=await api(`/api/projects/${slug}/duplicate`,{method:'POST',body:JSON.stringify({name:trimmed})});
-    toast('✅ Proyecto duplicado');
-    await refreshList();
-    openProject(r.slug);
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function renameProject(slug){
-  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
-  const cur=proj?(proj.display_name||slug):slug;
-  const name=prompt('Nuevo nombre para el proyecto:',cur);
-  if(name===null)return;
-  const trimmed=name.trim();
-  if(!trimmed)return;
-  try{
-    await api(`/api/projects/${slug}/rename`,{method:'PUT',body:JSON.stringify({name:trimmed})});
-    toast('✅ Renombrado');
-    await refreshList();
-    if(slug===current)await renderProject();  // el panel principal mostraba el nombre viejo
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function deleteProjectFromList(slug){
-  const proj=(window._allProjects||[]).find(x=>x.slug===slug);
-  if(proj&&proj.running){toast('⚠ No se puede borrar mientras se está generando.');return}
-  const name=proj?(proj.display_name||slug):slug;
-  if(!confirm(`¿Borrar el proyecto «${name}» y todos sus archivos generados? Esta acción no se puede deshacer.`))return;
-  try{
-    await api(`/api/projects/${slug}`,{method:'DELETE'});
-    toast('🗑 Proyecto borrado');
-    if(current===slug){current=null;showNew()}
-    refreshList();
-  }catch(e){toast('⚠ '+e.message)}
-}
+const fmtSec = s => s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+const money = v => v == null ? '—' : `$${Number(v).toFixed(2)}`;
+const dateOf = ts => ts ? new Date(ts * 1000).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—';
 
-/* ---------- nuevo proyecto ---------- */
-async function showNew(){
-  view='new';current=null;stopPoll();refreshList();
-  window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
-  const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
-    <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
-         onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
-      <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
-    </div>`).join('');
-  const mock=!CAT.keys.ANTHROPIC_API_KEY;
-  $('#main').innerHTML=`
-  <h1>Nuevo proyecto</h1>
-  <p class="muted">Dale una idea o pega tu guion, y el sistema produce un video largo listo para YouTube: concepto, guion, escenas, voz, imágenes, música, subtítulos y montaje.</p>
-  <div class="steps">
-    <div class="step"><b>1 · Tú aportas</b>una idea, un guion, una nota de voz, una imagen o un video de referencia.</div>
-    <div class="step"><b>2 · La IA produce</b>concepto y estilo, guion, guion gráfico por escenas, voz en off, imágenes y música.</div>
-    <div class="step"><b>3 · Se monta</b>todo se une con animación, subtítulos y música: obtienes el video, la miniatura y los metadatos.</div>
-  </div>
-  ${mock?`<div class="banner">⚠ <b>Modo vista previa activo</b> — sin clave de API, el resultado usa contenido de marcador (para ver cómo funciona). Configura tu clave en ⚙ Configuración para calidad real.</div>`:''}
-  <div class="card">
-    <label class="f"><span>1 · Nombre del proyecto</span>
-      <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
-    <label class="f"><span>1 · ¿Para dónde es este video?</span></label>
-    <div class="fmtgrid">
-      ${Object.entries(CAT.formats||{}).map(([k,f])=>{
-        const parts=f.label.split(' — ');
-        const ic=f.label.trim().split(' ')[0];
-        const nm=parts[0].replace(ic,'').trim();
-        return `<div class="fmtcard ${k==='long'?'active':''}" data-fmt="${k}" onclick="pickFormat('${k}')">
-          <span class="ic">${ic}</span><span class="nm">${esc(nm)}</span>
-          <span class="as">${esc(parts[1]||'')}</span></div>`;
-      }).join('')}
-    </div>
-    <select id="np-format" style="display:none">
-      ${Object.entries(CAT.formats||{}).map(([k,f])=>`<option value="${k}">${esc(f.label)}</option>`).join('')}
-    </select>
-    <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos cortos (Short/Reel/TikTok/Ads) generan con guion de gancho, escenas rápidas, texto grande de apertura, rupturas de patrón y subtítulos quemados — listos para subir.</p>
-    <div id="np-tpl-wrap" style="display:none">
-      <label class="f"><span>🎬 Plantilla del corto (estructura + visuales + sonido en un clic)</span>
-        <select id="np-template" style="width:auto">
-          ${Object.entries(CAT.short_templates||{}).map(([k,t])=>`<option value="${k}" title="${esc(t.hint||'')}">${esc(t.label)}</option>`).join('')}
-        </select></label>
-      <p class="muted" id="np-tpl-hint" style="font-size:12px;margin:2px 0 8px"></p>
-    </div>
-    <label class="f"><span>🧑 Presencia del personaje en pantalla (solo si subes su imagen en «Personaje narrador»)</span>
-      <select id="np-charpres" style="width:auto">
-        <option value="15">~15% — apariciones puntuales</option>
-        <option value="30" selected>~30% — gancho, momentos clave y cierre (recomendado)</option>
-        <option value="45">~45% — muy presente</option>
-        <option value="60">~60% — el video es sobre todo el personaje</option>
-      </select></label>
-    <p class="muted" style="font-size:12px;margin:2px 0 8px">⚠ El lipsync se cobra por segundo de personaje en pantalla: más presencia = más costo (la estimación previa lo refleja). El director decide en QUÉ momentos aparece con criterio narrativo; luego puedes forzarlo escena a escena en el Editor.</p>
-    <label class="f" style="flex-direction:row;align-items:center;gap:8px">
-      <input type="checkbox" id="np-charpip" style="width:auto">
-      <span>🫧 Personaje en BURBUJA: en vez de ocupar la pantalla, el personaje aparece en una burbuja circular sobre el B-roll (estilo reacción de TikTok)</span></label>
-    <label class="f"><span>2 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
-      <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
-    <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
-    ${uploadCatsHtml()}
-    <label class="f"><span>4 · Enlaces de referencia (opcional) — videos de YouTube, Vimeo, Wistia… cuyo estilo quieres replicar (uno por línea). Se analiza el video completo: guion, ritmo de cortes, estructura y estilo visual</span>
-      <textarea id="np-links" rows="2" placeholder="https://www.youtube.com/watch?v=…&#10;https://vimeo.com/…"></textarea></label>
-    <h3>5 · Canal y estilo guardado (opcional) — reutiliza un estilo de tu biblioteca sin re-analizar nada</h3>
-    <div class="row">
-      <select id="np-channel" style="width:auto" onchange="fillStyleOptions()">
-        <option value="">Sin canal</option>
-        ${(window._lib.channels||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
-      </select>
-      <select id="np-style" style="width:auto"></select>
-      <span class="muted" style="font-size:12px">Gestiónalos en «📺 Canales y estilos»</span>
-    </div>
-    <h3>6 · Estilo del video (se ignora si elegiste un estilo guardado)</h3>
-    <div class="presets">${presets}</div>
-    <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
-  </div>`;
-  window._pending=[];
-  fillStyleOptions();
-}
-function fillStyleOptions(){
-  const sel=$('#np-style');if(!sel)return;
-  const ch=$('#np-channel')?.value||'';
-  const styles=(window._lib?.styles||[]).filter(s=>!ch||s.channel_id===ch);
-  sel.innerHTML=`<option value="">Sin estilo guardado (se crea uno nuevo)</option>`
-    +styles.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
-  // si el canal tiene un único estilo, preseleccionarlo
-  if(ch&&styles.length===1)sel.value=styles[0].id;
-}
+const S = { screen: 'proyectos', slug: null, cfg: null, projects: [], detail: null, run: null, lib: null, script: null, timer: null, offline: false, fail: null };
 
-const UPLOAD_CATS=[
-  ['guion','📄 Guion o idea','Documentos con tu guion: PDF, Word (.docx), PowerPoint, Excel, .txt, .md','.txt,.md,.pdf,.docx,.doc,.pptx,.xlsx,.xls'],
-  ['voz','🎙 Tu voz / narración','Si subes tu narración grabada, se usa TAL CUAL en el video: se recortan los silencios largos y cada escena se alinea a lo que dices (mp3, wav, m4a…)','audio/*'],
-  ['broll','🎬 Tu B-roll (imágenes y videos)','Tus propias imágenes/videos: se usan directamente en el montaje del video','image/*,video/*'],
-  ['referencia','🎨 Referencia de estilo','Imagen, video o documento (PDF, docx…) cuyo estilo/tema quieres imitar: se analiza con IA','image/*,video/*,.pdf,.docx,.doc,.pptx,.txt,.md'],
-  ['personaje','🧑 Personaje narrador','La imagen del personaje que narrará EN CÁMARA con lipsync sobre tu voz (foto frontal clara). El director lo intercala con B-roll según el % de presencia que elijas','image/*'],
-  ['reaccion','🎭 Tu video de reacción','Grábate reaccionando al contenido (con o sin pantalla verde: se detecta sola). Te compondremos sobre el video TODO el tiempo: recortado por chroma si hay fondo verde, o en burbuja circular si no','video/*'],
-];
-function uploadCatsHtml(){
-  return `<div class="upcats">${UPLOAD_CATS.map(([k,label,hint,accept])=>`
-    <div class="upcat"><b>${label}</b><span class="hint">${hint}</span>
-      <input type="file" multiple accept="${accept}" onchange="addPending('${k}',this)">
-      <div id="chips-${k}"></div>
-    </div>`).join('')}</div>`;
-}
-function addPending(cat,input){
-  window._pending=window._pending||[];
-  for(const f of input.files){
-    if(f.size>300*1024*1024){toast(`«${f.name}» supera 300 MB — omitido`);continue}
-    window._pending.push({file:f,category:cat});
+async function api(path, opts) {
+  const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!r.ok) {
+    let msg = `Error ${r.status}`;
+    try { msg = (await r.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
   }
-  input.value='';
-  renderChips();
+  return r.json();
 }
-function removePending(i){window._pending.splice(i,1);renderChips()}
-function renderChips(){
-  UPLOAD_CATS.forEach(([k])=>{const el=$('#chips-'+k);if(el)el.innerHTML=''});
-  (window._pending||[]).forEach((p,i)=>{
-    const el=$('#chips-'+p.category);
-    if(el)el.insertAdjacentHTML('beforeend',
-      `<div class="filechip"><span title="${esc(p.file.name)}">${esc(p.file.name)}</span>
-       <em class="muted" style="font-size:11px">${(p.file.size/1048576).toFixed(1)} MB</em>
-       <button title="Quitar" onclick="removePending(${i})">✕</button></div>`);
+async function safe(fn) {
+  try { const v = await fn(); setFail(null); return v; }
+  catch (e) {
+    setFail(e instanceof TypeError
+      ? { kind: 'offline', text: 'No responde el servidor local. La corrida sigue en disco y se retoma al reconectar.' }
+      : { kind: 'server', text: e.message });
+  }
+}
+function setFail(f) {
+  S.fail = f;
+  S.offline = !!f;
+  const box = $('#offline');
+  box.classList.toggle('hide', !f);
+  if (f) {
+    $('#offlineTag').textContent = f.kind === 'offline' ? 'Sin conexión al motor' : 'El servidor respondió con error';
+    $('#offlineMsg').textContent = f.text;
+  }
+}
+function setOffline(v) { setFail(v ? { kind: 'offline', text: 'No responde el servidor local.' } : null); }
+
+/* ---------- tema ---------- */
+const theme = localStorage.getItem('ytstudio.theme') || 'light';
+applyTheme(theme);
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('ytstudio.theme', t);
+  for (const b of $('#theme').children) b.setAttribute('aria-pressed', String(b.dataset.theme === t));
+}
+$('#theme').addEventListener('click', e => { const b = e.target.closest('button'); if (b) applyTheme(b.dataset.theme); });
+
+/* ---------- navegación ---------- */
+$('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) go(b.dataset.go); });
+$('#new').addEventListener('click', () => go('nuevo'));
+$('#retry').addEventListener('click', boot);
+
+function go(screen, slug) {
+  S.screen = screen;
+  if (slug !== undefined) S.slug = slug;
+  clearInterval(S.timer); S.timer = null;
+  for (const b of $('#nav').children) {
+    const own = { proyectos: ['proyectos', 'nuevo', 'corrida', 'guion', 'escenas', 'personajes', 'metadatos'], canales: ['canales'], biblioteca: ['biblioteca'], ajustes: ['ajustes'] }[b.dataset.go];
+    b.setAttribute('aria-current', String(own.includes(screen)));
+  }
+  $('#crumb').textContent = ['corrida', 'guion', 'escenas', 'personajes', 'metadatos'].includes(screen) ? (S.detail?.display_name || S.slug || '') : '';
+  render();
+  if (['escenas', 'personajes', 'metadatos'].includes(screen) && !S.detail) pollRun();
+  if (screen === 'corrida') { pollRun(); S.timer = setInterval(pollRun, 2500); }
+  if (screen === 'canales') loadLibrary();
+  if (screen === 'guion') loadScript();
+}
+
+/* ---------- carga ---------- */
+async function boot() {
+  await safe(async () => {
+    S.cfg = await api('/api/config');
+    $('#ver').textContent = [S.cfg.version?.version, S.cfg.version?.date].filter(Boolean).join(' · ');
+    S.projects = await api('/api/projects');
   });
+  render();
 }
-function readB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f)})}
-async function createProject(){
-  const slug=$('#np-slug').value.trim(), text=$('#np-text').value.trim();
-  const links=($('#np-links')?.value||'').split(/\s+/).map(s=>s.trim()).filter(s=>/^https?:\/\//.test(s));
-  const pending=window._pending||[];
-  if(!slug){toast('Ponle un nombre al proyecto');return}
-  if(!text&&!pending.length&&!links.length){toast('Escribe una idea/guion, sube un archivo o añade un enlace');return}
-  const btn=document.querySelector('button.btn[onclick="createProject()"]');
-  if(btn){btn.disabled=true;btn.textContent='Subiendo…'}
-  try{
-    const files=[];
-    for(const p of pending){
-      files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
-    }
-    const r=await api('/api/projects',{method:'POST',body:JSON.stringify(
-      {slug,text,files,links,style_preset:document.querySelector('.preset.sel')?.dataset.k,
-       format:$('#np-format')?.value||'long',short_template:$('#np-template')?.value||'libre',
-       character_presence:parseInt($('#np-charpres')?.value||'30'),character_pip:!!$('#np-charpip')?.checked,
-       channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
-    toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
-    openProject(r.slug);
-  }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}
-}
-
-/* ---------- proyecto ---------- */
-async function openProject(slug){
-  view='project';current=slug;refreshList();
-  await renderProject();startPoll();
-}
-function phaseLabel(name){return (CAT.phases.find(p=>p.name===name)||{}).label||name}
-function phaseChipsHtml(p,curPhase){
-  const light=new Set(['ingest','concept','music','subtitles','publish']);
-  const isShort=(window._proj&&window._proj.format||'long')!=='long';
-  return CAT.phases.map(ph=>{
-    let st=p.phases[ph.name];
-    const isCur=curPhase===ph.name;
-    const cls=isCur?'running':(st==='done'?'done':st==='failed'?'failed':'');
-    const icon=isCur?'⏳':({done:'✔',failed:'✖'}[st]||'·');
-    const mini=isShort&&light.has(ph.name)&&cls!=='running'&&cls!=='failed'?' mini':'';
-    return `<div class="phase ${cls}${mini}" title="${esc(ph.desc)}">${icon} ${esc(ph.label)}</div>`;
-  }).join('');
-}
-async function renderProject(activeTab){
-  const p=await api('/api/projects/'+current);
-  window._proj=p;
-  const running=p.running;
-  const mock=!CAT.keys.ANTHROPIC_API_KEY;
-  const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
-  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Editor','✂'],['Video','▶'],['Concepto','💡'],['Archivos','📎']];
-  const tab=activeTab||window._tab||'Guion';window._tab=tab;
-  $('#main').innerHTML=`
-  <div class="row" style="justify-content:space-between">
-    <h1>🎬 ${esc(p.display_name||current)} ${fmtBadges(p)}</h1>
-    <div class="row">
-      <select id="run-to" style="width:auto" title="Hasta dónde generar">
-        <option value="">Generar el video completo</option>
-        <option value="script">Solo el guion (revisar antes)</option>
-        <option value="scenes">Hasta el guion gráfico</option>
-      </select>
-      <button class="btn" id="btn-run" ${running?'disabled':''} onclick="runPipeline()">${running?'⏳ Generando…':'▶ Generar video'}</button>
-      <select id="run-from" style="width:auto" onchange="rerunFrom(this.value)" ${running?'disabled':''} title="Rehacer desde un paso">
-        <option value="">Rehacer desde…</option>
-        ${CAT.phases.map(ph=>`<option value="${ph.name}">${esc(ph.label)}</option>`).join('')}
-      </select>
-      <button class="btn sec small" title="Borrar proyecto" ${running?'disabled':''} onclick="deleteProject()">🗑</button>
-    </div>
-  </div>
-  ${mock?`<div class="banner">⚠ <b>Modo vista previa</b> — no hay clave de API configurada (<code>ANTHROPIC_API_KEY</code>), así que el video se generará con contenido de marcador (voz silenciosa, imágenes de relleno). Tu guion <b>sí se respeta</b>. Para calidad real, añade tu clave en el archivo <code>.env</code> y elige los proveedores en ⚙ Configuración.</div>`:''}
-  <div class="muted" style="margin:6px 0 2px">Progreso — se generan 11 pasos en orden${running&&p.phase?`. Ahora: <b style="color:var(--run)">${esc(phaseLabel(p.phase))}</b>`:''}:</div>
-  <div id="phases">${phaseChipsHtml(p,running?p.phase:null)}</div>
-  <div id="progressbar" class="${running?'':'hidden'}">
-    <div class="track"><i style="width:0%"></i></div>
-    <div class="lbl"><span id="progresspct">0%</span><span id="progresseta"></span></div>
-  </div>
-  ${p.total_duration?`<div class="muted">Duración estimada: ${Math.round(p.total_duration)}s · ${p.scene_count||0} escenas</div>`:''}
-  <div id="estimate"></div>
-  ${failed&&!running?`<div class="card" style="border-color:var(--err)">✖ Se detuvo en el paso <b>${esc(phaseLabel(failed[0]))}</b>:<br><span class="muted">${esc(p.phase_info[failed[0]]?.error||'')}</span><br><br>Corrige lo indicado y pulsa <b>▶ Generar video</b> para reanudar desde ahí.</div>`:''}
-  ${(p.warnings||[]).map(w=>`<div class="banner">⚠ ${esc(w)}</div>`).join('')}
-  ${usageTimeHtml(p)}
-  <pre id="log"></pre>
-  <div class="tabs" style="margin-top:16px">${tabs.map(([t,ic])=>`<button class="tab ${t===tab?'active':''}" onclick="switchTab('${t}')">${ic} ${t}</button>`).join('')}</div>
-  <div id="tabbody"></div>`;
-  if(running){$('#log').style.display='block'}
-  renderTab(tab,p);
-  loadEstimate(current);
-}
-function switchTab(t){window._tab=t;renderProject(t)}
-function pickFormat(k){
-  const sel=$('#np-format');if(sel)sel.value=k;
-  document.querySelectorAll('.fmtcard').forEach(c=>c.classList.toggle('active',c.dataset.fmt===k));
-  toggleTplSel();
-}
-function aspectOf(p){
-  const a=p.video_aspect||{w:1920,h:1080};
-  return {w:a.w,h:a.h,vert:a.h>a.w,short:(p.format||'long')!=='long'};
-}
-function thumbStyle(p,base){
-  const a=aspectOf(p);
-  const wpx=a.vert?120:(a.w===a.h?170:base||240);
-  return `width:${wpx}px;height:auto;aspect-ratio:${a.w}/${a.h};object-fit:cover`;
-}
-function fmtBadges(p){
-  const f=CAT.formats?.[p.format];
-  const t=p.short_template&&p.short_template!=='libre'?CAT.short_templates?.[p.short_template]:null;
-  return (f&&p.format!=='long'?`<span class="badge" style="border-color:var(--accent);color:var(--accent)">${esc(f.label)}</span>`:'')
-       +(t?`<span class="badge">${esc(t.label)}</span>`:'');
-}
-function toggleTplSel(){
-  const f=$('#np-format')?.value||'long';
-  const wrap=$('#np-tpl-wrap');if(!wrap)return;
-  const short=!!(CAT.formats?.[f]?.short);
-  wrap.style.display=short?'block':'none';
-  const sel=$('#np-template'),hint=$('#np-tpl-hint');
-  if(sel&&hint){const upd=()=>{hint.textContent=CAT.short_templates?.[sel.value]?.hint||''};sel.onchange=upd;upd();}
-}
-
-async function loadEstimate(slug){
-  const el=$('#estimate');if(!el)return;
-  try{
-    const e=await api(`/api/projects/${slug}/estimate`);
-    if(!el.isConnected)return;
-    const mid=e.total_costo_medio??((e.total_costo[0]+e.total_costo[1])/2);
-    const midmin=e.total_min_medio??((e.total_minutos[0]+e.total_minutos[1])/2);
-    const costTxt=mid<0.01?'gratis':`~$${mid.toFixed(2)}`;
-    const mins=r=>r[0]===r[1]?`${r[1]} min`:`${r[0]}–${r[1]} min`;
-    // Compacto por defecto: un número aproximado, no un rango ancho que no
-    // dice mucho. El desglose por fase queda un clic más allá.
-    el.innerHTML=`<div class="card" style="font-size:13px;padding:12px 16px">
-      <div class="row" style="justify-content:space-between;cursor:pointer" onclick="this.parentElement.querySelector('.estdetail').classList.toggle('hidden');this.querySelector('.estchevron').textContent=this.parentElement.querySelector('.estdetail').classList.contains('hidden')?'▸':'▾'">
-        <span><b>💰 Estimado antes de generar:</b> ${costTxt} · ⏱ ~${Math.round(midmin)} min
-          <span class="muted" style="font-size:11px">(${e.escenas} escenas · ~${e.duracion_min} min de video)</span></span>
-        <span class="estchevron muted">▸</span>
-      </div>
-      <div class="estdetail hidden" style="margin-top:8px">
-        <table style="width:100%;border-collapse:collapse">
-          ${e.items.map(i=>`<tr>
-            <td style="padding:3px 8px 3px 0">${esc(i.fase)}<br><span class="muted" style="font-size:11px">${esc(i.detalle)}</span></td>
-            <td style="text-align:right;white-space:nowrap;vertical-align:top;padding-top:3px" class="muted">${i.costo[1]===0?'gratis':`$${i.costo[0].toFixed(2)}–$${i.costo[1].toFixed(2)}`}</td>
-            <td style="text-align:right;white-space:nowrap;vertical-align:top;padding:3px 0 0 12px" class="muted">${mins(i.minutos)}</td>
-          </tr>`).join('')}
-        </table>
-        ${e.notas.map(n=>`<div class="muted" style="font-size:11px;margin-top:5px">ℹ ${esc(n)}</div>`).join('')}
-      </div>
-    </div>`;
-  }catch(err){el.innerHTML=''}
-}
-
-function usageTimeHtml(p){
-  const u=p.usage_report,t=p.time_report;
-  if(!u&&!t)return'';
-  const fmtSec=s=>s==null?'—':s<60?`${Math.round(s)}s`:`${Math.floor(s/60)} min ${Math.round(s%60)}s`;
-  const rows=(u?.by_provider||[]).map(pr=>`
-    <tr><td style="padding:3px 8px 3px 0">${esc(pr.provider)}</td>
-      <td style="text-align:right;white-space:nowrap" class="muted">${pr.details.length} llamada(s)</td>
-      <td style="text-align:right;white-space:nowrap;padding-left:12px">${pr.usd<0.01&&pr.usd>0?'<$0.01':'$'+pr.usd.toFixed(2)}</td></tr>`).join('');
-  return `<div class="card" style="font-size:13px;padding:12px 16px">
-    <b>📊 Gasto real de este proyecto</b>
-    <span class="muted" style="font-size:11px">(lo que de verdad se consumió — no una predicción)</span>
-    ${u?`<table style="width:100%;margin-top:8px;border-collapse:collapse">${rows}
-      <tr><td colspan="3" style="border-top:1px solid rgba(128,128,128,.35);padding:0"></td></tr>
-      <tr style="font-weight:bold"><td style="padding-top:5px">Total real</td><td></td>
-        <td style="text-align:right;padding-top:5px">$${u.total_usd.toFixed(2)}</td></tr>
-    </table>`:'<div class="muted" style="margin-top:6px">Sin proveedores de pago usados todavía.</div>'}
-    ${t?`<div class="muted" style="margin-top:8px">⏱ Última ejecución: <b style="color:var(--text)">${fmtSec(t.last_run_seconds)}</b>
-      · Tiempo total invertido en este proyecto: <b style="color:var(--text)">${fmtSec(t.total_seconds)}</b></div>`:''}
-  </div>`;
-}
-
-async function setBrollPolicy(patch){
-  try{
-    await api(`/api/projects/${current}/broll-policy`,{method:'PUT',body:JSON.stringify(patch)});
-    if('review' in patch) toast(patch.review?'Revisión del director activada':'Revisión desactivada (ahorro de tokens)');
-    else if('auto_replace' in patch) toast(patch.auto_replace?'El director reemplazará el B-roll que no encaje':'Se respetará siempre tu B-roll');
-    await renderProject('Storyboard');  // refresca el estado (habilitar/deshabilitar)
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function uploadSceneBroll(sid,input){
-  const f=input.files[0];if(!f)return;
-  if(f.size>300*1024*1024){toast('El archivo supera 300 MB');input.value='';return}
-  toast('Subiendo…',1500);
-  try{
-    const data_base64=await readB64(f);
-    const r=await api(`/api/projects/${current}/scenes/${sid}/broll`,{method:'POST',
-      body:JSON.stringify({file:{name:f.name,data_base64}})});
-    toast(r.downgrade?'✅ Imagen subida (la escena era de video → se usa como imagen con movimiento)':'✅ B-roll subido a la escena '+sid);
-    await renderProject('Storyboard');
-  }catch(e){toast('⚠ '+e.message)}
-  input.value='';
-}
-async function deleteSceneBroll(sid){
-  if(!confirm(`¿Quitar tu B-roll de la escena ${sid}? Se generará con IA al montar.`))return;
-  try{
-    await api(`/api/projects/${current}/scenes/${sid}/broll`,{method:'DELETE'});
-    toast('Quitado — esa escena se generará con IA');
-    await renderProject('Storyboard');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function renderTab(tab,p){
-  const el=$('#tabbody');
-  if(tab==='Guion'){
-    if(!p.has_script){el.innerHTML='<div class="card muted">Aún no hay guion. Ejecuta el pipeline (puedes elegir "Solo hasta el guion" para revisarlo antes de producir).</div>';return}
-    const s=await api(`/api/projects/${current}/script`);
-    el.innerHTML=`<div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <span class="muted">Edita libremente — al guardar se regeneran las fases posteriores.</span>
-        <button class="btn small" onclick="saveScript()">💾 Guardar guion</button></div>
-      <textarea id="scripted">${esc(s.content)}</textarea></div>`;
-  }
-  else if(tab==='Storyboard'){
-    if(!p.scenes){el.innerHTML='<div class="card muted">Aún no hay escenas (fase «scenes»).</div>';return}
-    const manual=p.manual_broll||{};
-    el.innerHTML=`
-      <div class="card" style="padding:12px 16px;font-size:13px">
-        <b>🎬 Tu B-roll por escena (opcional)</b>
-        <p class="muted" style="margin:4px 0 6px">Sube tu propia imagen o video a las escenas que quieras — reutiliza B-roll de pruebas anteriores y ahorra tiempo y créditos. Lo que no subas, se genera con IA. Cada escena acepta el tipo que decidió el director (🎞 video o 🖼 imagen). Nada de esto afecta la voz, los subtítulos ni los tiempos.</p>
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:5px">
-          <input type="checkbox" style="width:auto" ${p.broll_review!==false?'checked':''} onchange="setBrollPolicy({review:this.checked})">
-          <span class="muted">El director <b>revisa con visión IA</b> si tu B-roll encaja con cada escena (consume algunos tokens). Desactívalo para ahorrar: tu material se usa tal cual, sin revisión.</span>
-        </label>
-        <label style="display:flex;gap:8px;align-items:center;cursor:${p.broll_review!==false?'pointer':'not-allowed'};opacity:${p.broll_review!==false?'1':'.5'}">
-          <input type="checkbox" style="width:auto" ${p.broll_auto_replace?'checked':''} ${p.broll_review!==false?'':'disabled'} onchange="setBrollPolicy({auto_replace:this.checked})">
-          <span class="muted">Si la revisión está activa, dejar que el director <b>reemplace por IA</b> el B-roll que juzgue que no encaja (si no, se respeta siempre tu elección y solo avisa).</span>
-        </label>
-      </div>`
-    + p.scenes.map(s=>{
-      const mb=manual[String(s.id)];
-      const rev=mb&&mb.review;
-      const isVideo=s.broll_type==='video';
-      const accept=isVideo?'video/*,image/*':'image/*';
-      const thumb=s.broll_image?`/files/${current}/06_broll/${s.broll_image}?v=${p.done}`:'';
-      return `
-      <div class="scene">
-        ${thumb?`<img src="${thumb}" loading="lazy" style="${thumbStyle(p)}">`:`<div style="width:${aspectOf(p).vert?120:240}px" class="muted">sin imagen aún</div>`}
-        <div style="flex:1">
-          <div class="num">ESCENA ${s.id} — ${esc(s.section)}
-            ${s.shot==='personaje'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">🧑 personaje</span>':''}
-            ${(s.characters||[]).map(n=>`<span class="badge">👥 ${esc(n)}</span>`).join('')}
-            <span class="badge">${s.animation}</span><span class="badge">${isVideo?'🎞 video':'🖼 imagen'}</span>
-            ${s.duration?`<span class="badge">${s.duration.toFixed(1)}s</span>`:''}
-            ${s.broll_source==='manual'?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">tu B-roll</span>':''}</div>
-          <p style="margin:6px 0">${esc(s.narration)}</p>
-          <div class="muted" style="font-size:12px">🎨 ${esc(s.broll_prompt)}</div>
-          ${s.overlay?`<div class="muted">🔤 Rótulo <span class="badge">${esc(s.overlay.type)}</span> ${s.overlay.kicker?`<small>${esc(s.overlay.kicker)} · </small>`:''}<b>${esc(s.overlay.text)}</b></div>`:(s.on_screen_text?`<div class="muted">🔤 Texto en pantalla: <b>${esc(s.on_screen_text)}</b></div>`:'')}
-          ${(s.sfx||s.pause_after)?`<div class="muted" style="font-size:12px">${s.sfx?`🔊 ${esc(s.sfx)} `:''}${s.pause_after?`⏸ respiro ${s.pause_after}s`:''}</div>`:''}
-          <div class="brollbox" style="margin-top:8px">
-            ${mb?`<div class="row" style="gap:8px">
-                <span class="badge">📎 ${esc(mb.orig||mb.file)}</span>
-                <button class="btn sec small" onclick="deleteSceneBroll(${s.id})">✕ Quitar (se generará con IA)</button>
-              </div>
-              ${rev?`<div class="muted" style="font-size:12px;margin-top:4px;color:${rev.fits?'var(--ok)':'var(--err)'}">${rev.fits?'✓ El director aprobó este B-roll para la escena.':'⚠ El director cree que NO encaja: '+esc(rev.reason)}</div>`:`<div class="muted" style="font-size:12px;margin-top:4px">${p.broll_review!==false?'Se revisará al generar.':'Revisión desactivada — se usa tal cual.'}</div>`}`
-            :`<label class="btn sec small" style="display:inline-block">⬆ Subir ${isVideo?'video o imagen':'imagen'} para esta escena
-                <input type="file" accept="${accept}" style="display:none" onchange="uploadSceneBroll(${s.id},this)"></label>
-              <span class="muted" style="font-size:11px;margin-left:6px">o se genera con IA</span>`}
-          </div>
-          ${s.vo_file?`<audio controls preload="none" src="/files/${current}/05_voiceover/${s.vo_file}" style="margin-top:8px"></audio>`:''}
-        </div>
-      </div>`;}).join('');
-  }
-  else if(tab==='Editor'){
-    if(!p.scenes){el.innerHTML='<div class="card muted">Aún no hay escenas (fase «scenes»).</div>';return}
-    const userVoice=p.scenes.some(s=>s.audio_start!==undefined&&s.audio_start!==null);
-    const ANIMS=[['zoom_in','Zoom in'],['zoom_out','Zoom out'],['pan_left','Paneo ←'],['pan_right','Paneo →'],['static','Estática']];
-    const TRANS=[['corte','Corte'],['fundido','Fundido']];
-    const SFXS=[['ninguno','—'],['whoosh','Whoosh'],['riser','Riser'],['boom','Boom']];
-    const OVTYPES=['personaje','lugar','fecha','dato','lista','conclusion'];
-    el.innerHTML=`
-      <div class="card" style="padding:12px 16px;font-size:13px">
-        <b>✂ Editor de escenas</b>
-        <p class="muted" style="margin:4px 0 0">Ajusta rótulos, movimiento de cámara, transiciones, efectos y arco musical de cada escena — y ${userVoice?'':'la duración de cada escena — '}luego «Aplicar» y remontar: solo se rehace el montaje (rápido y sin costo de IA). ${userVoice?'Las duraciones y el orden los manda tu narración (edítalos regrabando la voz).':'Con voz TTS también puedes alargar/acortar escenas.'} La narración se edita en la pestaña Guion.</p>
-      </div>
-      <div id="ed-scenes">`+
-      p.scenes.map(s=>{
-        const thumb=s.broll_image?`/files/${current}/06_broll/${s.broll_image}?v=${p.done}`:'';
-        const ov=s.overlay||{};
-        return `
-        <div class="scene ed" data-id="${s.id}" style="align-items:flex-start">
-          ${thumb?`<img src="${thumb}" loading="lazy" style="${thumbStyle(p,170)}">`:'<div style="width:120px" class="muted">sin imagen</div>'}
-          <div style="flex:1">
-            <div class="num">ESCENA ${s.id} — ${esc(s.section)} <span class="badge">${(s.duration||0).toFixed(1)}s</span></div>
-            <p class="muted" style="margin:4px 0;font-size:12px">${esc((s.narration||'').slice(0,140))}${(s.narration||'').length>140?'…':''}</p>
-            <div class="row" style="gap:8px;flex-wrap:wrap;font-size:12px">
-              ${p.has_character?`<label title="Quién ocupa la pantalla: el personaje hablando (lipsync, tiene costo por segundo) o B-roll ilustrativo">🧑 <select class="ed-shot"><option value="broll" ${s.shot!=='personaje'?'selected':''}>🎞 B-roll</option><option value="personaje" ${s.shot==='personaje'?'selected':''}>🧑 Personaje</option></select></label>`:''}
-              <label>🎥 <select class="ed-anim">${ANIMS.map(([v,l])=>`<option value="${v}" ${s.animation===v?'selected':''}>${l}</option>`).join('')}</select></label>
-              <label>🔀 <select class="ed-trans">${TRANS.map(([v,l])=>`<option value="${v}" ${s.transition===v?'selected':''}>${l}</option>`).join('')}</select></label>
-              <label>🔊 <select class="ed-sfx">${SFXS.map(([v,l])=>`<option value="${v}" ${(s.sfx||'ninguno')===v?'selected':''}>${l}</option>`).join('')}</select></label>
-              <label title="Intensidad musical de la escena (0 = mínima, 1 = clímax)">🎵 <input type="range" class="ed-mi" min="0" max="1" step="0.05" value="${s.music_intensity??0.55}" style="width:90px;vertical-align:middle"></label>
-              ${!userVoice?`<label title="Duración de la escena en segundos">⏱ <input type="number" class="ed-dur" min="1" max="60" step="0.5" value="${(s.duration||0).toFixed(1)}" style="width:64px"></label>`:''}
-            </div>
-            <div class="row" style="gap:8px;margin-top:6px;font-size:12px;flex-wrap:wrap">
-              <label>🔤 Rótulo <input class="ed-ovtext" placeholder="(sin rótulo)" value="${esc(ov.text||'')}" maxlength="44" style="width:180px"></label>
-              <label>encabezado <input class="ed-ovkick" placeholder="opcional" value="${esc(ov.kicker||'')}" maxlength="36" style="width:130px"></label>
-              <label>tipo <select class="ed-ovtype">${OVTYPES.map(t=>`<option ${((ov.type||'dato')===t)?'selected':''}>${t}</option>`).join('')}</select></label>
-            </div>
-          </div>
-        </div>`;}).join('')+`</div>
-      <div class="row" style="margin-top:10px;gap:10px">
-        <button class="btn" onclick="applySceneEdits()">💾 Aplicar cambios</button>
-        <span class="muted" style="font-size:12px">Después de aplicar, se te ofrecerá remontar (solo montaje, sin regenerar voz ni imágenes).</span>
-      </div>`;
-  }
-  else if(tab==='Video'){
-    if(!p.final_video){el.innerHTML='<div class="card muted">El video final aparecerá aquí al terminar la fase de montaje.</div>';return}
-    const m=p.metadata_full||{};
-    el.innerHTML=`<div class="card">
-      ${(()=>{const a=aspectOf(p);
-        return a.vert||a.w===a.h||a.w<a.h
-          ?`<video controls class="vframe" src="/files/${current}/${p.final_video}" style="aspect-ratio:${a.w}/${a.h};max-height:72vh;width:auto;max-width:100%"></video>`
-          :`<video controls src="/files/${current}/${p.final_video}" style="width:100%"></video>`;})()}
-      <div class="row" style="margin-top:14px;align-items:flex-start">
-        <div style="flex:1;min-width:280px">${metaOptionsHtml(p,m)}</div>
-      </div>
-      <br><div class="muted">Archivos: <a href="/files/${current}/${p.final_video}" download>video_final.mp4</a> ·
-        <a href="/files/${current}/08_subtitles/subtitulos.srt" download>subtitulos.srt</a> ·
-        ${p.thumbnail?`<a href="/files/${current}/${p.thumbnail}" download>miniatura.jpg</a>`:''}</div>
-    </div>`;
-  }
-  else if(tab==='Archivos'){
-    const catLabel={guion:'📄 Guion',voz:'🎙 Voz',broll:'🎬 B-roll propio',referencia:'🎨 Referencia',personaje:'🧑 Personaje',reaccion:'🎭 Reacción'};
-    const cast=(p.characters_roster||[]).map(c=>`
-      <div class="scene" style="align-items:center">
-        ${(c.files||[]).slice(0,3).map(f=>`<img src="/files/${current}/01_input/${f}" style="width:64px;height:64px;object-fit:cover;border-radius:6px">`).join('')}
-        ${!(c.files||[]).length?'<span class="badge">referencia autogenerada</span>':''}
-        <div style="flex:1">
-          <b>${esc(c.name)}</b> ${c.narrator?'<span class="badge" style="border-color:var(--ok);color:var(--ok)">🎙 narrador (lipsync)</span>':''}
-          <span class="badge">${(c.files||[]).length} foto(s)</span>
-          <div class="muted" style="font-size:12px">${esc(c.description||'')}</div>
-        </div>
-        <label class="btn sec small" style="display:inline-block">＋ fotos
-          <input type="file" accept="image/*" multiple style="display:none" onchange="charAddFiles('${c.id}',this)"></label>
-        ${!c.narrator?`<button class="btn sec small" onclick="charUpdate('${c.id}',{narrator:true})">hacer narrador</button>`:''}
-        <button class="btn sec small" onclick="charDelete('${c.id}')">✕</button>
-      </div>`).join('');
-    const castBlock=`
-      <div class="card">
-        <b>🧑 Elenco del video — personajes con identidad visual consistente</b>
-        <p class="muted" style="font-size:12.5px;margin:4px 0 8px">Cada personaje puede tener una o VARIAS fotos de referencia. El director etiqueta en qué escenas aparece cada uno y esas imágenes se generan con sus fotos (misma cara en todo el video). El narrador además habla en cámara con lipsync. Un personaje sin fotos recibe una referencia generada una sola vez. <b>Tras cambiar el elenco, rehaz desde «Escenas».</b></p>
-        ${cast||'<div class="muted">Aún no hay personajes.</div>'}
-        <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
-          <input id="ch-name" placeholder="Nombre (ej. Alejandro)" style="width:170px">
-          <input id="ch-desc" placeholder="Descripción breve (rasgos, época, vestuario…)" style="flex:1;min-width:200px">
-          <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="ch-narr" style="width:auto">narrador</label>
-          <label class="btn sec small" style="display:inline-block">📷 fotos
-            <input type="file" accept="image/*" multiple style="display:none" id="ch-files"></label>
-          <button class="btn small" onclick="charCreate()">＋ Crear personaje</button>
-        </div>
-      </div>`;
-    const rows=(p.assets||[]).map(a=>`
-      <div class="filechip" style="max-width:640px">
-        <span class="badge" style="margin:0">${catLabel[a.category]||a.category}</span>
-        <span title="${esc(a.name)}">${esc(a.name)}</span>
-        <button title="Borrar" onclick="deleteAsset(${a.id})">✕</button>
-      </div>`).join('');
-    el.innerHTML=`<div class="card">
-      <div class="muted" style="margin-bottom:10px">${p.has_text_input?'✔ Este proyecto también tiene texto pegado como material principal.':''}
-      Al añadir o borrar archivos se vuelve a analizar el material (los pasos se regeneran).</div>
-      ${castBlock}
-      ${rows||'<div class="muted">No hay archivos subidos.</div>'}
-      <h3>Añadir más archivos</h3>
-      ${uploadCatsHtml()}
-      <button class="btn small" onclick="uploadPending()">⬆ Subir seleccionados</button>
-    </div>`;
-    window._pending=[];
-  }
-  else if(tab==='Concepto'){
-    const c=p.concept;
-    if(!c){el.innerHTML='<div class="card muted">El concepto se genera en la fase 2.</div>';return}
-    el.innerHTML=`<div class="card">
-      <div class="row" style="justify-content:space-between">
-        <span class="muted">Estilo y fórmula de este proyecto — guárdalos como plantilla para reutilizarlos en proyectos futuros sin re-analizar (ahorra tiempo y tokens).</span>
-        <button class="btn small" onclick="saveStyleModal()">💾 Guardar estilo</button>
-      </div>
-      <h3>Títulos propuestos</h3>${(c.title_options||[]).map(t=>`<div>• ${esc(t)}</div>`).join('')}
-      <div class="grid2" style="margin-top:14px">
-        <div><h3>Ángulo</h3>${esc(c.angle)}</div><div><h3>Audiencia</h3>${esc(c.audience)}</div>
-        <div><h3>Tono</h3>${esc(c.tone)}</div><div><h3>Música</h3>${esc(c.music_direction?.mood)} — ${esc(c.music_direction?.description)}</div>
-      </div>
-      <h3>Estructura</h3>${(c.structure||[]).map((s,i)=>`<div>${i+1}. ${esc(s)}</div>`).join('')}
-      <h3>Estilo visual</h3><p>${esc(c.visual_style?.description)}</p>
-      <div class="muted">Prefijo de prompts: <code>${esc(c.visual_style?.prompt_prefix)}</code></div>
-      <div class="row" style="margin-top:8px">${(c.visual_style?.palette||[]).map(h=>`<span style="background:${esc(h)};width:34px;height:22px;border-radius:5px;display:inline-block" title="${esc(h)}"></span>`).join('')}</div>
-    </div>`;
-  }
-}
-async function deleteProject(){
-  if(!confirm(`¿Borrar el proyecto «${current}» y todos sus archivos generados? Esta acción no se puede deshacer.`))return;
-  try{await api('/api/projects/'+current,{method:'DELETE'});
-    toast('Proyecto borrado');current=null;await refreshList();showNew();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function deleteAsset(id){
-  if(!confirm('¿Borrar este archivo del proyecto? Se volverá a analizar el material.'))return;
-  try{await api(`/api/projects/${current}/assets/${id}`,{method:'DELETE'});
-    toast('Archivo borrado');renderProject('Archivos');refreshList();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function uploadPending(){
-  const pending=window._pending||[];
-  if(!pending.length){toast('Selecciona archivos primero');return}
-  try{
-    const files=[];
-    for(const p of pending){
-      files.push({name:p.file.name,data_base64:await readB64(p.file),category:p.category});
-    }
-    await api(`/api/projects/${current}/assets`,{method:'POST',body:JSON.stringify({files})});
-    window._pending=[];
-    toast(`${files.length} archivo(s) añadidos`);renderProject('Archivos');refreshList();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function saveScript(){
-  try{await api(`/api/projects/${current}/script`,{method:'PUT',body:JSON.stringify({content:$('#scripted').value})});
-    toast('Guion guardado — las fases posteriores se regenerarán');renderProject('Guion');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function runPipeline(){
-  try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({to:$('#run-to').value||null})});
-    startPoll();renderProject();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function rerunFrom(phase){
-  if(!phase)return;
-  if(!confirm(`¿Rehacer desde el paso «${phaseLabel(phase)}»? Se regenerarán ese paso y los siguientes.`))return;
-  try{await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:phase})});
-    startPoll();renderProject();
-  }catch(e){toast('⚠ '+e.message)}
-}
-function metaOptionsHtml(p,m){
-  const to=m.title_options||[], dop=m.description_options||[], th=m.thumbnails||[];
-  const ch=m.chosen||{title:0,description:0,thumbnail:0};
-  const v=Date.now(); // evita miniaturas cacheadas al cambiar la elección
-  if(!to.length){ // proyectos de versiones anteriores: vista clásica
-    return `${p.thumbnail?`<h3>Miniatura</h3><img src="/files/${current}/${p.thumbnail}?v=${v}" style="width:320px;border-radius:8px">`:''}
-      <h3>Metadatos</h3><b>${esc(m.title||'')}</b>
-      <p class="muted" style="white-space:pre-wrap;max-height:180px;overflow-y:auto">${esc(m.description||'')}</p>
-      <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>`;
-  }
-  const sel=(on)=>`border:2px solid ${on?'var(--accent,#E8C46B)':'var(--line)'};border-radius:8px;cursor:pointer`;
-  return `
-    <h3>Miniatura — 3 diseños, elige la tuya</h3>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      ${th.map((f,i)=>`<div onclick="selectMeta('thumbnail',${i})" style="${sel(ch.thumbnail===i)};padding:4px;text-align:center">
-        <img src="/files/${current}/09_final/${f}?v=${v}" style="width:230px;border-radius:5px;display:block">
-        <small class="muted">${['🎬 Cine','💥 Impacto','◧ Panel'][i]||''} ${ch.thumbnail===i?'· ✓ elegida':''}</small>
-      </div>`).join('')}
-    </div>
-    <h3>Título — 3 estrategias de CTR</h3>
-    ${to.map((o,i)=>`<div onclick="selectMeta('title',${i})" style="${sel(ch.title===i)};padding:8px 10px;margin-bottom:6px">
-      <b>${esc(o.title)}</b> ${ch.title===i?'<span class="badge">✓ elegido</span>':''}
-      <div class="muted" style="font-size:12px">${esc(o.angle||'')}</div>
-    </div>`).join('')}
-    <h3>Descripción — 3 enfoques</h3>
-    ${dop.map((o,i)=>`<div onclick="selectMeta('description',${i})" style="${sel(ch.description===i)};padding:8px 10px;margin-bottom:6px">
-      <span class="badge">${esc(o.angle||`opción ${i+1}`)}</span> ${ch.description===i?'<span class="badge">✓ elegida</span>':''}
-      <p class="muted" style="white-space:pre-wrap;max-height:120px;overflow-y:auto;margin:6px 0 0;font-size:12.5px">${esc(o.description)}</p>
-    </div>`).join('')}
-    <div class="muted">🏷 ${(m.tags||[]).map(esc).join(', ')}</div>`;
-}
-async function charCreate(){
-  const name=$('#ch-name').value.trim();
-  if(!name){toast('Ponle un nombre al personaje');return}
-  const files=[];
-  for(const f of ($('#ch-files')?.files||[])){
-    files.push({name:f.name,data_base64:await readB64(f)});
-  }
-  try{
-    const r=await api(`/api/projects/${current}/characters`,{method:'POST',body:JSON.stringify(
-      {name,description:$('#ch-desc').value,narrator:$('#ch-narr').checked,files})});
-    toast('✅ Personaje creado'+(r.hint?' — '+r.hint:''));renderProject('Archivos');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function charAddFiles(cid,input){
-  const files=[];
-  for(const f of input.files){files.push({name:f.name,data_base64:await readB64(f)})}
-  if(!files.length)return;
-  try{await api(`/api/projects/${current}/characters/${cid}/files`,{method:'POST',body:JSON.stringify({files})});
-    toast('✅ Fotos añadidas');renderProject('Archivos');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function charUpdate(cid,patch){
-  try{await api(`/api/projects/${current}/characters/${cid}`,{method:'PUT',body:JSON.stringify(patch)});
-    toast('✅ Personaje actualizado');renderProject('Archivos');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function charDelete(cid){
-  if(!confirm('¿Eliminar este personaje y sus fotos?'))return;
-  try{await api(`/api/projects/${current}/characters/${cid}`,{method:'DELETE'});
-    toast('🗑 Personaje eliminado');renderProject('Archivos');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function selectMeta(kind,i){
-  try{
-    await api(`/api/projects/${current}/metadata/select`,{method:'POST',body:JSON.stringify({kind,index:i})});
-    toast('✅ Elección guardada — se usará al publicar');
-    renderProject('Video');
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function applySceneEdits(){
-  const edits=[...document.querySelectorAll('#ed-scenes .scene.ed')].map(d=>{
-    const e={id:parseInt(d.dataset.id)};
-    e.animation=d.querySelector('.ed-anim').value;
-    e.transition=d.querySelector('.ed-trans').value;
-    e.sfx=d.querySelector('.ed-sfx').value;
-    e.music_intensity=parseFloat(d.querySelector('.ed-mi').value);
-    const dur=d.querySelector('.ed-dur');if(dur)e.duration=parseFloat(dur.value);
-    const shot=d.querySelector('.ed-shot');if(shot)e.shot=shot.value;
-    e.overlay_text=d.querySelector('.ed-ovtext').value;
-    e.overlay_kicker=d.querySelector('.ed-ovkick').value;
-    e.overlay_type=d.querySelector('.ed-ovtype').value;
-    return e;
+async function loadProjects() { await safe(async () => { S.projects = await api('/api/projects'); }); render(); }
+async function loadLibrary() { await safe(async () => { S.lib = await api('/api/library'); }); render(); }
+async function loadScript() {
+  S.script = null; S.scriptError = null;
+  await safe(async () => {
+    try { S.script = (await api(`/api/projects/${S.slug}/script`)).content; }
+    catch (e) { if (e instanceof TypeError) throw e; S.scriptError = e.message; }
   });
-  try{
-    const r=await api(`/api/projects/${current}/scenes`,{method:'PUT',body:JSON.stringify({edits})});
-    if(!r.saved){toast('Sin cambios que aplicar');return}
-    toast('✅ Cambios guardados');
-    const msg=r.rerun_from==='broll'
-      ?'Cambios guardados. Cambiaste personaje/B-roll de alguna escena: al regenerar se crea el material de ESAS escenas (el resto se reutiliza de caché). ¿Regenerar ahora?'
-      :'Cambios guardados. ¿Remontar el video ahora? (solo montaje — no regenera voz, imágenes ni guion)';
-    if(confirm(msg)){
-      await api(`/api/projects/${current}/run`,{method:'POST',body:JSON.stringify({from:r.rerun_from})});
-      startPoll();renderProject();
-    }
-  }catch(e){toast('⚠ '+e.message)}
+  render();
 }
-
-/* ---------- polling ---------- */
-function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
-function startPoll(){
-  stopPoll();
-  let lastCount=-1,wasRunning=false,lastPhase=null,toastedCount=-1;
-  pollTimer=setInterval(async()=>{
-    if(view!=='project'||!current){stopPoll();return}
-    const log=await api(`/api/projects/${current}/log`);
-    const el=$('#log');
-    if(el&&(log.running||log.lines.length)){
-      el.style.display='block';
-      if(log.lines.length!==lastCount){el.textContent=log.lines.join('\n');el.scrollTop=el.scrollHeight;lastCount=log.lines.length;}
-      if(log.running&&log.phase!==lastPhase){lastPhase=log.phase;renderPhasesOnly(log.phase);}
-    }
-    // aviso claro de que el programa SIGUE trabajando: un toast por cada
-    // fase que termina, no solo el resultado final del video completo. La
-    // primera lectura solo fija la base (no reproduce fases ya viejas si
-    // se recarga la página a mitad de una corrida).
-    if(toastedCount<0){toastedCount=log.lines.length}
-    else if(log.lines.length>toastedCount){
-      for(const line of log.lines.slice(toastedCount)){
-        const m=/^✔\s+(\w+)\s+completada en ([\d.]+)s/.exec(line);
-        if(m)toast(`✔ ${phaseLabel(m[1])} completada (${m[2]}s)`,2200);
-      }
-      toastedCount=log.lines.length;
-    }
-    const pb=$('#progressbar');
-    if(pb){
-      if(log.running){
-        pb.classList.remove('hidden');
-        const pct=log.percent??0;
-        pb.querySelector('.track i').style.width=pct+'%';
-        pb.querySelector('#progresspct').textContent=pct+'% completo';
-        pb.querySelector('#progresseta').textContent=log.eta_seconds!=null
-          ?`~${log.eta_seconds<60?Math.round(log.eta_seconds)+'s':Math.round(log.eta_seconds/60)+' min'} restantes`:'';
-      }else{pb.classList.add('hidden')}
-    }
-    if(wasRunning&&!log.running){
-      if(!log.error){
-        const d=await api('/api/projects/'+current);
-        if(d.final_video)window._tab='Video';  // mostrar el resultado directamente
-      }
-      await renderProject();refreshList();
-      toast(log.error?'⚠ '+log.error:'✅ ¡Video generado!');
-    }
-    wasRunning=log.running;
-  },1500);
-}
-async function renderPhasesOnly(curPhase){
-  const p=await api('/api/projects/'+current);
-  const el=$('#phases');if(el)el.innerHTML=phaseChipsHtml(p,curPhase);
-}
-
-/* ---------- configuración ---------- */
-function provCard(catKey){
-  const cat=CAT.catalog[catKey];
-  const cur=CFG.providers[catKey]||{};
-  const opts=cat.options.map(o=>{
-    const key=o.env?`<span class="keydot ${CAT.keys[o.env]?'on':'off'}"></span><span class="muted" style="font-size:12px">${o.env}${CAT.keys[o.env]?'':' (no definida)'}</span>`:'<span class="keydot on"></span><span class="muted" style="font-size:12px">sin clave</span>';
-    return `<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px;cursor:pointer">
-      <input type="radio" name="prov-${catKey}" value="${o.name}" ${cur.name===o.name?'checked':''} style="width:auto" onchange="renderModelPick('${catKey}')">
-      <b>${esc(o.label)}</b> ${key}
-    </label><div class="muted" style="margin:0 0 10px 24px;font-size:12.5px">${esc(o.notes||'')}</div>`;
-  }).join('');
-  return `<div class="provcard" id="cat-${catKey}">
-    <h2>${esc(cat.title)}</h2>${opts}
-    <div id="models-${catKey}"></div>
-  </div>`;
-}
-function renderModelPick(catKey){
-  const cat=CAT.catalog[catKey];
-  const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
-  const opt=cat.options.find(o=>o.name===sel)||{};
-  const cur=CFG.providers[catKey]||{};
-  let html='';
-  const items=opt.models||opt.voices||[];
-  if(items.length){
-    const field=opt.voices?'voice':'model';
-    const curVal=cur[field]||items[0].id;
-    html+=`<label class="f"><span>${opt.voices?'Voz':'Modelo'}</span>
-      <select id="pick-${catKey}" onchange="$('#free-${catKey}').value=this.value">
-        ${items.map(m=>`<option value="${m.id}" ${m.id===curVal?'selected':''}>${esc(m.label)}</option>`).join('')}
-      </select></label>
-      <label class="f"><span>o escribe un ${opt.voices?'voice_id':'modelo'} personalizado</span>
-      <input id="free-${catKey}" value="${esc(curVal)}"></label>`;
-  }
-  (cat.extra_fields||[]).forEach(f=>{
-    const isTxt=f.type==='text', isBool=f.type==='bool';
-    if(isBool){
-      html+=`<label class="f"><span>${esc(f.label)}</span>
-        <input type="checkbox" id="extra-${catKey}-${f.key}" ${cur[f.key]?'checked':''}>
-        <span class="muted" style="font-size:12px">${esc(f.hint||'')}</span></label>`;
-      return;
-    }
-    html+=`<label class="f"><span>${esc(f.label)}</span>
-      <input type="${isTxt?'text':'number'}" id="extra-${catKey}-${f.key}" value="${esc(String(cur[f.key]??(isTxt?'':0)))}">
-      <span class="muted" style="font-size:12px">${esc(f.hint||'')}</span></label>`;
+async function pollRun() {
+  await safe(async () => {
+    const [detail, run] = await Promise.all([
+      api(`/api/projects/${S.slug}`),
+      api(`/api/projects/${S.slug}/log`)
+    ]);
+    S.detail = detail; S.run = run;
+    if (!run.running && S.timer) { clearInterval(S.timer); S.timer = null; }
   });
-  $('#models-'+catKey).innerHTML=html;
-}
-function showSettings(){
-  view='settings';current=null;stopPoll();refreshList();
-  const cats=Object.keys(CAT.catalog);
-  const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
-    <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
-      onclick="document.querySelectorAll('#stylegrid .preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
-      <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
-      ${p.fps?`<span class="badge">${p.fps} fps</span>`:''}
-    </div>`).join('');
-  $('#main').innerHTML=`
-  <div class="row" style="justify-content:space-between"><h1>⚙ Configuración</h1>
-    <button class="btn" onclick="saveSettings()">💾 Guardar configuración</button></div><br>
-  <div class="card"><h2>🔑 Claves de API</h2>
-    <p class="muted" style="margin-bottom:12px">Pega aquí tus claves y pulsa Guardar — se almacenan en tu archivo local <code>.env</code> y se activan al instante. La mínima recomendada es la de Anthropic (Claude), que genera el concepto, el guion y las escenas: consíguela en <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</p>
-    ${[['ANTHROPIC_API_KEY','Anthropic (Claude) — guion, concepto, escenas'],
-       ['OPENAI_API_KEY','OpenAI — voz TTS, Whisper, imágenes con texto legible (GPT Image 2)'],
-       ['ELEVENLABS_API_KEY','ElevenLabs — voces premium y música con licencia limpia'],
-       ['REPLICATE_API_TOKEN','Replicate — FLUX, Veo/Kling, escalado, lipsync, MusicGen'],
-       ['CARTESIA_API_KEY','Cartesia — voz ~10x más barata que ElevenLabs (opcional)'],
-       ['ASSEMBLYAI_API_KEY','AssemblyAI — transcripción más barata y con mejores tiempos (opcional)']].map(([k,label])=>`
-      <div class="keyfield">
-        <span style="font-size:13px">${label}</span>
-        <input type="password" id="key-${k}" placeholder="${CAT.keys[k]?'●●●●●●●● (ya configurada — escribe para reemplazar)':'pega tu clave aquí'}">
-        <span class="keydot ${CAT.keys[k]?'on':'off'}" title="${CAT.keys[k]?'configurada':'sin configurar'}"></span>
-      </div>`).join('')}
-    <button class="btn small" onclick="saveKeys()">💾 Guardar claves</button>
-  </div>
-  <div class="card"><h2>Estilo por defecto</h2>
-    <div class="presets" id="stylegrid">${presets}</div></div>
-  <div class="card"><h2>Video</h2>
-    <div class="grid2">
-      <label class="f"><span>Duración objetivo (minutos)</span><input type="number" id="v-min" value="${CFG.video.target_minutes}"></label>
-      <label class="f"><span>Resolución</span>
-        <select id="v-res">
-          <option value="1920x1080" ${CFG.video.width===1920?'selected':''}>1920×1080 (Full HD)</option>
-          <option value="2560x1440" ${CFG.video.width===2560?'selected':''}>2560×1440 (2K)</option>
-          <option value="3840x2160" ${CFG.video.width===3840?'selected':''}>3840×2160 (4K)</option>
-        </select></label>
-      <label class="f"><span>Subtítulos</span>
-        <select id="v-subs">
-          <option value="false" ${!CFG.video.burn_subtitles?'selected':''}>Pista activable (recomendado para YouTube)</option>
-          <option value="true" ${CFG.video.burn_subtitles?'selected':''}>Quemados en el video</option>
-        </select></label>
-      <label class="f"><span>Idioma del video (guion, voz, subtítulos y metadatos)</span>
-        <select id="v-lang">
-          ${(CAT.languages||[]).map(l=>`<option value="${esc(l.code)}" ${l.code===CFG.language?'selected':''}>${esc(l.label)}</option>`).join('')}
-        </select></label>
-      <p class="muted" style="font-size:12px;margin:2px 0 8px">Con Edge TTS elige además una voz DEL idioma (la voz no traduce). ElevenLabs y OpenAI TTS hablan todos los idiomas con la misma voz.</p>
-      <label class="f"><span>Ritmo visual — cada cuánto cambia la imagen</span>
-        <select id="v-ritmo">
-          <option value="4" ${CFG.video.scene_seconds<=4?'selected':''}>Muy dinámico — cada ~4 s</option>
-          <option value="6" ${CFG.video.scene_seconds>4&&CFG.video.scene_seconds<=6?'selected':''}>Dinámico — cada ~6 s (recomendado)</option>
-          <option value="8" ${CFG.video.scene_seconds>6&&CFG.video.scene_seconds<=8?'selected':''}>Estándar — cada ~8 s</option>
-          <option value="10" ${CFG.video.scene_seconds>8&&CFG.video.scene_seconds<=10?'selected':''}>Pausado — cada ~10 s</option>
-          <option value="15" ${CFG.video.scene_seconds>10?'selected':''}>Contemplativo — cada ~15 s</option>
-        </select></label>
-    </div>
-    <div class="muted" style="font-size:12px">Escenas más cortas = más imágenes = más costo de generación (pero más dinámico). Aplica tanto a tu narración grabada como a la voz IA.</div></div>
-  <h3 style="font-size:15px">Módulo de integraciones — modelos de IA</h3>
-  ${cats.map(provCard).join('')}
-  <div class="card"><h2>Audio</h2>
-    <div class="grid2">
-      <label class="f"><span>Volumen de música (dB bajo la voz)</span><input type="number" id="a-db" value="${CFG.audio.music_db}"></label>
-      <label class="f"><span>Ducking automático</span>
-        <select id="a-duck"><option value="true" ${CFG.audio.duck?'selected':''}>Activado</option>
-        <option value="false" ${!CFG.audio.duck?'selected':''}>Desactivado</option></select></label>
-      <label class="f"><span>Sonido de los insertos (fotos de archivo, cifras, mapas)</span>
-        <select id="a-insfx">${(CAT.insert_sfx_options||[]).map(o=>`<option value="${o.id}" ${(CFG.audio.element_sfx||'auto')===o.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
-    </div>
-    <div class="muted" style="font-size:12px">En «Automático» el acento lo elige el estilo del video, y dentro de cada paleta la foto, la cifra y el mapa suenan distinto (no el mismo golpe 20 veces).</div></div>`;
-  cats.forEach(renderModelPick);
-}
-async function saveKeys(){
-  const keys={};
-  for(const k of ['ANTHROPIC_API_KEY','OPENAI_API_KEY','ELEVENLABS_API_KEY','REPLICATE_API_TOKEN']){
-    const v=$('#key-'+k)?.value.trim();
-    if(v)keys[k]=v;
-  }
-  if(!Object.keys(keys).length){toast('Pega al menos una clave');return}
-  try{
-    const r=await api('/api/keys',{method:'PUT',body:JSON.stringify({keys})});
-    CAT.keys=r.keys;
-    toast('✅ Claves guardadas y activas');
-    showSettings();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function saveSettings(){
-  const cfg=JSON.parse(JSON.stringify(CFG));
-  cfg.style={preset:document.querySelector('#stylegrid .preset.sel')?.dataset.k||'ninguno'};
-  cfg.video.target_minutes=+$('#v-min').value||10;
-  const [w,h]=$('#v-res').value.split('x').map(Number);
-  cfg.video.width=w;cfg.video.height=h;
-  cfg.video.burn_subtitles=$('#v-subs').value==='true';
-  cfg.video.scene_seconds=+$('#v-ritmo').value||6;
-  cfg.language=$('#v-lang').value||'es';
-  cfg.audio.music_db=+$('#a-db').value; cfg.audio.duck=$('#a-duck').value==='true';
-  cfg.audio.element_sfx=$('#a-insfx')?.value||'auto';
-  for(const catKey of Object.keys(CAT.catalog)){
-    const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
-    if(!sel)continue;
-    cfg.providers[catKey]=cfg.providers[catKey]||{};
-    cfg.providers[catKey].name=sel;
-    const opt=CAT.catalog[catKey].options.find(o=>o.name===sel)||{};
-    const free=$(`#free-${catKey}`);
-    if(free&&free.value){cfg.providers[catKey][opt.voices?'voice':'model']=free.value}
-    (CAT.catalog[catKey].extra_fields||[]).forEach(f=>{
-      const el=$(`#extra-${catKey}-${f.key}`);if(!el)return;
-      cfg.providers[catKey][f.key]=f.type==='bool'?el.checked
-        :(f.type==='text'?el.value:(+el.value||0));
-    });
-  }
-  try{await api('/api/config',{method:'PUT',body:JSON.stringify({config:cfg})});
-    CFG=cfg;toast('✅ Configuración guardada');
-  }catch(e){toast('⚠ '+e.message)}
+  if (S.screen === 'corrida') render();
 }
 
-/* ---------- canales y estilos ---------- */
-async function showLibrary(){
-  view='library';current=null;stopPoll();refreshList();
-  const lib=window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
-  const groups=[...lib.channels,{id:'',name:'Estilos sin canal',description:''}];
-  $('#main').innerHTML=`
-  <h1>📺 Canales y estilos</h1>
-  <p class="muted">Guarda el estilo de un proyecto que te gustó (botón «💾 Guardar estilo» en la pestaña Concepto de cada proyecto) o crea estilos desde cero. Agrúpalos por canal y elígelos al crear un proyecto nuevo: el video sale con esa dirección de arte, tono, música y ritmo — sin re-analizar referencias (ahorro de tiempo y tokens).</p>
-  <div class="card">
-    <h3>Nuevo canal</h3>
-    <div class="row">
-      <input id="ch-name" placeholder="Nombre del canal (ej. Historia Épica)" style="width:260px">
-      <input id="ch-desc" placeholder="Descripción (opcional)" style="flex:1">
-      <button class="btn small" onclick="createChannel()">＋ Crear canal</button>
-    </div>
-  </div>
-  ${groups.map(ch=>{
-    const styles=lib.styles.filter(s=>(s.channel_id||'')===(ch.id||''));
-    if(!ch.id&&!styles.length)return '';
-    return `<div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div><b>${ch.id?'📺 ':''}${esc(ch.name)}</b> <span class="muted">${esc(ch.description||'')}</span></div>
-        ${ch.id?`<button class="btn sec small" onclick="deleteChannel('${esc(ch.id)}')">🗑 Borrar canal</button>`:''}
-      </div>
-      ${styles.length?styles.map(s=>styleCard(s)).join(''):'<div class="muted" style="margin-top:6px">Sin estilos aún — guárdalos desde un proyecto o créalos abajo.</div>'}
-    </div>`}).join('')}
-  <div class="card"><h3>Nuevo estilo desde cero</h3>${styleForm(null)}</div>
-  <div id="style-edit"></div>
-  <h1 style="margin-top:26px">🗄 Banco de elementos</h1>
-  <p class="muted">Material propio para los INSERTOS que se superponen al B-roll cuando la narración menciona a alguien o algo (una foto de Elon Musk, un plano de El Cairo, un logo, un clip corto). <b>Tu material siempre tiene prioridad</b> sobre la búsqueda en Wikimedia. El nombre del archivo es la clave: <code>elon-musk.jpg</code> encuentra la mención «Elon Musk» (sin importar tildes ni mayúsculas). Usa solo material de uso libre o propio.</p>
-  <div id="bank"></div>`;
-  renderBank();
+/* ---------- pantallas ---------- */
+function render() {
+  const v = $('#view'); v.textContent = '';
+  if (S.fail && !S.cfg) { v.append(viewFallo()); return; }
+  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
+  try { v.append(fn()); }
+  catch (e) { v.append(viewFallo(e.message)); }
 }
-const BANK_LABELS={personajes:'👤 Personajes',lugares:'📍 Lugares',entidades:'🏛 Entidades y marcas',mapas:'🗺 Mapas',stickers:'✨ Stickers y adornos'};
-async function renderBank(){
-  const b=await api('/api/elements').catch(()=>null);
-  if(!b){$('#bank').innerHTML='<div class="card muted">No se pudo leer el banco.</div>';return}
-  $('#bank').innerHTML=b.categories.map(cat=>{
-    const items=b.items[cat]||[];
-    return `<div class="card">
-      <div class="row" style="justify-content:space-between">
-        <b>${BANK_LABELS[cat]||esc(cat)}</b>
-        <label class="btn sec small" style="cursor:pointer">＋ Añadir archivos
-          <input type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" style="display:none" onchange="bankUpload('${cat}',this)">
-        </label>
-      </div>
-      ${items.length?`<div class="row" style="flex-wrap:wrap;gap:10px;margin-top:10px">${items.map(it=>`
-        <div style="width:132px">
-          ${it.kind==='video'
-            ? `<video src="/elements/${cat}/${encodeURIComponent(it.file)}" style="width:132px;height:88px;object-fit:cover;border-radius:6px;background:#000" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>`
-            : `<img src="/elements/${cat}/${encodeURIComponent(it.file)}" style="width:132px;height:88px;object-fit:cover;border-radius:6px">`}
-          <div style="font-size:12px;margin-top:3px;word-break:break-word">${esc(it.etiqueta)}</div>
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <span class="muted" style="font-size:11px">${it.kind==='video'?'clip':'imagen'} · ${Math.round(it.size/1024)} KB</span>
-            <button class="btn sec small" style="padding:1px 6px" title="Quitar del banco" onclick="bankDelete('${cat}','${esc(it.file)}')">🗑</button>
-          </div>
-        </div>`).join('')}</div>`
-        :'<div class="muted" style="margin-top:6px;font-size:13px">Vacío. Añade archivos con el nombre de lo que representan.</div>'}
-    </div>`}).join('');
+
+function viewFallo(extra) {
+  const f = S.fail || {};
+  return el('div', { class: 'center' },
+    el('div', { style: 'max-width:520px' },
+      el('div', { class: 'kicker', style: 'color:var(--a700)' }, f.kind === 'server' ? 'El servidor respondió con error' : 'Sin conexión al motor local'),
+      el('h1', { style: 'font-size:30px;margin-top:12px;line-height:1.25' }, f.kind === 'server' ? 'La interfaz está viva, el servidor rechazó la petición' : 'La interfaz está viva, el motor no responde'),
+      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, extra || f.text || 'Arranca el servidor con «python -m ytstudio ui» y vuelve a intentar. Nada se pierde: las corridas viven en disco.')),
+    el('button', { class: 'btn btn-primary', onclick: boot }, 'Reintentar'));
 }
-async function bankUpload(cat,input){
-  const files=[...input.files];input.value='';
-  if(!files.length)return;
-  let ok=0;
-  for(const f of files){
-    try{
-      const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)});
-      await api('/api/elements',{method:'POST',body:JSON.stringify({category:cat,file:{name:f.name,data_base64:b64}})});
-      ok++;
-    }catch(e){toast('⚠ '+f.name+': '+e.message)}
+
+function viewProyectos() {
+  if (!S.projects.length) {
+    return el('div', { class: 'center' },
+      el('div', { style: 'max-width:540px' },
+        el('div', { class: 'kicker' }, 'Sin proyectos todavía'),
+        el('h1', { style: 'font-size:34px;margin-top:14px;line-height:1.2' }, 'Escribe un tema y el sistema hace el resto'),
+        el('p', { class: 'muted', style: 'line-height:1.75;margin-top:14px' }, `${(S.cfg?.phases || []).length || 11} fases, de la investigación al video montado con voz, imágenes, música y subtítulos. Verás el costo estimado antes de gastar nada.`)),
+      el('div', { style: 'display:flex;gap:10px' },
+        el('button', { class: 'btn btn-primary', onclick: () => go('nuevo') }, 'Crear el primer video'),
+        el('button', { class: 'btn', onclick: () => go('canales') }, 'Configurar un canal primero')));
   }
-  if(ok)toast(`✅ ${ok} elemento(s) añadidos`);
-  renderBank();
+  const running = S.projects.filter(p => p.running).length;
+  const body = el('tbody');
+  for (const p of S.projects) {
+    const estado = p.running ? `generando${p.phaseLabel || ''}` : p.has_error ? 'con error' : p.done === p.total ? 'listo' : 'borrador';
+    body.append(el('tr', { class: 'row', onclick: () => go('corrida', p.slug) },
+      el('td', { style: 'font-family:var(--heading);font-size:17px' }, p.display_name || p.slug),
+      el('td', {}, p.running ? el('span', { class: 'tag' }, estado) : el('span', { class: 'tag tag-quiet' }, estado)),
+      el('td', { class: 'mono', style: 'text-align:right' }, `${p.done}/${p.total}`),
+      el('td', { class: 'mono', style: 'text-align:right' }, p.scene_count ? `${p.scene_count} esc.` : '—'),
+      el('td', { class: 'mono', style: 'text-align:right' }, p.total_duration ? fmtSec(p.total_duration) : '—'),
+      el('td', { class: 'mono muted', style: 'text-align:right' }, dateOf(p.created_at))));
+  }
+  return el('div', { class: 'wrap' },
+    el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap' },
+      el('div', {},
+        el('div', { class: 'kicker' }, `${S.projects.length} proyectos · ${running} en curso`),
+        el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Proyectos')),
+      el('input', { class: 'input', style: 'width:260px', placeholder: 'Buscar…', oninput: e => {
+        const q = e.target.value.toLowerCase();
+        for (const tr of body.children) tr.classList.toggle('hide', !tr.textContent.toLowerCase().includes(q));
+      } })),
+    el('table', { style: 'margin-top:20px' },
+      el('thead', {}, el('tr', {},
+        el('th', {}, 'Proyecto'), el('th', {}, 'Estado'),
+        el('th', { style: 'text-align:right' }, 'Fases'),
+        el('th', { style: 'text-align:right' }, 'Escenas'),
+        el('th', { style: 'text-align:right' }, 'Duración'),
+        el('th', { style: 'text-align:right' }, 'Creado'))),
+      body));
 }
-async function bankDelete(cat,file){
-  if(!confirm(`¿Quitar «${file}» del banco?`))return;
-  try{await api(`/api/elements/${cat}/${encodeURIComponent(file)}`,{method:'DELETE'});renderBank()}
-  catch(e){toast('⚠ '+e.message)}
-}
-function styleCard(s){
-  return `<div class="scene" style="margin-top:8px"><div style="flex:1">
-    <b>🎨 ${esc(s.name)}</b> <span class="muted" style="font-size:12px">${s.source_project?`del proyecto ${esc(s.source_project)}`:'creado a mano'} · ${esc(s.created_at||'')}</span>
-    <div class="muted" style="font-size:12px">${esc((s.visual_description||'').slice(0,150))}</div>
-    <div class="row" style="margin-top:4px">${(s.palette||[]).map(h=>`<span style="background:${esc(h)};width:22px;height:14px;border-radius:3px;display:inline-block" title="${esc(h)}"></span>`).join('')}
-      ${s.scene_seconds?`<span class="badge">ritmo ${s.scene_seconds}s</span>`:''}
-      ${s.music_mood?`<span class="badge">♪ ${esc(s.music_mood)}</span>`:''}
-      ${s.transition?`<span class="badge">transición ${esc(s.transition)}</span>`:''}</div>
-    <div class="row" style="margin-top:6px">
-      <button class="btn sec small" onclick="editStyle('${esc(s.id)}')">✎ Editar</button>
-      <button class="btn sec small" onclick="deleteStyle('${esc(s.id)}')">🗑 Borrar</button>
-    </div></div></div>`;
-}
-function styleForm(s){
-  const v=k=>esc(s?.[k]??'');
-  const chOpts=`<option value="">Sin canal</option>`+(window._lib?.channels||[]).map(c=>`<option value="${esc(c.id)}" ${s?.channel_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
-  const id=s?`sf-${s.id}`:'sf-new';
-  return `<div id="${id}" class="grid2" data-style="${esc(s?.id||'')}">
-    <label class="f"><span>Nombre</span><input data-f="name" value="${v('name')}"></label>
-    <label class="f"><span>Canal</span><select data-f="channel_id">${chOpts}</select></label>
-    <label class="f" style="grid-column:1/-1"><span>Descripción visual (cómo se ve el contenido de este canal)</span><textarea data-f="visual_description" rows="2">${v('visual_description')}</textarea></label>
-    <label class="f" style="grid-column:1/-1"><span>Prefijo de prompts EN INGLÉS (se antepone a cada imagen IA para mantener el look)</span><input data-f="prompt_prefix" value="${v('prompt_prefix')}" placeholder="cinematic documentary photo, warm dramatic lighting, film grain"></label>
-    <label class="f"><span>Paleta (colores hex separados por coma)</span><input data-f="palette" value="${esc((s?.palette||[]).join(', '))}" placeholder="#1a1a2e, #e8c46b, #0f3460"></label>
-    <label class="f"><span>Tono de narración</span><input data-f="tone" value="${v('tone')}" placeholder="épico y reflexivo, en segunda persona"></label>
-    <label class="f"><span>Mood musical (inglés, 1-3 palabras)</span><input data-f="music_mood" value="${v('music_mood')}" placeholder="cinematic dark tension"></label>
-    <label class="f"><span>Descripción musical</span><input data-f="music_description" value="${v('music_description')}"></label>
-    <label class="f"><span>Ritmo visual (segundos por plano; vacío = el de Configuración)</span><input data-f="scene_seconds" type="number" min="3" max="20" step="0.5" value="${s?.scene_seconds??''}"></label>
-    <label class="f"><span>Transiciones</span><select data-f="transition">
-      <option value="" ${!s?.transition?'selected':''}>auto (varían según la historia)</option>
-      <option value="fade" ${s?.transition==='fade'?'selected':''}>fade (todas con fundido)</option>
-      <option value="none" ${s?.transition==='none'?'selected':''}>none (todas corte seco)</option></select></label>
-    <label class="f" style="grid-column:1/-1"><span>🔤 Branding de los RÓTULOS en pantalla (vacío = look por defecto del programa)</span>
-      <div class="row" style="gap:6px;margin:2px 0 6px">${Object.entries(CAT.overlay_branding_presets||{}).map(([k,p])=>`<button type="button" class="btn sec small" onclick="applyBrandingPreset('${id}','${k}')">${esc(p.label)}</button>`).join('')}</div>
-    </label>
-    <label class="f"><span>Tipografía</span><select data-f="overlay_font_family">
-      <option value="" ${!s?.overlay_font_family?'selected':''}>Por defecto</option>
-      ${Object.entries(CAT.overlay_font_families||{}).map(([k,f])=>`<option value="${k}" ${s?.overlay_font_family===k?'selected':''} title="${esc(f.hint||'')}">${esc(f.label)}</option>`).join('')}
-    </select></label>
-    <label class="f"><span>Diseño del rótulo</span><select data-f="overlay_style">
-      <option value="" ${!s?.overlay_style?'selected':''}>Por defecto (documental)</option>
-      <option value="documental" ${s?.overlay_style==='documental'?'selected':''}>Documental — placa oscura sobria + filete</option>
-      <option value="minimal" ${s?.overlay_style==='minimal'?'selected':''}>Minimal — sin placa, solo filete</option>
-      <option value="bold" ${s?.overlay_style==='bold'?'selected':''}>Bold — placa del color de acento</option>
-    </select></label>
-    <label class="f"><span>Color de acento (hex, sin #)</span><input data-f="overlay_accent" value="${esc(s?.overlay_accent||'')}" placeholder="E8C46B" maxlength="6" style="text-transform:uppercase"></label>
-    <label class="f"><span>Color del texto (hex, sin #)</span><input data-f="overlay_text_color" value="${esc(s?.overlay_text_color||'')}" placeholder="FFFFFF" maxlength="6" style="text-transform:uppercase"></label>
-    <label class="f" style="grid-column:1/-1"><span>Fórmula narrativa (gancho, estructura, reglas del canal — la IA la replica adaptada a cada tema)</span><textarea data-f="formula" rows="3">${v('formula')}</textarea></label>
-    <div><button class="btn small" onclick="submitStyleForm('${id}')">${s?'💾 Guardar cambios':'＋ Crear estilo'}</button></div>
-  </div>`;
-}
-function applyBrandingPreset(formId,key){
-  const p=(CAT.overlay_branding_presets||{})[key];if(!p)return;
-  const root=document.getElementById(formId);if(!root)return;
-  root.querySelector('[data-f=overlay_font_family]').value=p.overlay_font_family||'';
-  root.querySelector('[data-f=overlay_accent]').value=p.overlay_accent||'';
-  root.querySelector('[data-f=overlay_text_color]').value=p.overlay_text_color||'';
-  const st=root.querySelector('[data-f=overlay_style]');if(st)st.value=p.overlay_style||'';
-}
-async function submitStyleForm(id){
-  const root=document.getElementById(id);
-  const out={};root.querySelectorAll('[data-f]').forEach(el=>out[el.dataset.f]=el.value);
-  try{
-    const body=JSON.stringify(out);
-    if(root.dataset.style)await api(`/api/styles/${root.dataset.style}`,{method:'POST',body});
-    else await api('/api/styles',{method:'POST',body});
-    toast(root.dataset.style?'Estilo actualizado':'✅ Estilo creado');showLibrary();
-  }catch(e){toast('⚠ '+e.message)}
-}
-function editStyle(id){
-  const s=(window._lib?.styles||[]).find(x=>x.id===id);if(!s)return;
-  $('#style-edit').innerHTML=`<div class="card"><h3>Editar estilo — ${esc(s.name)}</h3>${styleForm(s)}</div>`;
-  $('#style-edit').scrollIntoView({behavior:'smooth'});
-}
-async function createChannel(){
-  try{
-    await api('/api/channels',{method:'POST',body:JSON.stringify({name:$('#ch-name').value,description:$('#ch-desc').value})});
-    toast('✅ Canal creado');showLibrary();
-  }catch(e){toast('⚠ '+e.message)}
-}
-async function deleteChannel(id){
-  if(!confirm('¿Borrar este canal? Sus estilos NO se borran (quedan «sin canal»).'))return;
-  await api(`/api/channels/${id}`,{method:'DELETE'});toast('Canal borrado');showLibrary();
-}
-async function deleteStyle(id){
-  if(!confirm('¿Borrar este estilo? Los proyectos ya generados no se ven afectados.'))return;
-  await api(`/api/styles/${id}`,{method:'DELETE'});toast('Estilo borrado');showLibrary();
-}
-async function saveStyleModal(){
-  const lib=await api('/api/library').catch(()=>({channels:[]}));
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;display:flex;align-items:center;justify-content:center';
-  ov.onclick=e=>{if(e.target===ov)ov.remove()};
-  ov.innerHTML=`<div class="card" style="max-width:440px;margin:20px;width:90%">
-    <b>💾 Guardar el estilo de este proyecto</b>
-    <div class="muted" style="font-size:12px;margin-top:4px">Se capturan: dirección visual, prefijo de prompts, paleta, tono, música, ritmo y fórmula — para reutilizarlos en proyectos nuevos.</div>
-    <label class="f" style="margin-top:10px"><span>Nombre del estilo</span><input id="ss-name" value="${esc(current||'')}"></label>
-    <label class="f"><span>Canal</span><select id="ss-channel"><option value="">Sin canal</option>
-      ${(lib.channels||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
-    <div class="row" style="margin-top:10px">
-      <button class="btn small" id="ss-save">Guardar</button>
-      <button class="btn sec small" id="ss-cancel">Cancelar</button>
-    </div></div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#ss-cancel').onclick=()=>ov.remove();
-  ov.querySelector('#ss-save').onclick=async()=>{
-    try{
-      await api(`/api/projects/${current}/save-style`,{method:'POST',
-        body:JSON.stringify({name:ov.querySelector('#ss-name').value,channel_id:ov.querySelector('#ss-channel').value||null})});
-      ov.remove();toast('✅ Estilo guardado en tu biblioteca (📺 Canales y estilos)');
-    }catch(e){toast('⚠ '+e.message)}
+
+function viewNuevo() {
+  const formats = Object.entries(S.cfg?.formats || { long: { label: 'Video largo' } });
+  const presets = Object.entries(S.cfg?.style_presets || {});
+  const st = { format: 'long', preset: presets[0]?.[0] };
+  const err = el('div', { class: 'muted', style: 'font-size:13px' });
+  const nombre = el('input', { class: 'input', placeholder: 'alejandro-magno' });
+  const texto = el('textarea', { class: 'input', rows: '7', placeholder: 'Escribe el tema o pega el material de partida…' });
+  const segFmt = el('div', { class: 'seg' }, formats.map(([k, f]) => el('button', { 'aria-pressed': String(k === st.format), onclick: e => { st.format = k; for (const b of segFmt.children) b.setAttribute('aria-pressed', String(b === e.target)); } }, f.label || k)));
+  const segPreset = el('div', { class: 'seg', style: 'flex-wrap:wrap' }, presets.map(([k, p]) => el('button', { 'aria-pressed': String(k === st.preset), onclick: e => { st.preset = k; for (const b of segPreset.children) b.setAttribute('aria-pressed', String(b === e.target)); } }, (p && (p.label || p.name)) || k)));
+  const crear = async (runAfter) => {
+    err.textContent = '';
+    try {
+      const body = { slug: nombre.value.trim(), text: texto.value.trim(), format: st.format, style_preset: st.preset };
+      const r = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
+      if (runAfter) await api(`/api/projects/${r.slug}/run`, { method: 'POST', body: JSON.stringify({}) });
+      await loadProjects();
+      go('corrida', r.slug);
+    } catch (e) { err.textContent = e.message; }
   };
+  return el('div', { class: 'wrap', style: 'max-width:760px' },
+    el('div', { class: 'kicker' }, 'Paso 1 de 1 · el resto lo decide el sistema'),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, '¿De qué trata el video?'),
+    el('div', { style: 'display:flex;flex-direction:column;gap:20px;margin-top:22px' },
+      el('div', {}, el('label', { class: 'f' }, 'Nombre del proyecto'), nombre),
+      el('div', {}, el('label', { class: 'f' }, 'Tema o material'), texto),
+      el('div', {}, el('label', { class: 'f' }, 'Formato'), segFmt),
+      presets.length ? el('div', {}, el('label', { class: 'f' }, 'Estilo visual'), segPreset) : null,
+      el('div', { style: 'display:flex;gap:10px;align-items:center;border-top:1px solid var(--divider);padding-top:16px' },
+        el('button', { class: 'btn btn-primary', onclick: () => crear(true) }, 'Crear y generar'),
+        el('button', { class: 'btn', onclick: () => crear(false) }, 'Solo crear'),
+        err)));
 }
 
-/* ---------- init ---------- */
-function renderVersion(){
-  const v=CAT.version||{};
-  const el=$('#verinfo');if(!el)return;
-  el.className=v.modified?'stale':'';
-  el.style.cursor='pointer';
-  el.title='Ver qué cambió en cada versión';
-  el.onclick=showChangelog;
-  // El disco puede tener una versión más nueva que el PROCESO en ejecución
-  // (actualizar.bat sin reiniciar iniciar.bat): avisar en grande.
-  const stale=CAT.server_version&&v.version&&CAT.server_version!==v.version;
-  el.innerHTML=(stale?`<div style="background:#7a2e2e;color:#ffd7d7;padding:6px 8px;border-radius:8px;margin-bottom:6px;font-size:12px"><b>⚠ Actualización descargada (${esc(v.version)}) pero NO aplicada.</b><br>Cierra la ventana de iniciar.bat y ábrela de nuevo.</div>`:'')
-    +`Versión: <b>${esc((stale?CAT.server_version:v.version)||v.commit||'?')}</b>${v.date?` · ${esc(v.date)}`:''}`
-    +`<span class="muted" style="font-size:11px"> · novedades 📋</span>`
-    // Solo si hay archivos DEL PROGRAMA tocados, y se NOMBRAN: el aviso
-    // anterior era vago y sonaba a «estás desactualizado» sin decir de qué
-    // hablaba (saltaba incluso por el material propio dentro de assets/).
-    +(v.modified?`<br><span title="${esc((v.modified_files||[]).join('\n'))}\n\nUn «git pull» puede fallar mientras estos archivos difieran del repositorio.">⚠ ${v.modified_count||''} archivo(s) del programa modificados <span class="muted" style="font-size:11px">(pasa el ratón)</span></span>`:'');
-}
-async function showChangelog(){
-  let md='';
-  try{md=(await api('/api/changelog')).content}catch(e){toast('⚠ '+e.message);return}
-  const html=md.split('\n').map(l=>{
-    if(l.startsWith('## '))return `<h3 style="margin:14px 0 4px">${esc(l.slice(3))}</h3>`;
-    if(l.startsWith('# '))return `<h2 style="margin:0 0 6px">${esc(l.slice(2))}</h2>`;
-    if(l.startsWith('- '))return `<div style="margin:2px 0 2px 14px">• ${esc(l.slice(2))}</div>`;
-    return l.trim()?`<div style="margin:2px 0 2px 14px">${esc(l.trim())}</div>`:'';
-  }).join('');
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;display:flex;align-items:center;justify-content:center';
-  ov.onclick=e=>{if(e.target===ov)ov.remove()};
-  ov.innerHTML=`<div class="card" style="max-width:640px;max-height:80vh;overflow:auto;margin:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <b>Registro de cambios</b>
-      <button class="btn sec small" onclick="this.closest('div[style*=fixed]')?.remove()||this.parentElement.parentElement.parentElement.remove()">✕ Cerrar</button>
-    </div><div style="font-size:13px;line-height:1.5">${html}</div></div>`;
-  document.body.appendChild(ov);
-}
-/* ---------- manual de uso ---------- */
-let MANUAL=null;
-function mdInline(s){
-  // negrita, código y enlaces — sobre texto YA escapado
-  return s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
-          .replace(/`([^`]+)`/g,'<code style="background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12.5px">$1</code>')
-          .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
-}
-function mdToHtml(md){
-  const out=[];let tbl=null;
-  const flush=()=>{if(tbl){out.push(`<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px">${tbl}</table></div>`);tbl=null}};
-  for(const raw of md.split('\n')){
-    const l=raw.replace(/^\s+$/,'');
-    if(/^<!--/.test(l))continue;
-    if(/^\|/.test(l)){
-      const cells=l.split('|').slice(1,-1).map(c=>c.trim());
-      if(cells.every(c=>/^:?-{2,}:?$/.test(c)))continue;   // separador
-      const tag=tbl===null?'th':'td';
-      const style=tag==='th'
-        ?'text-align:left;padding:6px 8px;border-bottom:2px solid var(--accent);white-space:nowrap'
-        :'padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top';
-      tbl=(tbl||'')+`<tr>${cells.map(c=>`<${tag} style="${style}">${mdInline(esc(c))}</${tag}>`).join('')}</tr>`;
-      continue;
+function viewCorrida() {
+  const d = S.detail, run = S.run || {};
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando la corrida…'));
+  const phases = S.cfg?.phases || [];
+  const cur = run.phase;
+  const list = el('div', {});
+  phases.forEach((p, i) => {
+    const status = d.phases?.[p.name];
+    const on = cur === p.name;
+    const row = el('div', { class: 'phase' + (on ? ' on' : status === 'done' ? '' : ' todo') },
+      el('span', { class: 'n' }, String(i + 1).padStart(2, '0')),
+      el('span', { class: 'nm' }, p.label || p.name),
+      el('span', { class: 'mono muted' }, on ? `${run.percent ?? 0} %` : status === 'done' ? 'listo' : status === 'failed' ? 'falló' : 'espera'));
+    list.append(row);
+    if (on) {
+      list.append(el('div', { style: 'padding:0 18px 12px;background:var(--a100);border-left:2px solid var(--accent)' },
+        el('div', { class: 'bar' }, el('i', { style: `width:${run.percent ?? 0}%` })),
+        el('div', { class: 'mono', style: 'color:var(--a700);margin-top:6px' }, run.eta_seconds != null ? `${fmtSec(run.eta_seconds)} restante` : 'calculando…')));
     }
-    flush();
-    if(/^###\s/.test(l)){out.push(`<h4 id="${slugify(l.slice(4))}" style="margin:16px 0 4px;color:var(--accent)">${mdInline(esc(l.slice(4)))}</h4>`);continue}
-    if(/^##\s/.test(l)){out.push(`<h3 id="${slugify(l.slice(3))}" style="margin:26px 0 8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)">${mdInline(esc(l.slice(3)))}</h3>`);continue}
-    if(/^#\s/.test(l)){out.push(`<h2 style="margin:0 0 8px">${mdInline(esc(l.slice(2)))}</h2>`);continue}
-    if(/^---+$/.test(l))continue;
-    if(/^>\s?/.test(l)){out.push(`<div style="border-left:3px solid var(--accent);background:var(--panel2);padding:8px 12px;margin:8px 0;border-radius:0 8px 8px 0">${mdInline(esc(l.replace(/^>\s?/,'')))}</div>`);continue}
-    if(/^\s*[-*]\s/.test(l)){out.push(`<div style="margin:3px 0 3px 16px">• ${mdInline(esc(l.replace(/^\s*[-*]\s/,'')))}</div>`);continue}
-    if(/^\d+\.\s/.test(l)){out.push(`<div style="margin:3px 0 3px 16px">${mdInline(esc(l))}</div>`);continue}
-    if(/^```/.test(l)){out.push(l.length>3?'<pre style="background:var(--panel2);padding:10px;border-radius:8px;overflow-x:auto;font-size:12.5px">':'</pre>');continue}
-    out.push(l.trim()?`<p style="margin:6px 0">${mdInline(esc(l))}</p>`:'');
+  });
+
+  const warnings = d.warnings || [];
+  const atencion = el('div', {});
+  if (run.error) atencion.append(el('div', { class: 'warn', style: 'margin-bottom:14px' },
+    el('div', { class: 'kicker', style: 'color:var(--a700)' }, 'La corrida se detuvo'),
+    el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:6px' }, run.error),
+    el('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+      el('button', { class: 'btn btn-sm btn-primary', onclick: () => runFrom(cur || undefined) }, 'Reintentar'),
+      el('button', { class: 'btn btn-sm', onclick: () => runFrom() }, 'Reintentar desde el principio'))));
+  if (!warnings.length && !run.error) atencion.append(el('div', { class: 'muted', style: 'font-size:13px' }, 'Nada pendiente. El sistema avisa solo cuando hace falta decidir.'));
+  warnings.slice(0, 8).forEach(w => {
+    const text = typeof w === 'string' ? w : (w.message || w.text || JSON.stringify(w));
+    const kind = typeof w === 'object' ? (w.phase || w.kind || 'aviso') : 'aviso';
+    atencion.append(el('div', { style: 'border-top:1px solid var(--divider);padding:11px 0' },
+      el('div', { class: 'kicker' }, kind),
+      el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px' }, text)));
+  });
+
+  const usage = d.usage_report || {};
+  const total = usage.total_usd ?? usage.total ?? usage.usd;
+  const video = d.final_video ? el('video', { src: `/files/${S.slug}/${d.final_video}`, controls: '', style: 'width:100%;display:block' })
+    : el('div', { class: 'plate', style: 'aspect-ratio:16/9;display:flex;align-items:flex-end;padding:12px' },
+      el('span', { class: 'mono muted', style: 'background:var(--bg);padding:4px 6px' }, run.running ? 'montando…' : 'sin video todavía'));
+
+  const acciones = el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+    run.running
+      ? el('span', { class: 'tag' }, `generando · ${cur || 'iniciando'}`)
+      : el('button', { class: 'btn btn-primary', onclick: () => runFrom() }, 'Generar video'),
+    el('button', { class: 'btn btn-sm', onclick: () => go('guion') }, 'Editar guion'),
+    el('button', { class: 'btn btn-sm', onclick: async () => {
+      const name = prompt('Nombre nuevo del proyecto', S.detail?.display_name || S.slug);
+      if (!name) return;
+      try { await api(`/api/projects/${S.slug}/rename`, { method: 'PUT', body: JSON.stringify({ name }) }); await pollRun(); await loadProjects(); go('corrida'); }
+      catch (e) { alert(e.message); }
+    } }, 'Renombrar'),
+    el('select', { class: 'input', style: 'width:auto;font-size:12px', onchange: e => e.target.value && runFrom(e.target.value) },
+      el('option', { value: '' }, 'Rehacer desde…'),
+      phases.map(p => el('option', { value: p.name }, p.label || p.name))));
+
+  return el('div', { class: 'split', style: 'grid-template-columns:264px 1fr 320px' },
+    el('aside', { class: 'railL' },
+      el('div', { class: 'kicker', style: 'padding:16px 18px 8px' }, `Fases · ${phases.length}`),
+      list,
+      el('div', { style: 'padding:14px 18px' },
+        el('button', { class: 'btn btn-sm', style: 'width:100%', onclick: () => { const l = $('#logbox'); l.classList.toggle('hide'); } }, 'Log de eventos'),
+        el('div', { id: 'logbox', class: 'log hide', style: 'margin-top:10px' }, (run.lines || []).slice(-60).join('\n') || 'sin líneas'))),
+    el('div', { class: 'wrap' },
+      el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap' },
+        el('div', {},
+          el('div', { class: 'kicker' }, `${d.done} de ${d.total} fases${d.scene_count ? ` · ${d.scene_count} escenas` : ''}`),
+          el('h1', { style: 'font-size:32px;margin-top:8px' }, d.display_name || S.slug),
+          tabBar('corrida')),
+        acciones),
+      el('div', { style: 'margin-top:18px' }, video),
+      el('div', { style: 'display:flex;justify-content:space-between;margin-top:8px' },
+        el('span', { class: 'muted', style: 'font-size:13px' }, d.metadata?.title || d.concept?.title || 'sin título todavía'),
+        el('span', { class: 'mono muted' }, d.total_duration ? fmtSec(d.total_duration) : '—')),
+      d.thumbnail ? el('div', { style: 'margin-top:20px' },
+        el('div', { class: 'kicker', style: 'margin-bottom:8px' }, 'Miniatura'),
+        el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null),
+    el('aside', { class: 'rail' },
+      el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between' },
+        el('h2', { style: 'font-size:18px' }, 'Atención'),
+        el('span', { class: 'tag' }, String(warnings.length + (run.error ? 1 : 0)))),
+      el('div', { style: 'margin-top:12px' }, atencion),
+      el('div', { class: 'kicker', style: 'margin:20px 0 8px;border-top:1px solid var(--divider);padding-top:16px' }, 'Gasto real'),
+      total != null
+        ? el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline' },
+          el('span', { style: 'font-family:var(--heading);font-size:16px' }, 'Total'),
+          el('span', { style: 'font-family:var(--heading);font-size:20px;color:var(--a700)' }, money(total)))
+        : el('div', { class: 'muted', style: 'font-size:13px' }, 'Se calcula al terminar cada fase.'),
+      d.time_report ? el('div', { class: 'mono muted', style: 'margin-top:8px' }, `tiempo total ${fmtSec(d.time_report.total_seconds || d.time_report.total || null)}`) : null));
+}
+
+async function runFrom(from) {
+  try {
+    await api(`/api/projects/${S.slug}/run`, { method: 'POST', body: JSON.stringify(from ? { from } : {}) });
+    pollRun(); if (!S.timer) S.timer = setInterval(pollRun, 2500);
+  } catch (e) { alert(e.message); }
+}
+
+function viewGuion() {
+  if (S.script === null) return el('div', { class: 'center' },
+    el('div', { class: 'kicker' }, 'Guion'),
+    el('p', { class: 'muted', style: 'max-width:460px;line-height:1.7' }, S.scriptError || 'Aún no hay guion. Genera hasta la fase de guion para poder editarlo.'),
+    el('button', { class: 'btn', onclick: () => go('corrida') }, 'Volver a la corrida'));
+  const ta = el('textarea', { class: 'input', rows: '22', style: 'font-size:15px;line-height:1.8' }, S.script);
+  const msg = el('span', { class: 'muted', style: 'font-size:13px' });
+  return el('div', { class: 'wrap', style: 'max-width:900px' },
+    el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap' },
+      el('div', {}, el('div', { class: 'kicker' }, 'Editor de guion'), el('h1', { style: 'font-size:30px;margin-top:8px' }, S.detail?.display_name || S.slug)),
+      el('div', { style: 'display:flex;gap:8px;align-items:center' }, msg,
+        el('button', { class: 'btn', onclick: () => go('corrida') }, 'Cancelar'),
+        el('button', { class: 'btn btn-primary', onclick: async () => {
+          try { await api(`/api/projects/${S.slug}/script`, { method: 'PUT', body: JSON.stringify({ content: ta.value }) }); msg.textContent = 'Guardado. Las fases posteriores se rehacen.'; }
+          catch (e) { msg.textContent = e.message; }
+        } }, 'Guardar guion'))),
+    el('div', { style: 'margin-top:18px' }, ta),
+    el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' }, 'Guardar invalida escenas, voz y montaje: el sistema los rehace desde aquí.'));
+}
+
+function viewCanales() {
+  if (!S.lib) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando canales…'));
+  const channels = S.lib.channels || [], styles = S.lib.styles || [];
+  if (!channels.length && !styles.length) return el('div', { class: 'center' },
+    el('div', { style: 'max-width:520px' },
+      el('div', { class: 'kicker' }, 'Sin canales guardados'),
+      el('h1', { style: 'font-size:30px;margin-top:12px;line-height:1.25' }, 'Un canal recuerda voz, tono y dirección de imagen'),
+      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, 'Guarda el estilo de un proyecto terminado y los siguientes videos saldrán iguales sin volver a configurar nada.')));
+  return el('div', { class: 'wrap' },
+    el('div', { class: 'kicker' }, `${channels.length} canales · ${styles.length} estilos`),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Canales y estilos'),
+    el('div', { class: 'grid4', style: 'margin-top:22px' },
+      channels.map(c => el('div', { class: 'card', style: 'padding:16px' },
+        el('div', { style: 'font-family:var(--heading);font-size:19px' }, c.name || c.id),
+        el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:6px' }, c.description || 'sin descripción'),
+        el('div', { class: 'mono muted', style: 'margin-top:10px' }, styles.filter(s => s.channel_id === c.id).length + ' estilos'))),
+      styles.map(s => el('div', { class: 'card', style: 'padding:16px;border-color:var(--accent)' },
+        el('div', { class: 'kicker', style: 'color:var(--a700)' }, 'estilo'),
+        el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:5px' }, s.name || s.id),
+        el('div', { class: 'muted', style: 'font-size:13px;margin-top:6px' }, [s.language, s.format, s.preset].filter(Boolean).join(' · ') || '—')))));
+}
+
+function viewBiblioteca() {
+  const done = S.projects.filter(p => p.done === p.total);
+  if (!done.length) return el('div', { class: 'center' },
+    el('div', { style: 'max-width:480px' },
+      el('div', { class: 'kicker' }, 'Biblioteca vacía'),
+      el('h1', { style: 'font-size:30px;margin-top:12px;line-height:1.25' }, 'Aquí quedan los videos terminados'),
+      el('p', { class: 'muted', style: 'line-height:1.75;margin-top:12px' }, 'Cuando una corrida llega a la fase final, el video, su miniatura y sus metadatos aparecen en esta lista.')));
+  return el('div', { class: 'wrap' },
+    el('div', { class: 'kicker' }, `${done.length} videos terminados`),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Biblioteca'),
+    el('div', { class: 'grid4', style: 'margin-top:22px' }, done.map(p => el('figure', { style: 'margin:0;cursor:pointer', onclick: () => go('corrida', p.slug) },
+      el('div', { class: 'plate', style: 'aspect-ratio:16/9' }),
+      el('figcaption', { style: 'margin-top:8px;line-height:1.5' },
+        el('span', { style: 'font-family:var(--heading);font-size:17px' }, p.display_name || p.slug),
+        el('br'),
+        el('span', { class: 'mono muted' }, [p.total_duration ? fmtSec(p.total_duration) : null, dateOf(p.created_at)].filter(Boolean).join(' · ')))))));
+}
+
+// Casilla SÍ/NO con su explicación debajo. Muchos ajustes del programa son
+// booleanos y necesitan una frase que diga qué hacen: sin ella, el nombre
+// solo (p. ej. «ducking») no significa nada para quien no edita audio.
+function check(label, value, onSet, hint) {
+  return el('div', {},
+    el('label', { style: 'display:flex;gap:9px;align-items:center;font-size:14px;cursor:pointer' },
+      el('input', { type: 'checkbox', checked: value ? 'checked' : null, onchange: e => onSet(e.target.checked) }),
+      label),
+    hint ? el('div', { class: 'muted', style: 'font-size:12px;line-height:1.55;margin:4px 0 0 27px;max-width:60ch' }, hint) : null);
+}
+
+// FORMATOS DE SALIDA con la proporción protegida. Antes eran dos campos
+// numéricos sueltos: bastaba rozar la flechita del ancho para dejar 1922x1080
+// y sacar el video deformado. Ahora se elige un formato conocido y las dos
+// medidas se fijan juntas; el modo libre existe, pero con candado de
+// proporción para que al cambiar un lado el otro se recalcule.
+const FORMATOS = [
+  { w: 1920, h: 1080, t: '1920 × 1080 · 16:9 horizontal (YouTube)' },
+  { w: 2560, h: 1440, t: '2560 × 1440 · 16:9 en 2K' },
+  { w: 3840, h: 2160, t: '3840 × 2160 · 16:9 en 4K' },
+  { w: 1080, h: 1920, t: '1080 × 1920 · 9:16 vertical (Shorts, Reels, TikTok)' },
+  { w: 1080, h: 1080, t: '1080 × 1080 · 1:1 cuadrado (Meta Ads)' },
+  { w: 1080, h: 1350, t: '1080 × 1350 · 4:5 retrato (feed de Instagram)' },
+];
+
+function formatoVideo(cfg, set) {
+  const w0 = cfg.video?.width || 1920, h0 = cfg.video?.height || 1080;
+  const conocido = FORMATOS.find(f => f.w === w0 && f.h === h0);
+  const libre = el('div', { class: conocido ? 'hide' : '' , style: 'display:flex;gap:12px;align-items:flex-end;margin-top:12px;flex-wrap:wrap' });
+  const inW = el('input', { class: 'input', type: 'number', style: 'width:120px', value: w0 });
+  const inH = el('input', { class: 'input', type: 'number', style: 'width:120px', value: h0 });
+  const nota = el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px' });
+  let ratio = w0 / h0, candado = true;
+
+  const describe = () => {
+    const w = Number(inW.value) || 0, h = Number(inH.value) || 0;
+    const g = (a, b) => b ? g(b, a % b) : a;
+    const d = g(w, h) || 1;
+    nota.textContent = w && h ? `Proporción ${w / d}:${h / d}` : '';
+  };
+  const aplicar = (w, h) => {
+    inW.value = w; inH.value = h;
+    set(['video', 'width'], w); set(['video', 'height'], h);
+    describe();
+  };
+  inW.addEventListener('input', () => {
+    const w = Math.max(16, Math.round(Number(inW.value) || 0));
+    aplicar(w, candado ? Math.round(w / ratio / 2) * 2 : Number(inH.value) || h0);
+  });
+  inH.addEventListener('input', () => {
+    const h = Math.max(16, Math.round(Number(inH.value) || 0));
+    aplicar(candado ? Math.round(h * ratio / 2) * 2 : Number(inW.value) || w0, h);
+  });
+
+  const sel = el('select', { class: 'input', style: 'width:auto', onchange: e => {
+    if (e.target.value === 'libre') { libre.classList.remove('hide'); describe(); return; }
+    libre.classList.add('hide');
+    const f = FORMATOS[Number(e.target.value)];
+    ratio = f.w / f.h;
+    aplicar(f.w, f.h);
+  } },
+    FORMATOS.map((f, i) => el('option', { value: String(i), selected: conocido === f ? 'selected' : null }, f.t)),
+    el('option', { value: 'libre', selected: conocido ? null : 'selected' }, 'Personalizado…'));
+
+  libre.append(
+    el('div', {}, el('label', { class: 'f' }, 'Ancho'), inW),
+    el('div', {}, el('label', { class: 'f' }, 'Alto'), inH),
+    el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;padding-bottom:10px' },
+      el('input', { type: 'checkbox', checked: 'checked', onchange: e => { candado = e.target.checked; if (candado) ratio = (Number(inW.value) || 1) / (Number(inH.value) || 1); } }),
+      'Mantener la proporción'));
+  describe();
+
+  return el('div', { style: 'margin-top:20px' },
+    el('label', { class: 'f' }, 'Formato de salida'),
+    sel, libre, nota);
+}
+
+// PROVEEDORES Y MODELOS, una tarjeta por categoría (inteligencia, voz,
+// transcripción, imágenes, video, lipsync, música). El contenido sale del
+// catálogo que sirve el programa, así que cada modelo nuevo aparece aquí solo
+// —incluidas las rutas de ahorro de la v0.58.0: el modo híbrido, la calidad de
+// GPT Image, Cartesia, AssemblyAI, Veo y ElevenLabs Music.
+function proveedorCard(catKey, cat, cfg, set, keys) {
+  const cur = (cfg.providers && cfg.providers[catKey]) || {};
+  const detalle = el('div', { style: 'margin-top:14px;display:flex;flex-direction:column;gap:14px' });
+
+  const pintarDetalle = (nombre) => {
+    detalle.replaceChildren();
+    const opt = (cat.options || []).find(o => o.name === nombre) || {};
+    const items = opt.models || opt.voices || [];
+    const campo = opt.voices ? 'voice' : 'model';
+    if (items.length) {
+      const libre = el('input', { class: 'input', value: cur[campo] || items[0].id,
+        oninput: e => set(['providers', catKey, campo], e.target.value.trim()) });
+      const sel = el('select', { class: 'input', onchange: e => {
+        libre.value = e.target.value;
+        set(['providers', catKey, campo], e.target.value);
+      } }, items.map(m => el('option', { value: m.id, selected: m.id === (cur[campo] || items[0].id) ? 'selected' : null }, m.label)));
+      detalle.append(
+        el('div', {}, el('label', { class: 'f' }, opt.voices ? 'Voz' : 'Modelo'), sel),
+        el('div', {}, el('label', { class: 'f' }, opt.voices ? 'O pega un voice_id de tu cuenta' : 'O escribe otro modelo'), libre));
+    }
+    for (const f of (cat.extra_fields || [])) {
+      if (f.type === 'bool') {
+        detalle.append(check(f.label, cur[f.key], v => set(['providers', catKey, f.key], v), f.hint));
+        continue;
+      }
+      const esTexto = f.type === 'text';
+      detalle.append(el('div', {},
+        el('label', { class: 'f' }, f.label),
+        el('input', { class: 'input', type: esTexto ? 'text' : 'number',
+          value: cur[f.key] ?? (esTexto ? '' : 0),
+          oninput: e => set(['providers', catKey, f.key], esTexto ? e.target.value : (Number(e.target.value) || 0)) }),
+        f.hint ? el('div', { class: 'muted', style: 'font-size:12px;line-height:1.55;margin-top:5px;max-width:64ch' }, f.hint) : null));
+    }
+    if (opt.notes) detalle.append(el('div', { class: 'muted', style: 'font-size:12px;line-height:1.6;border-left:2px solid var(--divider);padding-left:12px;max-width:70ch' }, opt.notes));
+  };
+
+  const radios = (cat.options || []).map(o => {
+    const falta = o.env && !keys[o.env];
+    return el('label', { style: 'display:flex;gap:9px;align-items:baseline;cursor:pointer;padding:7px 0' },
+      el('input', { type: 'radio', name: `prov-${catKey}`, value: o.name,
+        checked: cur.name === o.name ? 'checked' : null,
+        onchange: () => { set(['providers', catKey, 'name'], o.name); pintarDetalle(o.name); } }),
+      el('span', {},
+        el('span', { style: 'font-family:var(--heading);font-size:16px' }, o.label),
+        o.env ? el('span', { class: falta ? 'tag tag-quiet' : 'tag', style: 'margin-left:9px' }, falta ? 'falta la clave' : 'lista') : null));
+  });
+
+  pintarDetalle(cur.name);
+  return el('div', { class: 'card', style: 'padding:18px 20px' },
+    el('h2', { style: 'font-size:21px' }, cat.title),
+    el('div', { style: 'margin-top:10px' }, radios),
+    detalle);
+}
+
+function viewAjustes() {
+  const keys = S.cfg?.keys || {};
+  const cfg = JSON.parse(JSON.stringify(S.cfg?.config || {}));
+  const msg = el('span', { class: 'muted', style: 'font-size:13px' });
+  const set = (path, value) => {
+    let o = cfg;
+    for (const k of path.slice(0, -1)) o = (o[k] = o[k] || {});
+    o[path[path.length - 1]] = value;
+  };
+  const num = (label, path, unit, step) => {
+    let o = cfg; for (const k of path.slice(0, -1)) o = o?.[k] || {};
+    return el('div', {}, el('label', { class: 'f' }, label),
+      el('div', { style: 'display:flex;gap:8px;align-items:center' },
+        el('input', { class: 'input', type: 'number', step: step || '1', style: 'width:130px', value: o?.[path[path.length - 1]] ?? '', oninput: e => set(path, Number(e.target.value)) }),
+        unit ? el('span', { class: 'mono muted' }, unit) : null));
+  };
+  // Los catálogos del programa vienen en DOS formas: lista de objetos
+  // ({code,label} para los idiomas) o diccionario clave→objeto (los estilos).
+  // Antes se pintaba el objeto entero: de ahí el «[object Object]» — y, peor,
+  // era ESE texto el que se guardaba en config.language. `opt()` normaliza
+  // cualquiera de las dos formas a {v:valor_real, t:texto_visible}.
+  const opt = (o, k) => typeof o === 'string'
+    ? { v: o, t: o }
+    : { v: o.code ?? o.id ?? k, t: o.label ?? o.name ?? o.code ?? o.id ?? k };
+  const listOf = src => Array.isArray(src) ? src.map(o => opt(o))
+    : Object.entries(src || {}).map(([k, o]) => opt(o, k));
+
+  const langOpts = listOf(S.cfg?.languages);
+  const presetOpts = listOf(S.cfg?.style_presets);
+  const selector = (label, path, options, current, hint) => el('div', {},
+    el('label', { class: 'f' }, label),
+    el('select', { class: 'input', style: 'width:auto', onchange: e => set(path, e.target.value) },
+      options.map(o => el('option', { value: o.v, selected: o.v === current ? 'selected' : null }, o.t))),
+    hint ? el('div', { class: 'muted', style: 'font-size:12px;margin-top:5px;line-height:1.5' }, hint) : null);
+
+  // La lista de claves sale del propio programa, no de una lista fija: así una
+  // clave nueva (Cartesia, AssemblyAI…) aparece aquí sin tocar la interfaz.
+  const ORDEN = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'REPLICATE_API_TOKEN',
+                 'ELEVENLABS_API_KEY', 'CARTESIA_API_KEY', 'ASSEMBLYAI_API_KEY'];
+  const QUE_ES = {
+    ANTHROPIC_API_KEY: 'Claude — concepto, guion, escenas y control de calidad. Es la mínima imprescindible.',
+    OPENAI_API_KEY: 'Voz, transcripción con Whisper e imágenes con texto legible (GPT Image 2).',
+    REPLICATE_API_TOKEN: 'Imágenes FLUX, video Veo/Kling, escalado del modo híbrido, lipsync y música.',
+    ELEVENLABS_API_KEY: 'Voces de máxima calidad y música con licencia comercial limpia.',
+    CARTESIA_API_KEY: 'Voz unas 10 veces más barata que ElevenLabs (opcional).',
+    ASSEMBLYAI_API_KEY: 'Transcripción más barata y con mejores tiempos por palabra (opcional).',
+  };
+  const listaClaves = [...ORDEN.filter(k => k in keys), ...Object.keys(keys).filter(k => !ORDEN.includes(k))];
+  const keyInputs = listaClaves.map(k =>
+    el('div', { style: 'display:grid;grid-template-columns:230px 1fr auto;gap:12px;align-items:center;border-bottom:1px solid var(--divider);padding:12px 0' },
+      el('div', {},
+        el('div', { class: 'mono' }, k),
+        QUE_ES[k] ? el('div', { class: 'muted', style: 'font-size:12px;line-height:1.5;margin-top:4px' }, QUE_ES[k]) : null),
+      el('input', { class: 'input', type: 'password', placeholder: keys[k] ? 'configurada · escribe para cambiarla' : 'sin configurar', 'data-key': k }),
+      el('span', { class: keys[k] ? 'tag' : 'tag tag-quiet' }, keys[k] ? 'ok' : 'falta')));
+
+  return el('div', { class: 'wrap', style: 'max-width:820px' },
+    el('div', { class: 'kicker' }, 'Local · este equipo'),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Ajustes'),
+
+    el('div', { class: 'kicker', style: 'margin:26px 0 12px' }, 'Video y voz'),
+    el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px' },
+      langOpts.length ? selector('Idioma', ['language'], langOpts, cfg.language) : null,
+      presetOpts.length ? selector('Estilo visual', ['style', 'preset'], presetOpts, cfg.style?.preset) : null,
+      num('Duración objetivo', ['video', 'target_minutes'], 'min'),
+      num('Segundos por escena', ['video', 'scene_seconds'], 's', '0.5'),
+      num('Volumen de la música', ['audio', 'music_db'], 'dB')),
+    formatoVideo(cfg, set),
+    el('div', { style: 'display:flex;flex-direction:column;gap:12px;margin-top:18px' },
+      check('Subtítulos incrustados en el video', cfg.video?.burn_subtitles,
+        v => set(['video', 'burn_subtitles'], v),
+        'Quedan grabados en la imagen: se ven en cualquier reproductor, pero ya no se pueden quitar.'),
+      // `audio.duck` es un SÍ/NO en la configuración; el rediseño lo pintaba
+      // como campo numérico, así que guardaba un número donde va un booleano.
+      check('Bajar la música cuando hablas', cfg.audio?.duck,
+        v => set(['audio', 'duck'], v),
+        'Llamado «ducking» en audio profesional: la música se aparta sola bajo la voz y vuelve a subir al terminar la frase. Déjalo activado salvo que quieras la música siempre al mismo nivel.'),
+      check('Efectos de sonido en los insertos', cfg.audio?.element_sfx,
+        v => set(['audio', 'element_sfx'], v),
+        'El pequeño acento sonoro que acompaña a una foto de archivo, una cifra o un mapa cuando aparecen.')),
+    el('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:18px' },
+      el('button', { class: 'btn btn-primary', onclick: async () => {
+        try { await api('/api/config', { method: 'PUT', body: JSON.stringify({ config: cfg }) }); S.cfg.config = cfg; msg.textContent = 'Guardado en config.local.yaml.'; }
+        catch (e) { msg.textContent = e.message; }
+      } }, 'Guardar ajustes'), msg),
+
+    el('div', { class: 'kicker', style: 'margin:34px 0 6px;border-top:1px solid var(--divider);padding-top:22px' }, 'Proveedores y modelos'),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin:0 0 16px' },
+      'Qué servicio hace cada parte del trabajo, y con qué modelo. Aquí está la factura del programa: las imágenes son el 90 % del gasto, y el escalado del modo híbrido las deja en la décima parte.'),
+    el('div', { style: 'display:flex;flex-direction:column;gap:16px' },
+      Object.entries(S.cfg?.catalog || {}).map(([k, cat]) => proveedorCard(k, cat, cfg, set, keys))),
+    el('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:18px' },
+      el('button', { class: 'btn btn-primary', onclick: async () => {
+        try { await api('/api/config', { method: 'PUT', body: JSON.stringify({ config: cfg }) }); S.cfg.config = cfg; msg.textContent = 'Proveedores guardados.'; }
+        catch (e) { msg.textContent = e.message; }
+      } }, 'Guardar proveedores')),
+
+    el('div', { class: 'kicker', style: 'margin:34px 0 6px;border-top:1px solid var(--divider);padding-top:22px' }, 'Claves de API'),
+    el('div', {}, keyInputs),
+    el('button', { class: 'btn', style: 'margin-top:14px', onclick: async () => {
+      const out = {};
+      for (const i of document.querySelectorAll('[data-key]')) if (i.value.trim()) out[i.dataset.key] = i.value.trim();
+      if (!Object.keys(out).length) { msg.textContent = 'No hay claves nuevas.'; return; }
+      try { const r = await api('/api/keys', { method: 'PUT', body: JSON.stringify({ keys: out }) }); S.cfg.keys = r.keys; render(); }
+      catch (e) { alert(e.message); }
+    } }, 'Guardar claves'),
+
+    el('div', { class: 'kicker', style: 'margin:30px 0 8px;border-top:1px solid var(--divider);padding-top:22px' }, 'Versión'),
+    el('div', { class: 'mono muted', style: 'line-height:1.9' },
+      `programa ${S.cfg?.version?.version || '—'} · commit ${S.cfg?.version?.commit || '—'} · ${S.cfg?.version?.date || ''}`,
+      S.cfg?.server_version && S.cfg.server_version !== S.cfg?.version?.version
+        ? el('div', { style: 'color:var(--a700);margin-top:6px' }, `El proceso corre ${S.cfg.server_version}: reinicia para cargar la versión nueva.`) : null,
+      S.cfg?.version?.modified ? el('div', { style: 'margin-top:6px' }, `${S.cfg.version.modified_count} archivo(s) modificados sin guardar en git`) : null));
+}
+
+function tabBar(active) {
+  const tabs = [['corrida', 'Corrida'], ['guion', 'Guion'], ['escenas', 'Escenas'], ['personajes', 'Personajes'], ['metadatos', 'Metadatos']];
+  return el('div', { style: 'display:flex;gap:2px;margin-top:14px;border-bottom:1px solid var(--divider)' },
+    tabs.map(([k, label]) => el('button', {
+      class: 'btn btn-ghost btn-sm',
+      style: `border-radius:0;border-bottom:2px solid ${k === active ? 'var(--accent)' : 'transparent'};color:${k === active ? 'var(--a700)' : 'var(--n700)'}`,
+      onclick: () => go(k)
+    }, label)));
+}
+
+function projHeader(active, kicker) {
+  return el('div', {},
+    el('div', { class: 'kicker' }, kicker),
+    el('h1', { style: 'font-size:30px;margin-top:8px' }, S.detail?.display_name || S.slug),
+    tabBar(active));
+}
+
+function pickFile(accept, cb) {
+  const inp = el('input', { type: 'file', accept: accept || '', multiple: 'multiple', style: 'display:none' });
+  inp.addEventListener('change', async () => {
+    const files = [];
+    for (const f of inp.files) {
+      const buf = await f.arrayBuffer();
+      let bin = ''; const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      files.push({ name: f.name, data_base64: btoa(bin) });
+    }
+    cb(files);
+  });
+  document.body.append(inp); inp.click(); inp.remove();
+}
+
+function viewEscenas() {
+  const d = S.detail;
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando…'));
+  const scenes = d.scenes || [];
+  const msg = el('span', { class: 'muted', style: 'font-size:13px' });
+  if (!scenes.length) return el('div', { class: 'wrap' }, projHeader('escenas', 'Escenas'),
+    el('p', { class: 'muted', style: 'margin-top:22px;max-width:520px;line-height:1.75' }, 'Aún no hay escenas. Genera hasta la fase de escenas (storyboard) para poder subir material propio y ajustar animación, transición y rótulos.'));
+
+  const edits = new Map();
+  const mark = (id, field, value) => { const e = edits.get(id) || { id }; e[field] = value; edits.set(id, e); msg.textContent = `${edits.size} escena(s) con cambios sin guardar`; };
+  const sel = (id, field, options, current) => el('select', { class: 'input', style: 'width:auto;font-size:12px;padding:5px 8px', onchange: ev => mark(id, field, ev.target.value) },
+    options.map(o => el('option', { value: o, selected: o === current ? 'selected' : null }, o)));
+
+  const rows = scenes.map(s => {
+    const manual = (d.manual_broll || {})[String(s.id)];
+    return el('tr', {},
+      el('td', { class: 'mono', style: 'color:var(--a700)' }, String(s.id).padStart(3, '0')),
+      el('td', { style: 'max-width:340px' },
+        el('div', { style: 'font-size:13px;line-height:1.55' }, (s.narration || s.text || s.description || '').slice(0, 150) || '—'),
+        el('div', { class: 'mono muted', style: 'margin-top:4px' }, [s.shot, s.broll_type, s.duration ? `${Number(s.duration).toFixed(1)} s` : null].filter(Boolean).join(' · '))),
+      el('td', {}, sel(s.id, 'animation', ['zoom_in', 'zoom_out', 'pan_left', 'pan_right', 'static'], s.animation)),
+      el('td', {}, sel(s.id, 'transition', ['corte', 'fundido'], s.transition)),
+      el('td', {}, sel(s.id, 'sfx', ['ninguno', 'whoosh', 'riser', 'boom'], s.sfx || 'ninguno')),
+      el('td', {}, el('input', { class: 'input', style: 'width:150px;font-size:12px;padding:5px 8px', value: (s.overlay || {}).text || '', placeholder: 'rótulo…', oninput: ev => mark(s.id, 'overlay_text', ev.target.value) })),
+      el('td', { style: 'text-align:right;white-space:nowrap' },
+        manual ? el('span', { class: 'tag', style: 'margin-right:6px' }, 'propio') : null,
+        el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*,video/*', async files => {
+          try { await api(`/api/projects/${S.slug}/scenes/${s.id}/broll`, { method: 'POST', body: JSON.stringify({ file: files[0] }) }); await pollRun(); render(); }
+          catch (e) { alert(e.message); }
+        }) }, manual ? 'Cambiar' : 'Subir'),
+        manual ? el('button', { class: 'btn btn-sm btn-ghost', onclick: async () => {
+          try { await api(`/api/projects/${S.slug}/scenes/${s.id}/broll`, { method: 'DELETE' }); await pollRun(); render(); }
+          catch (e) { alert(e.message); }
+        } }, 'Quitar') : null));
+  });
+
+  const policy = el('div', { style: 'display:flex;gap:16px;align-items:center;flex-wrap:wrap' },
+    el('label', { style: 'display:flex;gap:7px;align-items:center;font-size:13px' },
+      el('input', { type: 'checkbox', checked: d.broll_auto_replace ? 'checked' : null, onchange: ev => savePolicy({ auto_replace: ev.target.checked }) }), 'Reemplazar B-roll automáticamente'),
+    el('label', { style: 'display:flex;gap:7px;align-items:center;font-size:13px' },
+      el('input', { type: 'checkbox', checked: d.broll_review !== false ? 'checked' : null, onchange: ev => savePolicy({ review: ev.target.checked }) }), 'Revisar antes de montar'));
+
+  async function savePolicy(body) {
+    try { await api(`/api/projects/${S.slug}/broll-policy`, { method: 'PUT', body: JSON.stringify(body) }); await pollRun(); }
+    catch (e) { alert(e.message); }
   }
-  flush();
-  return out.join('');
+
+  return el('div', { class: 'wrap' }, projHeader('escenas', `${scenes.length} escenas`),
+    el('div', { style: 'display:flex;justify-content:space-between;gap:16px;align-items:center;margin-top:18px;flex-wrap:wrap' }, policy,
+      el('div', { style: 'display:flex;gap:8px;align-items:center' }, msg,
+        el('button', { class: 'btn btn-primary', onclick: async () => {
+          if (!edits.size) { msg.textContent = 'Sin cambios.'; return; }
+          try {
+            const r = await api(`/api/projects/${S.slug}/scenes`, { method: 'PUT', body: JSON.stringify({ edits: [...edits.values()] }) });
+            msg.textContent = r.rerun_from ? `Guardado. Se rehará desde «${r.rerun_from}».` : 'Sin cambios que afecten el montaje.';
+            edits.clear(); await pollRun();
+          } catch (e) { msg.textContent = e.message; }
+        } }, 'Guardar cambios'))),
+    el('table', { style: 'margin-top:16px' },
+      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Escena'), el('th', {}, 'Animación'), el('th', {}, 'Transición'), el('th', {}, 'Sonido'), el('th', {}, 'Rótulo'), el('th', { style: 'text-align:right' }, 'Material propio'))),
+      el('tbody', {}, rows)),
+    el('div', { class: 'muted', style: 'font-size:13px;margin-top:12px' }, 'Estos ajustes se remontan sin volver a llamar a la IA. La narración y el orden se cambian en el guion.'));
 }
-function slugify(s){return 'm-'+s.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g,'-').replace(/^-|-$/g,'')}
-async function showManual(){
-  view='manual';current=null;stopPoll();refreshList();
-  if(!MANUAL){try{MANUAL=await api('/api/manual')}catch(e){toast('⚠ '+e.message);return}}
-  const stale=MANUAL.manual_version&&MANUAL.program_version&&MANUAL.manual_version!==MANUAL.program_version;
-  const toc=MANUAL.content.split('\n').filter(l=>/^##\s/.test(l))
-    .map(l=>l.slice(3).trim())
-    .map(t=>`<a href="#${slugify(t)}" onclick="event.preventDefault();document.getElementById('${slugify(t)}')?.scrollIntoView({behavior:'smooth'})" style="display:block;padding:3px 0;font-size:12.5px">${esc(t)}</a>`).join('');
-  $('#main').innerHTML=`<div style="max-width:900px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h1 style="margin:0">📖 Manual de uso</h1>
-      <div class="row" style="gap:6px">
-        <input id="man-q" placeholder="🔎 Buscar en el manual…" oninput="filterManual(this.value)" style="width:220px">
-        <a class="btn sec small" href="/api/manual" download="MANUAL.json" title="Descargar el texto">⬇</a>
-      </div>
-    </div>
-    ${stale?`<div class="banner">⚠ Este manual documenta la versión <b>${esc(MANUAL.manual_version)}</b> y el programa está en <b>${esc(MANUAL.program_version)}</b>. Puede faltarle alguna novedad reciente — revisa el registro de cambios.</div>`
-           :`<p class="muted" style="font-size:12px">Actualizado para la versión <b>${esc(MANUAL.manual_version||'actual')}</b> del programa.</p>`}
-    <div class="row" style="align-items:flex-start;gap:16px">
-      <div class="card" style="flex:1;font-size:13.5px;line-height:1.6" id="man-body">${mdToHtml(MANUAL.content)}</div>
-      <div class="card" style="width:210px;position:sticky;top:14px;max-height:80vh;overflow:auto" id="man-toc">
-        <b style="font-size:12px">Contenido</b>${toc}</div>
-    </div></div>`;
+
+function viewPersonajes() {
+  const d = S.detail;
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando…'));
+  const chars = d.characters_roster || [];
+  const nombre = el('input', { class: 'input', placeholder: 'Nombre del personaje' });
+  const desc = el('input', { class: 'input', placeholder: 'Cómo se ve y cómo habla' });
+  const narrador = el('input', { type: 'checkbox' });
+  const pend = el('span', { class: 'muted', style: 'font-size:13px' });
+  let files = [];
+
+  const cards = chars.map(c => el('div', { class: 'card', style: 'padding:14px' },
+    el('div', { style: 'display:flex;justify-content:space-between;gap:10px;align-items:baseline' },
+      el('span', { style: 'font-family:var(--heading);font-size:19px' }, c.name),
+      c.narrator ? el('span', { class: 'tag' }, 'narrador') : null),
+    el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:6px' }, c.description || 'sin descripción'),
+    el('div', { class: 'mono muted', style: 'margin-top:8px' }, `${(c.files || []).length} imagen(es)`),
+    el('div', { style: 'display:flex;gap:6px;margin-top:12px;flex-wrap:wrap' },
+      c.narrator ? null : el('button', { class: 'btn btn-sm', onclick: async () => {
+        try { await api(`/api/projects/${S.slug}/characters/${c.id}`, { method: 'PUT', body: JSON.stringify({ narrator: true }) }); await pollRun(); render(); } catch (e) { alert(e.message); }
+      } }, 'Hacer narrador'),
+      el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*', async fs => {
+        try { await api(`/api/projects/${S.slug}/characters/${c.id}/files`, { method: 'POST', body: JSON.stringify({ files: fs }) }); await pollRun(); render(); } catch (e) { alert(e.message); }
+      }) }, 'Añadir imágenes'),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: async () => {
+        if (!confirm(`¿Borrar a ${c.name}?`)) return;
+        try { await api(`/api/projects/${S.slug}/characters/${c.id}`, { method: 'DELETE' }); await pollRun(); render(); } catch (e) { alert(e.message); }
+      } }, 'Borrar'))));
+
+  return el('div', { class: 'wrap', style: 'max-width:980px' }, projHeader('personajes', `${chars.length} personajes${d.has_character ? ' · con narrador' : ''}`),
+    chars.length ? el('div', { class: 'grid4', style: 'margin-top:20px' }, cards)
+      : el('p', { class: 'muted', style: 'margin-top:20px;max-width:540px;line-height:1.75' }, 'Sin personajes. Si añades uno con foto y lo marcas como narrador, el sistema le hace lipsync en parte del video en lugar de mostrar solo B-roll.'),
+    el('div', { style: 'border-top:1px solid var(--divider);margin-top:26px;padding-top:20px;max-width:560px' },
+      el('div', { class: 'kicker' }, 'Añadir personaje'),
+      el('div', { style: 'display:flex;flex-direction:column;gap:12px;margin-top:12px' }, nombre, desc,
+        el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px' }, narrador, 'Es el narrador del video'),
+        el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+          el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*', fs => { files = fs; pend.textContent = `${fs.length} imagen(es) listas`; }) }, 'Elegir imágenes'), pend),
+        el('button', { class: 'btn btn-primary', style: 'align-self:flex-start', onclick: async () => {
+          try {
+            await api(`/api/projects/${S.slug}/characters`, { method: 'POST', body: JSON.stringify({ name: nombre.value, description: desc.value, narrator: narrador.checked, files }) });
+            files = []; await pollRun(); render();
+          } catch (e) { alert(e.message); }
+        } }, 'Guardar personaje'))),
+    el('div', { class: 'muted', style: 'font-size:13px;margin-top:14px' }, 'Tras cambiar el elenco, rehaz desde «Escenas» para que el director lo use.'));
 }
-function filterManual(q){
-  const body=$('#man-body');if(!body)return;
-  const t=(q||'').trim().toLowerCase();
-  if(!t){body.innerHTML=mdToHtml(MANUAL.content);$('#man-toc').style.display='';return}
-  const hits=MANUAL.content.split('\n').filter(l=>l.toLowerCase().includes(t)&&l.trim()&&!/^<!--/.test(l));
-  $('#man-toc').style.display='none';
-  body.innerHTML=hits.length
-    ?`<p class="muted" style="font-size:12px">${hits.length} línea(s) con «${esc(q)}»:</p>`+mdToHtml(hits.join('\n'))
-    :`<p class="muted">Sin resultados para «${esc(q)}». Prueba con otra palabra (por ejemplo: «costo», «narración», «banco», «rehacer»).</p>`;
+
+function viewMetadatos() {
+  const d = S.detail;
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando…'));
+  const meta = d.metadata_full;
+  if (!meta) return el('div', { class: 'wrap' }, projHeader('metadatos', 'Metadatos'),
+    el('p', { class: 'muted', style: 'margin-top:22px;max-width:520px;line-height:1.75' }, 'Aún no hay metadatos. Genera hasta la fase de metadatos para elegir entre las tres propuestas de título, descripción y miniatura.'));
+  const chosen = meta.chosen || {};
+  const pick = async (kind, index) => {
+    try { await api(`/api/projects/${S.slug}/metadata/select`, { method: 'POST', body: JSON.stringify({ kind, index }) }); await pollRun(); render(); }
+    catch (e) { alert(e.message); }
+  };
+  const opciones = (kind, items, renderItem) => el('div', { style: 'margin-top:22px' },
+    el('div', { class: 'kicker', style: 'margin-bottom:10px' }, { title: 'Título', description: 'Descripción', thumbnail: 'Miniatura' }[kind]),
+    el('div', { style: kind === 'thumbnail' ? 'display:grid;grid-template-columns:repeat(3,1fr);gap:16px' : 'display:flex;flex-direction:column;gap:10px' },
+      items.map((it, i) => el('div', {
+        class: 'card',
+        style: `padding:${kind === 'thumbnail' ? '8px' : '13px 15px'};cursor:pointer;${chosen[kind] === i ? 'border-color:var(--accent);background:var(--a100)' : ''}`,
+        onclick: () => pick(kind, i)
+      }, renderItem(it, i), chosen[kind] === i ? el('div', { class: 'mono', style: 'color:var(--a700);margin-top:8px' }, 'elegida') : null))));
+
+  return el('div', { class: 'wrap', style: 'max-width:880px' }, projHeader('metadatos', 'Elige lo que se publica'),
+    (meta.title_options || []).length ? opciones('title', meta.title_options, o => el('div', { style: 'font-family:var(--heading);font-size:20px;line-height:1.3' }, o.title || o)) : null,
+    (meta.description_options || []).length ? opciones('description', meta.description_options, o => el('div', { style: 'font-size:14px;line-height:1.7' }, (o.description || o).slice(0, 320))) : null,
+    (meta.thumbnails || []).length ? opciones('thumbnail', meta.thumbnails, f => el('img', { src: `/files/${S.slug}/final/${f}`, style: 'width:100%;display:block' })) : null,
+    el('div', { class: 'muted', style: 'font-size:13px;margin-top:18px' }, 'Elegir no vuelve a generar nada: solo cambia qué opción se usa al publicar.'));
 }
-let EVFILTER='all';
-async function showEvents(){
-  const main=document.getElementById('main');
-  let data;
-  try{data=await api('/api/events?limit=500')}
-  catch(e){
-    if((e.message||'').includes('No encontrado'))
-      toast('⚠ El programa sigue ejecutando la versión anterior: cierra la ventana de iniciar.bat y ábrela de nuevo.');
-    else toast('⚠ '+e.message);
-    return;
-  }
-  const icon={info:'•',warn:'⚠',error:'✕'};
-  const color={info:'var(--muted)',warn:'#E8C46B',error:'#ff6b6b'};
-  const evs=data.events.filter(e=>EVFILTER==='all'||e.level===EVFILTER);
-  // El log guarda el slug interno (estable aunque renombres el proyecto);
-  // se muestra el nombre visible ACTUAL — así un proyecto renombrado o
-  // duplicado no aparece con el nombre técnico enterrado.
-  const allProjects=window._allProjects||await api('/api/projects').catch(()=>[]);
-  const nameOf=slug=>{const p=allProjects.find(x=>x.slug===slug);return p?(p.display_name||slug):slug};
-  const rows=evs.map(e=>{
-    const sec=(e.seconds!=null)?` <span class="muted">(${e.seconds}s)</span>`:'';
-    const ph=e.phase?` <span class="badge">${esc(e.phase)}</span>`:'';
-    const pr=e.project?` <span class="muted" style="font-size:11px" title="${esc(e.project)}">${esc(nameOf(e.project))}</span>`:'';
-    return `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="color:${color[e.level]||'var(--muted)'};min-width:14px;text-align:center">${icon[e.level]||'•'}</span>
-      <span class="muted" style="font-size:11px;white-space:nowrap">${esc(e.ts||'')}</span>
-      <span style="flex:1">${esc(e.message||'')}${sec}${ph}${pr}</span>
-    </div>`;
-  }).join('')||'<div class="muted" style="padding:14px 0">Aún no hay eventos. Genera un video y aquí quedará el historial de novedades, errores y tiempos.</div>';
-  main.innerHTML=`<div style="max-width:820px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h1 style="margin:0">🧾 Log de eventos</h1>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn sec small" onclick="EVFILTER='all';showEvents()">Todo</button>
-        <button class="btn sec small" onclick="EVFILTER='warn';showEvents()">Avisos</button>
-        <button class="btn sec small" onclick="EVFILTER='error';showEvents()">Errores</button>
-        <button class="btn sec small" onclick="showEvents()">↻ Actualizar</button>
-        <a class="btn small" href="/api/events/download" download>⬇ Descargar</a>
-      </div>
-    </div>
-    <p class="muted" style="font-size:12px">Cada novedad, aviso, error y el tiempo de cada fase quedan registrados aquí. Descárgalo para compartírmelo si algo falla.</p>
-    <div class="card" style="font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace">${rows}</div>
-  </div>`;
-}
-(async function(){
-  const data=await api('/api/config');
-  CAT=data;CFG=data.config;
-  renderVersion();
-  await refreshList();
-  const projects=await api('/api/projects');
-  if(projects.length)openProject(projects[0].slug);else showNew();
-})();
+
+boot();
 </script>
 </body>
 </html>
