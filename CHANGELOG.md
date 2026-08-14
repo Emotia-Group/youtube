@@ -52,6 +52,12 @@ formas concretas de gastar menos sin bajar la calidad.
   (4/6/8 s, frente a los 5/10 de Kling) y su pista nativa se guarda junto al
   clip. El costo de los clips pasa a calcularse **en proporción a los segundos
   que se piden de verdad**, en vez de saltar al doble al pasar de 7.5 s.
+  *Alcance de esta versión:* esa pista se **guarda**, pero todavía no entra
+  sola en la mezcla final — la cama de ambiente se construye como un único
+  archivo para todo el video desde la fase de música, y empalmar ahí el sonido
+  de una escena concreta toca el mezclador de audio, que es la pieza más
+  delicada del programa. Queda para una revisión propia, con clips reales
+  delante, en vez de tocarlo a ciegas.
 - 🆕 Y MÁS OPCIONES EN TODAS LAS CATEGORÍAS: **FLUX 2 Pro y Flash** (ojo: FLUX
   2 cobra por megapíxel), **Ideogram v3 Turbo** como relevo barato de Imagen 4
   Fast, **Kling 3.0**, **Nano Banana Pro** como modelo de identidad (mantiene
