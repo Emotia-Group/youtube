@@ -907,7 +907,12 @@ function mdInline(s) {
     .replace(/`([^`]+)`/g, '<code style="font:11px var(--mono);background:var(--a100);padding:1px 4px;border-radius:3px">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
-    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Las comillas se escapan también en el enlace: sin eso, una URL que
+    // llevara una comilla cerraría el atributo href y lo que viniera detrás
+    // se interpretaría como marcado. El manual es un archivo del programa,
+    // pero un lector de Markdown no debe depender de que su entrada sea buena.
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,
+      (_, t, u) => `<a href="${u.replace(/"/g, '&quot;')}" target="_blank" rel="noopener">${t}</a>`);
 }
 
 function mdToHtml(md) {
