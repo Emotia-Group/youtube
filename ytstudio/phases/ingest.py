@@ -518,8 +518,9 @@ def run(project, cfg) -> None:
                 "No hay un proveedor de transcripción real configurado (STT) "
                 "— tu grabación se usará como audio, pero el guion y los "
                 "subtítulos serán de MUESTRA, no lo que realmente dijiste. "
-                "Configura tu clave de OpenAI en ⚙ Configuración para "
-                "transcribir tu voz de verdad.")
+                "Configura en ⚙ Configuración tu clave de OpenAI (Whisper) o "
+                "de AssemblyAI (más barato y con mejores tiempos por palabra) "
+                "para transcribir tu voz de verdad.")
         # (retrocompatible: un STT sin el parámetro `hint` se llama sin él)
         import inspect
         kw = {}

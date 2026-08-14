@@ -1006,9 +1006,11 @@ function showSettings(){
   <div class="card"><h2>🔑 Claves de API</h2>
     <p class="muted" style="margin-bottom:12px">Pega aquí tus claves y pulsa Guardar — se almacenan en tu archivo local <code>.env</code> y se activan al instante. La mínima recomendada es la de Anthropic (Claude), que genera el concepto, el guion y las escenas: consíguela en <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</p>
     ${[['ANTHROPIC_API_KEY','Anthropic (Claude) — guion, concepto, escenas'],
-       ['OPENAI_API_KEY','OpenAI — voz TTS, Whisper, imágenes'],
-       ['ELEVENLABS_API_KEY','ElevenLabs — voces premium'],
-       ['REPLICATE_API_TOKEN','Replicate — FLUX, Kling, MusicGen']].map(([k,label])=>`
+       ['OPENAI_API_KEY','OpenAI — voz TTS, Whisper, imágenes con texto legible (GPT Image 2)'],
+       ['ELEVENLABS_API_KEY','ElevenLabs — voces premium y música con licencia limpia'],
+       ['REPLICATE_API_TOKEN','Replicate — FLUX, Veo/Kling, escalado, lipsync, MusicGen'],
+       ['CARTESIA_API_KEY','Cartesia — voz ~10x más barata que ElevenLabs (opcional)'],
+       ['ASSEMBLYAI_API_KEY','AssemblyAI — transcripción más barata y con mejores tiempos (opcional)']].map(([k,label])=>`
       <div class="keyfield">
         <span style="font-size:13px">${label}</span>
         <input type="password" id="key-${k}" placeholder="${CAT.keys[k]?'●●●●●●●● (ya configurada — escribe para reemplazar)':'pega tu clave aquí'}">

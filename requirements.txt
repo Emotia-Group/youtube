@@ -10,10 +10,17 @@ python-pptx>=0.6.23
 openpyxl>=3.1
 
 # Proveedores opcionales (instala solo los que uses)
-openai>=1.40              # TTS (tts-1/gpt-4o-mini-tts), STT (whisper-1), imágenes (gpt-image-1)
+openai>=1.40              # TTS (gpt-4o-mini-tts), STT (whisper-1), imágenes
+                          # (GPT Image 2 — gpt-image-1 se apaga el 23/10/2026)
 elevenlabs>=1.6           # TTS de alta calidad multilingüe
 edge-tts>=6.1             # TTS gratuito (voces neuronales de Edge)
-replicate>=0.32           # imágenes (FLUX), video generativo (Kling/Wan), música (MusicGen)
+replicate>=0.32           # imágenes (FLUX), video generativo (Kling/Wan/Veo),
+                          # ESCALADO del modo híbrido, lipsync, música
+
+# Cartesia (voz ~10x más barata que ElevenLabs) y AssemblyAI (transcripción
+# más barata y con mejores tiempos por palabra) NO necesitan paquete: hablan
+# por HTTP directo. Basta con definir CARTESIA_API_KEY / ASSEMBLYAI_API_KEY
+# en ⚙ Configuración → Claves de API.
 yt-dlp>=2024.10           # análisis profundo de videos de referencia por enlace
                           # (guion/transcripción, ritmo de cortes, estilo visual)
 
