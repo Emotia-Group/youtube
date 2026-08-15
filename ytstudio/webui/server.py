@@ -1150,6 +1150,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_library())
             elif path == "/api/elements":
                 self._json(api_elements_list())
+            elif m := re.fullmatch(r"/docs/manual/([\w.-]+)", path):
+                # CAPTURAS DE PANTALLA DEL MANUAL. La ruta es la misma que en
+                # el archivo (docs/manual/…), así las imágenes se ven tanto en
+                # GitHub como dentro del programa, sin dos juegos de rutas.
+                self._serve_file(ROOT / "docs" / "manual" / m.group(1))
             elif m := re.fullmatch(r"/elements/([\w-]+)/(.+)", path):
                 self._element_file(m.group(1), m.group(2))
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):

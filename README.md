@@ -268,4 +268,17 @@ Qué hace esta fase:
 
 El paso a paso de Google Cloud (proyecto, APIs, pantalla de consentimiento y
 por qué los tokens caducan a los 7 días mientras la app está «en pruebas»)
-está en el **MANUAL.md, capítulo 13**.
+está en el **[MANUAL.md](MANUAL.md), capítulo 18**.
+
+## 📖 Manual de uso
+
+El [MANUAL.md](MANUAL.md) es la guía completa para usar el programa sin
+conocimientos técnicos: capturas de pantalla reales, un recorrido guiado para
+el primer video, una **receta paso a paso por cada tipo de video** (largo con
+tu voz, largo con voz artificial, Short/Reel/TikTok, anuncios de Meta,
+presentador con lipsync, video de reacción), cómo ahorrar dinero, cómo subir
+la calidad, problemas frecuentes y un glosario en palabras normales.
+
+También se lee **dentro del programa**, con índice y buscador: menú
+**📖 Manual de uso**. Si el manual se queda atrás respecto a la versión del
+programa, la interfaz lo avisa y `probar.bat` lo pone en rojo.

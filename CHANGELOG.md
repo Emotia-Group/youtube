@@ -9,6 +9,41 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.58.0 — 2026-08-15
+El manual, reescrito para que lo pueda seguir cualquiera. Antes describía el
+programa; ahora **enseña a usarlo**: con capturas de pantalla reales, una
+receta paso a paso por cada tipo de video y sin dar por sabido nada.
+
+- 📸 CAPTURAS DENTRO DEL MANUAL: 16 pantallas reales del programa (la de
+  inicio, los formatos, las casillas de archivos, el panel de un proyecto con
+  su estimación, el storyboard, el editor de escenas, el video con las 3
+  miniaturas, el concepto, las tres partes de Configuración, los canales y
+  estilos, el banco de elementos, el log de eventos y la Torre de Control con
+  sus reportes). Se ven igual en GitHub y dentro del programa: el visor del
+  manual ya renderiza imágenes — hasta ahora una imagen aparecía como el
+  texto crudo «![alto](ruta)» — y el servidor las sirve desde `docs/manual/`
+  con una ruta que no permite salirse de esa carpeta.
+- 🧭 UNA RECETA POR TIPO DE VIDEO (lo que pediste): documental largo con tu
+  voz, largo con voz artificial, Short/Reel/TikTok con sus 7 plantillas,
+  anuncio de Meta en 1:1 y 4:5, presentador en cámara con lipsync, video de
+  reacción y copiar el estilo de un video de referencia. Cada una con sus
+  pasos numerados, sus ajustes recomendados, su costo típico y sus errores
+  frecuentes.
+- 🗣 SIN JERGA: los términos inevitables se explican donde aparecen («prompt»
+  es la descripción con la que se pide la imagen, «lipsync» es animar la foto
+  para que mueva la boca, «ducking» es bajar la música cuando hablas) y el
+  glosario final está en palabras normales. Se añadió un recorrido guiado
+  «tu primer video en 20 minutos» que cuesta centavos.
+- 🖥 LOS NOMBRES, CORREGIDOS: el manual llamaba «pestaña Material», «pestaña
+  Personajes», «pestaña Escenas» y «📚 Biblioteca» a pantallas que en la
+  interfaz se llaman 📎 Archivos, 🎞 Storyboard y 📺 Canales y estilos. Ya no:
+  y una comprobación nueva falla si vuelven a divergir.
+- ✅ Batería v0.58.0: verifica que ninguna captura esté rota ni huérfana, que
+  el servidor las sirva, que el visor las pinte, que estén documentados los
+  6 formatos y las 7 plantillas del catálogo (si mañana se añade uno y nadie
+  lo escribe, sale en rojo) y que el manual siga nombrando las pantallas que
+  de verdad existen.
+
 ## v0.57.0 — 2026-08-14
 Los seis detalles que encontraste en el video de prueba. Dos de ellos eran
 fallos de verdad en el personaje con lipsync — y el segundo explicaba por qué
