@@ -133,7 +133,11 @@ for name, texto in MANUALES.items():
     check(f"T3c «{name}» solo usa sus capturas y las del panel", not ajenas,
           str(ajenas))
 
-en_disco = {str(p.relative_to(ROOT)) for p in IMG_DIR.rglob("*.png")}
+# .as_posix(): en Windows, str() de una ruta da «docs\manual\...» y el manual
+# la escribe «docs/manual/...», así que TODAS las capturas parecían huérfanas y
+# la batería salía roja en el equipo del creador con el programa perfectamente
+# sano. Las rutas de Markdown son siempre con barra normal: se comparan así.
+en_disco = {p.relative_to(ROOT).as_posix() for p in IMG_DIR.rglob("*.png")}
 huerfanas = sorted(en_disco - usadas)
 check("T3d no hay capturas huérfanas", not huerfanas, str(huerfanas))
 pesadas = [str(p.name) for p in IMG_DIR.rglob("*.png") if p.stat().st_size > 900_000]

@@ -9,6 +9,17 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.62.1 — 2026-08-17
+Arreglo de la batería de pruebas en Windows: `probar.bat` salía en rojo con el
+programa perfectamente sano.
+
+- 🪟 «NO HAY CAPTURAS HUÉRFANAS» daba por huérfanas TODAS las capturas del
+  manual al correr en Windows. La prueba comparaba la ruta del disco
+  (`docs\manual\…`, con barra invertida) contra la que escribe el manual
+  (`docs/manual/…`, con barra normal): nunca coincidían. Ahora se comparan las
+  dos con barra normal, que es como se escriben las rutas en Markdown. Ninguna
+  captura estaba de más: era la prueba la que miraba mal.
+
 ## v0.62.0 — 2026-08-17
 Cambiar de plantilla ya no se hace sin querer: el selector pasa de dos botones
 pegados a **una ficha por plantilla, con miniatura**, y el cambio **pide
