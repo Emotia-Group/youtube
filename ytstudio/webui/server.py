@@ -90,11 +90,69 @@ def get_version() -> dict:
 SERVER_VERSION = get_version().get("version", "")
 
 
-def manual_version() -> str:
+# ---------------------------------------------------------------------------
+# PLANTILLAS DE LA INTERFAZ
+# ---------------------------------------------------------------------------
+# El programa se ve de dos maneras distintas y el creador elige cuál usar sin
+# perder la otra. Cada plantilla tiene SU archivo de interfaz, SU manual y SU
+# juego de capturas: un manual con pantallas que no coinciden con lo que tienes
+# delante enseña peor que no tener manual.
+
+TEMPLATES: dict[str, dict] = {
+    "nueva": {"label": "Nueva (editorial, clara u oscura)",
+              "html": "index.html", "manual": "MANUAL.md",
+              "shots": "nueva"},
+    "clasica": {"label": "Clásica (oscura, la anterior)",
+                "html": "index-clasica.html", "manual": "MANUAL-clasica.md",
+                "shots": "clasica"},
+}
+DEFAULT_TEMPLATE = "nueva"
+
+
+def ui_template(cfg: dict | None = None) -> str:
+    """Plantilla activa. Un valor desconocido en el config no puede dejar el
+    programa sin interfaz: se cae a la de por defecto."""
+    if cfg is None:
+        try:
+            cfg = load_config()
+        except Exception:
+            cfg = {}
+    name = str(((cfg.get("ui") or {}).get("template") or "")).strip().lower()
+    return name if name in TEMPLATES else DEFAULT_TEMPLATE
+
+
+def api_set_ui_template(body: dict) -> dict:
+    """Cambia la plantilla y la deja guardada en config.local.yaml (fuera de
+    Git, como el resto de las preferencias)."""
+    name = str(body.get("template") or "").strip().lower()
+    if name not in TEMPLATES:
+        raise ApiError(400, f"Plantilla desconocida: {name!r}. "
+                            f"Opciones: {', '.join(TEMPLATES)}.")
+    path = ROOT / "config.local.yaml"
+    try:
+        current = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        current = {}
+    current.setdefault("ui", {})["template"] = name
+    path.write_text(yaml.safe_dump(current, allow_unicode=True,
+                                   sort_keys=False), encoding="utf-8")
+    return {"template": name, "label": TEMPLATES[name]["label"]}
+
+
+def manual_path(template: str | None = None) -> Path:
+    """Archivo de manual de una plantilla. Si esa versión aún no existe, se
+    sirve la general: mejor un manual con capturas de la otra interfaz que
+    ningún manual."""
+    tpl = TEMPLATES.get(template or ui_template(), TEMPLATES[DEFAULT_TEMPLATE])
+    path = ROOT / tpl["manual"]
+    return path if path.exists() else ROOT / "MANUAL.md"
+
+
+def manual_version(template: str | None = None) -> str:
     """Versión que declara el MANUAL (marca MANUAL_VERSION). Sirve para avisar
     en la interfaz cuando el manual se quedó atrás respecto al programa — y
     para que la batería de pruebas lo detecte sola."""
-    path = ROOT / "MANUAL.md"
+    path = manual_path(template)
     if not path.exists():
         return ""
     m = re.search(r"MANUAL_VERSION:\s*([0-9]+\.[0-9]+\.[0-9]+)",
@@ -103,14 +161,17 @@ def manual_version() -> str:
 
 
 def api_manual() -> dict:
-    """El manual de uso + la versión que documenta y la del programa, para que
-    la interfaz avise si se quedó desactualizado. Las versiones se comparan sin
-    la «v» inicial: el CHANGELOG las escribe «v0.51.0» y la marca «0.51.0»."""
-    path = ROOT / "MANUAL.md"
+    """El manual DE LA PLANTILLA ACTIVA + la versión que documenta y la del
+    programa, para que la interfaz avise si se quedó desactualizado. Las
+    versiones se comparan sin la «v» inicial: el CHANGELOG las escribe
+    «v0.51.0» y la marca «0.51.0»."""
+    tpl = ui_template()
+    path = manual_path(tpl)
     prog = str((get_version() or {}).get("version", "")).lstrip("v")
     return {"content": path.read_text(encoding="utf-8") if path.exists() else "",
-            "manual_version": manual_version(),
-            "program_version": prog}
+            "manual_version": manual_version(tpl),
+            "program_version": prog,
+            "template": tpl, "template_label": TEMPLATES[tpl]["label"]}
 
 
 def api_changelog() -> dict:
@@ -926,6 +987,9 @@ def api_get_config() -> dict:
         "keys": key_status(),
         "version": get_version(),
         "server_version": SERVER_VERSION,
+        "ui_template": ui_template(),
+        "ui_templates": [{"id": k, "label": v["label"]}
+                         for k, v in TEMPLATES.items()],
         "phases": [{"name": n, "desc": d, "label": PHASE_LABELS.get(n, n)}
                    for n, _, d in PHASES],
     }
@@ -938,6 +1002,7 @@ def api_get_config() -> dict:
 # fluye siempre desde config.yaml (el del repo, actualizable con git pull).
 _UI_CONFIG_PATHS = (
     ("language",),
+    ("ui", "template"),  # plantilla de la interfaz elegida por el creador
     ("style", "preset"),
     ("video", "target_minutes"), ("video", "width"), ("video", "height"),
     ("video", "burn_subtitles"), ("video", "scene_seconds"),
@@ -1138,6 +1203,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._serve_file(target)
 
+    def _manual_image(self, folder: str, name: str) -> None:
+        """Sirve una captura del manual (docs/manual/<plantilla>/<archivo>)."""
+        base = (ROOT / "docs" / "manual").resolve()
+        target = (base / folder / name).resolve()
+        if not str(target).startswith(str(base)):
+            self._json({"error": "Ruta inválida"}, 403)
+            return
+        self._serve_file(target)
+
     def _element_file(self, category: str, name: str) -> None:
         """Sirve un archivo del BANCO DE ELEMENTOS para la vista previa."""
         from ytstudio.utils.elements import BANK_DIR
@@ -1157,7 +1231,11 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path.split("?")[0]
             query = parse_qs(urlparse(self.path).query)
             if path in ("/", "/index.html"):
-                self._serve_file(STATIC_DIR / "index.html", no_cache=True)
+                # La PLANTILLA elegida decide qué interfaz se sirve. Las dos
+                # hablan con este mismo motor y con los mismos proyectos.
+                self._serve_file(
+                    STATIC_DIR / TEMPLATES[ui_template()]["html"],
+                    no_cache=True)
             elif path == "/api/events":
                 self._json(api_events(query))
             elif path == "/api/events/download":
@@ -1184,6 +1262,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_library())
             elif path == "/api/elements":
                 self._json(api_elements_list())
+            elif m := re.fullmatch(r"/docs/manual/([\w-]+)/([\w.-]+)", path):
+                # CAPTURAS DEL MANUAL, una carpeta por plantilla. La ruta es la
+                # misma que se escribe en el archivo (docs/manual/…), así las
+                # imágenes se ven igual en GitHub y dentro del programa.
+                self._manual_image(m.group(1), m.group(2))
             elif m := re.fullmatch(r"/elements/([\w-]+)/(.+)", path):
                 self._element_file(m.group(1), m.group(2))
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
@@ -1243,6 +1326,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_config(self._body()))
             elif path == "/api/keys":
                 self._json(api_save_keys(self._body()))
+            elif path == "/api/ui-template":
+                self._json(api_set_ui_template(self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/script", path):
                 self._json(api_save_script(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/rename", path):

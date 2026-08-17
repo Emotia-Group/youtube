@@ -904,6 +904,13 @@ function overlay(titulo, contenido, ancho) {
 function mdInline(s) {
   return String(s)
     .replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    // CAPTURAS DEL MANUAL. Van antes que los enlaces: si no, «![alt](ruta)»
+    // se convertiría en un enlace y el «!» quedaría suelto en el texto. Solo
+    // se admiten rutas relativas del propio programa (docs/manual/…): una
+    // imagen remota rompería la promesa de funcionar sin conexión.
+    .replace(/!\[([^\]]*)\]\((docs\/manual\/[\w.\-/]+)\)/g,
+      (_, alt, src) => `<img src="${src}" alt="${alt.replace(/"/g, '&quot;')}" loading="lazy"`
+        + ' style="display:block;width:100%;max-width:820px;border:1px solid var(--divider);border-radius:4px;margin:12px 0">')
     .replace(/`([^`]+)`/g, '<code style="font:11px var(--mono);background:var(--a100);padding:1px 4px;border-radius:3px">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
@@ -925,8 +932,17 @@ function mdToHtml(md) {
   const lineas = [];
   for (const cruda of String(md || '').split('\n')) {
     const t = cruda.trim();
-    if (!nuevoBloque(t) && lineas.length && lineas[lineas.length - 1]
-        && !/^(#{1,6} |>|\||---|===)/.test(lineas[lineas.length - 1])) {
+    // Los comentarios del archivo (la marca de versión, la de plantilla) son
+    // para el programa, no para quien lee: no se pintan.
+    if (/^<!--/.test(t)) continue;
+    const previa = lineas.length ? lineas[lineas.length - 1] : '';
+    // Una CITA de varias líneas es UNA cita: si cada línea se pintara por su
+    // cuenta, el aviso salía troceado en cinco recuadros y una negrita
+    // partida entre dos líneas nunca se cerraba (se veían los asteriscos).
+    if (/^>/.test(t) && /^>/.test(previa)) {
+      lineas[lineas.length - 1] += ' ' + t.replace(/^>\s?/, '');
+    } else if (!nuevoBloque(t) && previa
+        && !/^(#{1,6} |\||---|===)/.test(previa)) {
       lineas[lineas.length - 1] += ' ' + t;     // continúa el bloque anterior
     } else {
       lineas.push(t);
@@ -1204,6 +1220,32 @@ function proveedorCard(catKey, cat, cfg, set, keys) {
     detalle);
 }
 
+// PLANTILLA DE LA INTERFAZ: el programa se ve de dos maneras y el creador
+// elige cuál usar. No se pierde ninguna: se cambia y se vuelve cuando quiera,
+// y el MANUAL se sirve con las capturas de la que esté puesta.
+function plantillaSelector() {
+  const actual = S.cfg?.ui_template || 'nueva';
+  const opciones = S.cfg?.ui_templates || [];
+  if (opciones.length < 2) return null;
+  const aviso = el('span', { class: 'muted', style: 'font-size:13px' });
+  return el('div', { style: 'margin-top:26px' },
+    el('div', { class: 'kicker' }, 'Plantilla de la interfaz'),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin:8px 0 12px' },
+      'Cómo se ve el programa. Las dos plantillas trabajan con el mismo motor y con los mismos proyectos: cambiar de una a otra no toca nada de tu trabajo. El manual de uso también cambia, para que sus capturas coincidan con lo que tienes delante.'),
+    el('div', { class: 'seg' }, opciones.map(o => el('button', {
+      'aria-pressed': String(o.id === actual),
+      onclick: async () => {
+        if (o.id === actual) return;
+        aviso.textContent = 'Cambiando…';
+        try {
+          await api('/api/ui-template', { method: 'PUT', body: JSON.stringify({ template: o.id }) });
+          location.reload();
+        } catch (e) { aviso.textContent = e.message; }
+      },
+    }, o.label))),
+    el('div', { style: 'margin-top:8px' }, aviso));
+}
+
 function viewAjustes() {
   const keys = S.cfg?.keys || {};
   const cfg = JSON.parse(JSON.stringify(S.cfg?.config || {}));
@@ -1263,6 +1305,8 @@ function viewAjustes() {
   return el('div', { class: 'wrap', style: 'max-width:820px' },
     el('div', { class: 'kicker' }, 'Local · este equipo'),
     el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Ajustes'),
+
+    plantillaSelector(),
 
     el('div', { class: 'kicker', style: 'margin:26px 0 12px' }, 'Video y voz'),
     el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px' },

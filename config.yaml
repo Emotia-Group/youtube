@@ -1,4 +1,17 @@
 language: es
+ui:
+  template: nueva          # PLANTILLA DE LA INTERFAZ (el aspecto del programa):
+                           #   nueva   · la interfaz editorial de la v0.59, con
+                           #             modo claro/oscuro y pestañas Corrida ·
+                           #             Material · Guion · Escenas ·
+                           #             Personajes · Metadatos
+                           #   clasica · la interfaz oscura anterior, con las
+                           #             pestañas Guion · Storyboard · Editor ·
+                           #             Video · Concepto · Archivos
+                           # Se cambia sin tocar este archivo, desde la propia
+                           # interfaz, y el MANUAL se sirve con las capturas de
+                           # la plantilla que estés usando. Las dos hablan con
+                           # el mismo motor: los proyectos no se ven afectados.
 style:
   preset: documental_cinematografico
 video:

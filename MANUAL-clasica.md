@@ -1,17 +1,17 @@
 # Manual de uso de ytstudio
 
 <!-- MANUAL_VERSION: 0.60.0 -->
-<!-- PLANTILLA: nueva -->
+<!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
 técnicos. Si sabes usar el navegador y arrastrar un archivo, sabes usar este
 programa.
 
-> 🎨 **Estás leyendo el manual de la plantilla NUEVA** (la interfaz clara u
-> oscura, con las pestañas Corrida · Material · Guion · Escenas · Personajes ·
-> Metadatos). Si cambias a la plantilla clásica en **Ajustes**, este mismo
-> menú te mostrará el manual de la otra, con sus propias capturas. Ver el
-> capítulo 2.6.
+> 🎨 **Estás leyendo el manual de la plantilla CLÁSICA** (la interfaz oscura,
+> con el menú lateral y las pestañas Guion · Storyboard · Editor · Video ·
+> Concepto · Archivos). Si cambias a la plantilla nueva en **⚙ Configuración**,
+> este mismo menú te mostrará el manual de la otra, con sus propias capturas.
+> Ver el capítulo 2.6.
 
 **Cómo leerlo:**
 
@@ -20,7 +20,7 @@ programa.
   con tu cara)? Ve directo al capítulo **4**.
 - ¿Buscas algo puntual («cómo cambio la miniatura», «por qué salió caro»)?
   Usa el **buscador** del manual dentro del programa (**📖 Manual de uso** →
-  🔎) o el índice lateral.
+  🔎) o el índice de la derecha.
 
 > **La regla de oro:** todo lo que cuesta dinero se te avisa **antes** (con
 > una estimación), se mide **mientras** (con un tope automático que frena el
@@ -61,7 +61,7 @@ textos para publicar.
   responsabilidad**.
 - **No genera caras de personas reales** con IA (los generadores lo
   rechazan). Para eso está el **banco de elementos**: fotos reales que tú
-  aportas (capítulo 5.5).
+  aportas (capítulo 5.4).
 - **No funciona sin ffmpeg**, un programa gratuito que hace el montaje. Se
   instala una sola vez (capítulo 2.3).
 
@@ -100,21 +100,19 @@ Ocurren dos cosas:
 
 Para cerrar el programa: cierra la ventana negra.
 
-![La pantalla de inicio con la lista de proyectos](docs/manual/nueva/01-inicio-proyectos.png)
+![La pantalla de inicio del programa](docs/manual/clasica/01-nuevo-proyecto.png)
 
-Arriba, en la cabecera, está todo lo que vas a usar:
+A la izquierda está el menú fijo, y lo vas a usar todo el tiempo:
 
-| Control | Para qué |
+| Menú | Para qué |
 |---|---|
-| **Proyectos** | La lista de tus videos |
-| **Canales** | La identidad guardada de cada canal (estilos reutilizables) |
-| **Biblioteca** | El banco de elementos: tus fotos, mapas y logos |
-| **Ajustes** | Plantilla, idioma, calidad, modelos, claves y ahorro |
-| **La versión** (v0.60.0 · fecha) | Un clic muestra las novedades de cada versión |
+| **＋ Nuevo proyecto** | Empezar un video |
+| **📺 Canales y estilos** | Guardar la identidad de tus canales y el banco de elementos |
 | **📖 Manual de uso** | Este manual, con buscador |
-| **Log de eventos** | El historial de todo lo que pasó (para diagnosticar) |
-| **Claro / Oscuro** | El aspecto de la interfaz, a tu gusto |
-| **Nuevo proyecto** | Empezar un video |
+| **🧾 Log de eventos** | El historial de todo lo que pasó (para diagnosticar problemas) |
+| **⚙ Configuración** | Plantilla, claves, idioma, calidad, modelos y ahorro |
+| **Proyectos** | La lista de tus videos, con buscador y filtro |
+| **Versión (abajo)** | Qué versión tienes; clic para ver las novedades |
 
 ### 2.2 Las claves de API: la «llave» de cada servicio
 
@@ -122,10 +120,10 @@ Una **clave de API** es una contraseña larga que le das al programa para que
 pueda usar un servicio de inteligencia artificial **en tu nombre y con tu
 cuenta**. Se pega una vez y se queda guardada en tu equipo.
 
-Ve a **Ajustes → Claves de API**, pega cada clave y pulsa **Guardar claves**.
-La etiqueta «ok» confirma que quedó configurada; «falta», que no.
+Ve a **⚙ Configuración → 🔑 Claves de API**, pega cada clave y pulsa
+**💾 Guardar claves**. El punto verde ● confirma que quedó configurada.
 
-![Dónde se pegan las claves de API](docs/manual/nueva/14-ajustes-claves.png)
+![El selector de plantilla y las claves de API](docs/manual/clasica/09-plantilla-y-claves.png)
 
 | Clave | Para qué sirve | ¿Es imprescindible? | Dónde se consigue |
 |---|---|---|---|
@@ -137,9 +135,9 @@ La etiqueta «ok» confirma que quedó configurada; «falta», que no.
 | `ASSEMBLYAI_API_KEY` | Transcripción más barata y con mejores tiempos por palabra | Opcional | assemblyai.com |
 
 > ⚠ **Si falta una clave el programa no se rompe: cambia a «modo vista
-> previa» y te avisa.** En ese modo las imágenes son de relleno y la voz es
-> un silencio con la duración correcta. Sirve para aprender a usarlo sin
-> gastar, pero **no publiques un video hecho así**.
+> previa» y te avisa con un cartel amarillo.** En ese modo las imágenes son
+> de relleno y la voz es un silencio con la duración correcta. Sirve para
+> aprender a usarlo sin gastar, pero **no publiques un video hecho así**.
 
 ### 2.3 ffmpeg: la única instalación obligatoria
 
@@ -174,15 +172,15 @@ Doble clic en **`probar.bat`** (o `./probar.sh` en Mac/Linux). Ejecuta unas
 | **`actualizar.bat`** | Lo mismo + reinstala las librerías (tarda más) | Solo si el aviso menciona que cambiaron las dependencias |
 
 Después de actualizar, **cierra la ventana negra y vuelve a abrir
-`iniciar.bat`**. En la cabecera verás la versión; haz clic para leer las
-**novedades**.
+`iniciar.bat`**. Abajo a la izquierda verás la versión; haz clic para leer
+las **novedades**.
 
 Dos avisos que pueden aparecer ahí:
 
 | Aviso | Qué significa | Qué hacer |
 |---|---|---|
-| **actualización NO aplicada: reinicia** | Bajaste la versión nueva pero el programa sigue corriendo la vieja | Cierra la ventana negra y abre `iniciar.bat` otra vez |
-| **N archivo(s) del programa modificados** | Hay archivos del programa distintos a los originales (pasa el ratón para ver cuáles) | Si no los tocaste tú, la orden `git checkout .` los restaura. Mientras difieran, actualizar puede fallar |
+| **⚠ Actualización descargada pero NO aplicada** | Bajaste la versión nueva pero el programa sigue corriendo la vieja | Cierra la ventana negra y abre `iniciar.bat` otra vez |
+| **⚠ N archivo(s) del programa modificados** | Hay archivos del programa distintos a los originales (pasa el ratón para ver cuáles) | Si no los tocaste tú, la orden `git checkout .` los restaura. Mientras difieran, actualizar puede fallar |
 
 > 💡 **Tu material propio nunca cuenta como «modificado»**: tu música, tus
 > efectos, tus ambientes, tu banco de elementos y tus proyectos viven en tu
@@ -196,32 +194,29 @@ cambiar de una a otra **no toca nada de tu trabajo**.
 
 | Plantilla | Cómo se ve | Sus pestañas |
 |---|---|---|
-| **Nueva** (la de este manual) | Editorial, con modo claro y oscuro | Corrida · Material · Guion · Escenas · Personajes · Metadatos |
-| **Clásica** | Oscura, la de las versiones anteriores | Guion · Storyboard · Editor · Video · Concepto · Archivos |
+| **Clásica** (la de este manual) | Oscura, con menú lateral | Guion · Storyboard · Editor · Video · Concepto · Archivos |
+| **Nueva** | Editorial, con modo claro y oscuro | Corrida · Material · Guion · Escenas · Personajes · Metadatos |
 
-**Para cambiar:** **Ajustes → Plantilla de la interfaz** y pulsa la otra. La
-página se recarga sola y el **manual también cambia**, para que sus capturas
-coincidan con lo que tienes delante.
-
-![El selector de plantilla, arriba de los Ajustes](docs/manual/nueva/12-ajustes-plantilla-y-video.png)
+**Para cambiar:** **⚙ Configuración → 🎨 Plantilla de la interfaz** y pulsa
+la otra. La página se recarga sola y el **manual también cambia**, para que
+sus capturas coincidan con lo que tienes delante.
 
 **Qué tiene cada una hoy** (las dos generan exactamente el mismo video; lo
 que cambia es qué controles te ofrece la pantalla):
 
-| Control | Nueva | Clásica |
+| Control | Clásica | Nueva |
 |---|---|---|
-| Modo claro y oscuro | Sí | No (siempre oscura) |
-| Subir material en pantallas separadas y ordenadas | Sí | Todo en una pestaña |
-| **Estimación de costo antes de generar** | No | **Sí** |
-| **Generar solo hasta el guion o hasta el guion gráfico** | No | **Sí** |
-| **Elegir el % de presencia del personaje y la burbuja** | No | **Sí** |
-| Duplicar y borrar proyectos desde la lista | No (solo renombrar) | Sí |
+| **Estimación de costo antes de generar** | **Sí** | No |
+| **Generar solo hasta el guion o hasta el guion gráfico** | **Sí** | No |
+| **Elegir el % de presencia del personaje y la burbuja** | **Sí** | No |
+| Duplicar y borrar proyectos desde la lista | Sí | No (solo renombrar) |
+| Modo claro y oscuro | No (siempre oscura) | Sí |
+| Subir material en pantallas separadas y ordenadas | Todo en una pestaña | Sí |
 
-> 💡 **Consejo práctico:** trabaja en la que te resulte más cómoda y cámbiate
-> a la **clásica** cuando quieras **parar en el punto de control** antes de
-> gastar en imágenes, ver la **estimación previa** o ajustar la **presencia
-> del personaje**. Son dos vistas del mismo programa: puedes ir y volver
-> tantas veces como quieras, incluso a mitad de un proyecto.
+> 💡 **Consejo práctico:** la plantilla clásica es hoy la más completa para
+> **controlar el gasto** (estimación previa y parada en el punto de control).
+> Puedes ir y volver tantas veces como quieras, incluso a mitad de un
+> proyecto.
 
 ---
 
@@ -230,45 +225,48 @@ que cambia es qué controles te ofrece la pantalla):
 Esta es una prueba completa que **cuesta centavos** y te enseña todo el
 recorrido. Reserva 20 minutos.
 
-**Paso 1 — Prepara el modo económico.** Ve a **Ajustes**:
+**Paso 1 — Prepara el modo económico.** Ve a **⚙ Configuración**:
 
-- En **Video y voz → Duración objetivo**, pon **3 minutos**.
-- Baja a **Proveedores y modelos → Imágenes IA** y elige **FLUX schnell**
-  (unos $0.003 por imagen: un video entero de prueba cuesta menos que un
-  café).
+- En **Imágenes IA**, elige **FLUX schnell** (unos $0.003 por imagen: un
+  video entero de prueba cuesta menos que un café).
 - En **Video generativo por escena**, elige **Ninguno — Ken Burns**
   (movimiento de cámara sobre las imágenes: gratis y queda muy bien).
-- Pulsa **Guardar ajustes** y **Guardar proveedores**.
+- En **Video → Duración objetivo**, pon **3 minutos**.
+- Pulsa **💾 Guardar configuración**.
 
-**Paso 2 — Crea el proyecto.** Botón **Nuevo proyecto** (arriba a la
-derecha):
+**Paso 2 — Crea el proyecto.** Menú **＋ Nuevo proyecto**:
 
-![La pantalla de proyecto nuevo](docs/manual/nueva/02-nuevo-proyecto.png)
+1. **Nombre**: algo corto y sin acentos, por ejemplo `prueba-faros`.
+2. **¿Para dónde es este video?**: deja **🎬 YouTube — video largo**.
+3. **Escribe tu idea** en el recuadro grande. Una o dos frases bastan:
+   «Un documental sobre los fareros que salvaron miles de vidas en el siglo
+   XIX: soledad, tormentas y la luz que nunca se apagó».
+4. **Estilo del video**: elige **Documental cinematográfico**.
+5. Pulsa **Crear proyecto →**.
 
-1. **¿Para dónde es este video?**: deja **YouTube — video largo (16:9)**.
-2. **Nombre del proyecto**: algo corto y sin acentos, por ejemplo
-   `prueba-faros`.
-3. **Tema o material**: escribe tu idea. Una o dos frases bastan: «Un
-   documental sobre los fareros que salvaron miles de vidas en el siglo XIX:
-   soledad, tormentas y la luz que nunca se apagó».
-4. **Estilo visual de fábrica**: elige **Documental cinematográfico**.
-5. Pulsa **Crear y generar** (o **Solo crear** si quieres subir material
-   tuyo antes de empezar).
+**Paso 3 — Mira lo que va a costar.** Ya dentro del proyecto verás la línea
+**💰 Estimado antes de generar**. Haz clic para desplegar el detalle por
+pasos. Ese número es tu presupuesto aproximado.
 
-**Paso 3 — Mira cómo trabaja.** Entras a la pestaña **Corrida**: a la
-izquierda, las 11 fases con su estado; en el centro, el video cuando exista;
-a la derecha, **Atención** (lo que necesita tu decisión) y el **gasto real**.
+![El panel de un proyecto: los 11 pasos y la estimación](docs/manual/clasica/04-panel-del-proyecto.png)
 
-![La pantalla de la corrida](docs/manual/nueva/04-corrida.png)
+**Paso 4 — Genera solo hasta el guion gráfico.** En el desplegable de arriba
+elige **«Hasta el guion gráfico»** y pulsa **▶ Generar video**. En unos
+minutos tendrás concepto, guion y todas las escenas planificadas, **sin
+haber generado ninguna imagen** (que es lo que cuesta).
 
-Puedes cerrar el navegador: **el trabajo sigue** en la ventana negra.
+**Paso 5 — Revisa.** Abre la pestaña **📝 Guion** y léelo; corrige lo que
+quieras y pulsa **💾 Guardar guion**. Luego abre **🎞 Storyboard** y mira
+escena por escena qué se va a ilustrar.
 
-**Paso 4 — Revisa el guion y las escenas.** Mientras trabaja (o al terminar),
-entra a **Guion** para leerlo y corregirlo, y a **Escenas** para ver qué se
-va a ilustrar en cada momento.
+**Paso 6 — Genera el video completo.** Vuelve a poner el desplegable en
+**«Generar el video completo»** y pulsa **▶ Generar video**. Ahora sí se
+crean las imágenes, la voz, la música y el montaje. Puedes cerrar el
+navegador: **el trabajo sigue** en la ventana negra.
 
-**Paso 5 — Elige y descarga.** En **Metadatos** eliges entre 3 miniaturas, 3
-títulos y 3 descripciones. En **Corrida** tienes el video para reproducirlo.
+**Paso 7 — Míralo y elige.** Al terminar se abre sola la pestaña **▶ Video**.
+Reproduce el resultado, elige entre las 3 miniaturas, los 3 títulos y las 3
+descripciones, y descarga los archivos.
 
 Ya está: ese es el ciclo completo. Todo lo demás en este manual es para
 hacerlo **mejor** y **más barato**.
@@ -277,22 +275,22 @@ hacerlo **mejor** y **más barato**.
 
 ## 4. Elige el tipo de video: una receta para cada uno
 
-Lo primero que eliges al crear un proyecto es **para dónde es el video**. Esa
-elección cambia sola la forma de la pantalla, la duración, el tamaño del
+Lo primero que eliges al crear un proyecto es **para dónde es el video**.
+Esa elección cambia sola la forma de la pantalla, la duración, el tamaño del
 texto y el estilo del guion.
 
-![Los seis formatos y la plantilla narrativa de los cortos](docs/manual/nueva/03-formatos-y-plantillas.png)
+![Los seis formatos y las plantillas de corto](docs/manual/clasica/02-formatos-y-plantillas.png)
 
 | Formato | Forma de la pantalla | Duración a la que apunta | Subtítulos |
 |---|---|---|---|
-| **YouTube — video largo** | Horizontal 16:9 | La que pongas en Ajustes (10 min por defecto) | Pista activable |
-| **YouTube Short** | Vertical 9:16 | ~55 segundos | Incrustados (siempre visibles) |
-| **Instagram Reel** | Vertical 9:16 | ~85 segundos | Incrustados |
-| **TikTok** | Vertical 9:16 | ~60 segundos | Incrustados |
-| **Meta Ads — cuadrado 1:1** | Cuadrado | ~40 segundos | Incrustados |
-| **Meta Ads / Feed IG — retrato 4:5** | Retrato | ~40 segundos | Incrustados |
+| 🎬 **YouTube — video largo** | Horizontal 16:9 | La que pongas en Configuración (10 min por defecto) | Pista activable |
+| 📱 **YouTube Short** | Vertical 9:16 | ~55 segundos | Quemados (siempre visibles) |
+| 📱 **Instagram Reel** | Vertical 9:16 | ~85 segundos | Quemados |
+| 📱 **TikTok** | Vertical 9:16 | ~60 segundos | Quemados |
+| 🟦 **Meta Ads cuadrado** | Cuadrado 1:1 | ~40 segundos | Quemados |
+| 🟦 **Meta Ads / Feed IG** | Retrato 4:5 | ~40 segundos | Quemados |
 
-> **«Subtítulos incrustados»** significa que el texto va pintado dentro de la
+> **«Subtítulos quemados»** significa que el texto va pintado dentro de la
 > imagen y siempre se ve (imprescindible en redes, donde la gente mira sin
 > sonido). **«Pista activable»** es el subtítulo que el espectador enciende o
 > apaga en YouTube.
@@ -304,14 +302,14 @@ Es la combinación más barata y la que suena a ti.
 1. **Graba tu narración** completa en un solo archivo (mp3, wav o m4a).
    Consejos de grabación en el capítulo 13.2. Máximo ~69 minutos por
    archivo; si es más largo, divídelo en dos.
-2. **Nuevo proyecto** → formato **YouTube — video largo** → nombre → una
-   frase con el tema → **Solo crear** (importante: «Solo crear», para poder
-   subir tu voz antes de que empiece).
-3. Entra a la pestaña **Material** → **Narración (tu voz)** → **Añadir** y
-   sube tu grabación.
-4. Si tienes guion escrito, súbelo también en **Guion o notas** (así el
+2. **＋ Nuevo proyecto** → formato **🎬 YouTube — video largo**.
+3. Sube tu grabación en la casilla **🎙 Tu voz / narración**.
+4. Si tienes guion escrito, súbelo también en **📄 Guion o idea** (así el
    programa no reinventa nada).
-5. Vuelve a **Corrida** y pulsa **Generar video**.
+5. Elige el **estilo** (Documental cinematográfico suele ser el acierto
+   seguro) o un **estilo guardado** de tu canal.
+6. Crea el proyecto y genera **«Hasta el guion gráfico»**.
+7. Revisa el storyboard y **luego** genera el video completo.
 
 **Qué hace el programa con tu voz:** la transcribe con tiempos exactos,
 limpia los tropiezos evidentes (capítulo 13), corta cada escena a la medida
@@ -326,18 +324,18 @@ cuesta unos **$0.11**.
 
 Útil para probar formatos rápido o para canales sin locutor.
 
-1. **Ajustes → Proveedores y modelos → Voz en off**: elige el proveedor.
+1. **⚙ Configuración → Voz en off**: elige el proveedor.
    - **Edge TTS**: **gratis** y sorprendentemente natural. Elige una voz
      **del idioma del video** (la voz no traduce).
    - **Cartesia Sonic**: la más barata con calidad de narración.
    - **OpenAI TTS**: muy barato (~$0.20-0.50 por video de 18 min).
    - **ElevenLabs**: la mejor calidad; se descuenta de tu plan.
-2. Crea el proyecto escribiendo solo **el tema** o pegando tu guion en
-   **Tema o material**.
-3. Pulsa **Crear y generar**.
+2. Crea el proyecto escribiendo solo **la idea** o pegando tu guion.
+3. Genera **«Solo el guion (revisar antes)»**, corrígelo a tu gusto en la
+   pestaña 📝 Guion, guarda, y continúa.
 
-> 💡 Con voz artificial puedes **alargar o acortar escenas** una por una
-> (capítulo 10.4). Con tu voz grabada no: ahí manda tu narración.
+> 💡 Con voz artificial puedes **alargar o acortar escenas** una por una en
+> la pestaña ✂ Editor. Con tu voz grabada no: ahí manda tu narración.
 
 ### 4.3 Receta C — Short, Reel o TikTok (video vertical corto)
 
@@ -346,13 +344,14 @@ TikToks) comparten el mismo lenguaje: gancho en los dos primeros segundos,
 texto grande, ritmo alto y subtítulos siempre visibles. El programa los
 genera ya con esas reglas puestas.
 
-1. **Nuevo proyecto** → elige **YouTube Short**, **Instagram Reel** o
-   **TikTok**.
-2. Aparece un desplegable nuevo: **Plantilla narrativa del corto**. Elige la
-   estructura (tabla abajo). Es lo que más cambia el resultado.
+1. **＋ Nuevo proyecto** → elige **📱 YouTube Short**, **📱 Instagram Reel**
+   o **📱 TikTok**.
+2. Aparece un nuevo desplegable: **🎬 Plantilla del corto**. Elige la
+   estructura que quieres (tabla abajo). Es lo que más cambia el resultado.
 3. Escribe el tema en una o dos frases. Cuanto más concreto, mejor.
-4. **Crear y generar**: un corto son unas 18 escenas, así que es rápido y
-   barato (**alrededor de $1** con FLUX 1.1 Pro; céntimos con FLUX schnell).
+4. Genera el video completo: un corto son unas 18 escenas, así que es
+   rápido y barato (**alrededor de $1** con FLUX 1.1 Pro; céntimos con
+   FLUX schnell).
 
 **Las 7 plantillas de corto:**
 
@@ -366,22 +365,21 @@ genera ya con esas reglas puestas.
 | ⚡ **Tutorial en pasos** | Promete un resultado y da 3-5 pasos concretos | Cómo se hace algo |
 | 🤯 **Dato impactante** | Abre con la cifra que rompe la cabeza y luego la explica | Curiosidades y estadísticas |
 
-En los cortos el programa además usa una **biblioteca de 970 ganchos virales
-probados** para escribir la primera frase, que es la que decide si alguien se
-queda o pasa de largo.
+En los cortos el programa además usa una **biblioteca de 970 ganchos
+virales probados** para escribir la primera frase, que es la que decide si
+alguien se queda o pasa de largo.
 
 ### 4.4 Receta D — Anuncio para Meta (Facebook e Instagram)
 
-1. Elige **Meta Ads — cuadrado 1:1** (para el muro) o **Meta Ads / Feed IG —
-   retrato 4:5** (ocupa más pantalla en el móvil).
-2. Elige la plantilla **Tutorial en pasos**, **Antes / Después** o **Dato
-   impactante**, según lo que vendas.
-3. En **Tema o material**, di **qué vendes, a quién y qué quieres que haga**
+1. Elige **🟦 Meta Ads — cuadrado 1:1** (para el muro) o
+   **🟦 Meta Ads / Feed IG — retrato 4:5** (ocupa más pantalla en el móvil).
+2. Elige la plantilla **⚡ Tutorial en pasos**, **🔁 Antes / Después** o
+   **🤯 Dato impactante**, según lo que vendas.
+3. En el texto de la idea, di **qué vendes, a quién y qué quieres que haga**
    el espectador. Ejemplo: «Curso de fotografía para principiantes; público
    de 25-40 años; quiero que se apunten a la clase gratuita».
-4. Crea con **Solo crear** y sube tus fotos de producto en **Material →
-   B-roll propio**: en un anuncio, tu material real convence más que
-   cualquier imagen generada.
+4. Sube tus fotos de producto en **🎬 Tu B-roll**: en un anuncio, tu
+   material real convence más que cualquier imagen generada.
 
 ### 4.5 Receta E — Video con un presentador en cámara (lipsync)
 
@@ -389,42 +387,38 @@ queda o pasa de largo.
 **mueva la boca** al ritmo de la narración: parece que habla a cámara.
 
 1. Consigue una **foto frontal, nítida y bien iluminada** del personaje.
-2. Crea el proyecto con **Solo crear**.
-3. Ve a la pestaña **Personajes** → escribe su nombre, una descripción breve
-   (rasgos, época, vestuario), marca **Es el narrador del video**, pulsa
-   **Elegir imágenes** y luego **Guardar personaje**.
-4. Sube también **tu voz grabada** en **Material**: la boca se moverá con TU
-   voz.
-5. En **Ajustes → Proveedores → Personaje narrador con lipsync**, empieza
-   con **SadTalker**.
-6. Vuelve a **Corrida** y pulsa **Generar video**.
+2. Al crear el proyecto, súbela en la casilla **🧑 Personaje narrador**.
+3. Elige la **presencia en pantalla**: 15%, 30% (recomendado), 45% o 60%.
+   Es el porcentaje del video en el que se le ve hablando; el resto son
+   imágenes ilustrativas.
+4. Opcional: marca **🫧 Personaje en burbuja** para que aparezca en un
+   círculo pequeño sobre las imágenes, al estilo de las reacciones de TikTok.
+5. Sube también **tu voz grabada**: la boca se moverá con TU voz.
+6. En **⚙ Configuración → Personaje narrador con lipsync**, empieza con
+   **SadTalker**.
 
 > ⚠ **Esto se cobra por segundo de personaje en pantalla, y es lo más caro
-> del programa.** Un video de 10 minutos con el personaje un 30% del tiempo
-> son 180 segundos de lipsync: con SadTalker son unos $1-4; con **Hedra
-> Character-3** unos $9-16; con **OmniHuman** $18-29. **Estrategia: itera con
-> SadTalker y deja el modelo caro para la versión final.**
-
-> 💡 El **porcentaje de presencia** del personaje (15%, 30%, 45%, 60%) y el
-> modo **burbuja** solo se eligen en la plantilla clásica (capítulo 2.6). En
-> la nueva, el director decide los momentos con criterio narrativo.
+> del programa.** Un video de 10 minutos al 30% son 180 segundos de
+> personaje: con SadTalker son unos $1-4; con **Hedra Character-3** unos
+> $9-16; con **OmniHuman** $18-29. **Estrategia: itera con SadTalker y deja
+> el modelo caro para la versión final.**
 
 ### 4.6 Receta F — Video de reacción
 
 1. Grábate reaccionando al contenido, con o sin fondo verde (el programa
    detecta el fondo verde solo).
-2. Súbelo en **Material → Video de reacción**.
+2. Sube ese archivo en la casilla **🎭 Tu video de reacción**.
 3. Con fondo verde te recorta la silueta; sin él te pone en una burbuja
    circular. En los dos casos apareces **durante todo el video**.
 
 ### 4.7 Receta G — Copiar el estilo de un video que te gusta
 
-1. Crea el proyecto y ve a **Material → Enlace de referencia (YouTube)**.
-2. Pega la dirección y pulsa **Añadir enlace**.
-3. El programa lo descarga, escucha su narración y mira sus imágenes para
+1. Al crear el proyecto, pega la dirección del video (YouTube, Vimeo…) en
+   **4 · Enlaces de referencia**.
+2. El programa lo descarga, escucha su narración y mira sus imágenes para
    aprender el **ritmo de los cortes, la estructura y el estilo visual**.
-4. Un solo enlace bueno vale más que tres regulares.
-5. Cuando el resultado te guste, **guarda ese estilo** (capítulo 5.6) y
+3. Un solo enlace bueno vale más que tres regulares.
+4. Cuando el resultado te guste, **guarda ese estilo** (capítulo 5.5) y
    reutilízalo gratis para siempre.
 
 ---
@@ -434,44 +428,42 @@ queda o pasa de largo.
 Este es el capítulo más rentable del manual. **Cinco minutos aquí te ahorran
 dólares y horas de corrección.**
 
-### 5.1 La pestaña Material: todo lo que aportas tú
+### 5.1 Las seis casillas de archivos
 
-![La pestaña Material](docs/manual/nueva/05-material.png)
+![Las seis categorías de archivos](docs/manual/clasica/03-categorias-de-archivos.png)
 
-Cada tipo de archivo tiene su sitio, porque de eso depende cómo se usa. Pulsa
-**Añadir** en el bloque que corresponda.
+Cada archivo va en su casilla, porque de eso depende cómo se usa. Puedes
+subir varios a la vez y quitarlos con ✕. El límite es **300 MB por archivo**.
 
-| Bloque | Qué poner ahí | Cómo se usa |
+| Casilla | Qué poner ahí | Cómo se usa |
 |---|---|---|
-| **Narración (tu voz)** | mp3, wav, m4a, ogg, opus | Es la voz del video, tal cual, con las escenas ajustadas a ella |
-| **Guion o notas** | txt, md, PDF, Word, rtf | Si es un guion, se respeta; si son notas, se usan como base |
-| **B-roll propio** | Tus imágenes y videos | Se reparten por el video en lugar de imágenes generadas |
-| **Fotos del personaje** | Foto frontal de una persona | Habla en cámara con lipsync y mantiene su cara en todas sus escenas |
-| **Video de reacción** | Video tuyo reaccionando | Te compone sobre el video todo el rato |
-| **Enlace de referencia** | Una dirección de YouTube | Se analiza para copiar su ritmo y su estilo |
+| 📄 **Guion o idea** | PDF, Word, PowerPoint, Excel, txt, md | Si es un guion, se respeta; si son notas, se usan como base |
+| 🎙 **Tu voz / narración** | mp3, wav, m4a, ogg, opus | Es la voz del video, tal cual, con las escenas ajustadas a ella |
+| 🎬 **Tu B-roll** | Tus imágenes y videos | Se reparten por el video en lugar de imágenes generadas |
+| 🎨 **Referencia de estilo** | Imagen, video o documento | Se analiza para copiar su estilo y su tema |
+| 🧑 **Personaje narrador** | Foto frontal de una persona | Habla en cámara con lipsync |
+| 🎭 **Tu video de reacción** | Video tuyo reaccionando | Te compone sobre el video todo el rato |
 
 > 💡 **Truco del nombre de archivo:** si nombras tu B-roll `scene_003.jpg` o
-> `03_batalla.mp4`, ese archivo va exactamente a **esa** escena. Si no, se
-> reparten de forma uniforme.
+> `03_batalla.mp4`, ese archivo va exactamente a **esa** escena. Si no,
+> se reparten de forma uniforme.
 
-⚠ Al añadir o quitar material, **el análisis vuelve a empezar desde la
-primera fase**. Es lo correcto (cambia la base del video), pero significa que
-conviene subirlo todo antes de generar.
+Después de crear el proyecto puedes **añadir o quitar material** en la
+pestaña **📎 Archivos**. Ten en cuenta que al hacerlo se vuelve a analizar
+todo y los pasos se regeneran.
 
 ### 5.2 El elenco: que un personaje tenga siempre la misma cara
 
 Un problema clásico de las imágenes generadas es que el mismo personaje sale
 con una cara distinta en cada escena. El **elenco** lo resuelve.
 
-![La pestaña Personajes](docs/manual/nueva/08-personajes.png)
-
-En la pestaña **Personajes**:
+En la pestaña **📎 Archivos**, en el bloque «🧑 Elenco del video»:
 
 1. Escribe el **nombre** del personaje (ej. «Alejandro»).
 2. Escribe una **descripción breve**: rasgos, época, vestuario.
-3. Marca **Es el narrador del video** si es quien habla a cámara.
-4. Pulsa **Elegir imágenes** y sube **una o varias** fotos de referencia.
-5. Pulsa **Guardar personaje**.
+3. Pulsa **📷 fotos** y sube **una o varias** fotos de referencia.
+4. Marca **narrador** si es quien habla a cámara.
+5. Pulsa **＋ Crear personaje**.
 6. **Importante: después de cambiar el elenco, usa «Rehacer desde →
    Escenas»** para que el director reparta bien los personajes.
 
@@ -480,23 +472,19 @@ reutiliza en todas sus escenas.
 
 ### 5.3 Cuánto va a costar y el freno automático
 
-El programa se pone a sí mismo un **tope de presupuesto** por corrida: coge
-la estimación alta de lo que falta por generar y la multiplica por 1.4
-(`budget.margin`). Si la generación intentara pasarse de ahí, **se detiene
-sola**. Ese margen absorbe reintentos normales, pero frena un desbocamiento
-real.
+Al abrir un proyecto verás la línea **💰 Estimado antes de generar**. Haz
+clic para ver el desglose por pasos: cuánto cuesta y cuánto tarda cada uno.
+
+Además, el programa se pone a sí mismo un **tope de presupuesto** por
+corrida: coge la estimación alta y la multiplica por 1.4 (`budget.margin`).
+Si la generación intentara pasarse de ahí, **se detiene sola**. Ese margen
+absorbe reintentos normales, pero frena un desbocamiento real.
 
 - ¿Quieres un candado más estricto? Pon un número en `budget.max_usd`
   (0 = sin techo manual). Solo manda cuando es **más** restrictivo que el
   automático: nunca sirve para gastar más.
 - El tope se recalcula antes de cada paso, así que en cuanto existen las
   escenas reales el cálculo se vuelve exacto.
-- El **gasto real** aparece en la columna derecha de **Corrida** en cuanto
-  termina cada fase.
-
-> 💡 ¿Quieres ver el **presupuesto detallado antes de pulsar Generar**?
-> Cámbiate un momento a la plantilla clásica (capítulo 2.6): ahí cada
-> proyecto muestra la estimación desglosada por fases.
 
 ### 5.4 El banco de elementos: material tuyo, gratis y para siempre
 
@@ -505,17 +493,18 @@ programa puede superponer un **inserto**: una tarjeta con la foto real, la
 cifra animada o el mapa, encima de la imagen de fondo. Es lo que hace que un
 video parezca profesional.
 
-El **banco de elementos** es tu archivo propio para esos insertos, y vive en
-la pantalla **Biblioteca**.
+El **banco de elementos** es tu archivo propio para esos insertos. Vive en
+**📺 Canales y estilos**, al final de la página.
 
-![El banco de elementos](docs/manual/nueva/11-banco-de-elementos.png)
+![El banco de elementos](docs/manual/clasica/13-banco-de-elementos.png)
 
 **Cómo llenarlo, paso a paso:**
 
-1. Entra a **Biblioteca**.
-2. Elige la categoría: Personajes, Lugares, Entidades y marcas, Mapas o
-   Stickers.
-3. Pulsa **Añadir** y sube imágenes o clips cortos (mp4, webm, mov).
+1. Ve a **📺 Canales y estilos** y baja hasta **🗄 Banco de elementos**.
+2. Elige la categoría: 👤 Personajes, 📍 Lugares, 🏛 Entidades y marcas,
+   🗺 Mapas o ✨ Stickers y adornos.
+3. Pulsa **＋ Añadir archivos** y sube imágenes o clips cortos (mp4, webm,
+   mov).
 4. **El nombre del archivo es la clave**: `elon-musk.jpg` se encuentra
    cuando la narración dice «Elon Musk». No importan tildes ni mayúsculas.
 
@@ -533,13 +522,20 @@ la pantalla **Biblioteca**.
 Cuando un video te guste, **guarda su estilo** y arranca los siguientes con
 la misma identidad **sin pagar el análisis otra vez**.
 
-![La pantalla Canales](docs/manual/nueva/10-canales-y-estilos.png)
+**Guardarlo:** entra al proyecto → pestaña **💡 Concepto** → botón
+**💾 Guardar estilo** → ponle nombre y asígnalo a un canal.
 
-En la pantalla **Canales** creas canales (para agrupar) y estilos. Un estilo
-guarda: la descripción visual, el prefijo que se antepone a cada imagen, la
-paleta de colores, el tono de la narración, la música, el ritmo, las
-transiciones, la **fórmula narrativa** de tu canal y el **branding de los
-rótulos**:
+![La pestaña Concepto y el botón de guardar estilo](docs/manual/clasica/08-concepto-y-guardar-estilo.png)
+
+**Gestionarlos:** menú **📺 Canales y estilos**. Ahí creas canales (para
+agrupar), editas estilos o creas uno desde cero.
+
+![Canales y estilos guardados](docs/manual/clasica/12-canales-y-estilos.png)
+
+Un estilo guarda: la descripción visual, el prefijo que se antepone a cada
+imagen, la paleta de colores, el tono de la narración, la música, el ritmo,
+las transiciones, la **fórmula narrativa** de tu canal y el **branding de
+los rótulos**:
 
 | Ajuste del rótulo | Opciones |
 |---|---|
@@ -547,25 +543,23 @@ rótulos**:
 | **Diseño** | Documental (placa oscura sobria) · Minimal (solo una línea de acento) · Bold (placa de color, máxima presencia) |
 | **Colores** | Color de acento y color del texto |
 
-Hay **cuatro combinaciones de un clic** para empezar: Documental clásico,
-Impacto viral, Tech / datos y Minimalista.
+Hay **cuatro combinaciones de un clic** para empezar: 🎞 Documental clásico,
+⚡ Impacto viral, 🖥 Tech / datos y ◻ Minimalista.
 
-**Usarlo:** al crear un proyecto, en **Tu estilo guardado (canal)**, elige el
-estilo. Ese proyecto nace con la identidad ya puesta.
+**Usarlo:** al crear el proyecto, en «5 · Canal y estilo guardado», elige el
+canal y el estilo. Ese proyecto nace con la identidad ya puesta.
 
 ---
 
 ## 6. Generar: los 11 pasos y el punto de control
 
-### 6.1 Los controles de la pestaña Corrida
+### 6.1 Los tres controles de arriba
 
 | Control | Qué hace |
 |---|---|
-| **Generar video** | Empieza (o **reanuda** donde se quedó, sin volver a pagar lo hecho) |
-| **Editar guion** | Salta a la pestaña Guion |
-| **Renombrar** | Cambia el nombre visible del proyecto |
-| **Rehacer desde…** | Vuelve a hacer un paso concreto **y todos los siguientes** |
-| **Log de eventos** (columna izquierda) | Despliega el registro en vivo de la corrida |
+| **Desplegable «Generar el video completo»** | Hasta dónde llegar: todo, «Solo el guion (revisar antes)» o «Hasta el guion gráfico» |
+| **▶ Generar video** | Empieza (o **reanuda** donde se quedó, sin volver a pagar lo hecho) |
+| **Desplegable «Rehacer desde…»** | Vuelve a hacer un paso concreto **y todos los siguientes** |
 
 ### 6.2 Los 11 pasos, y cuál cuesta dinero
 
@@ -597,30 +591,22 @@ vivo, justo antes del paso que gasta el dinero:
 
 **Léelo siempre.** Es el último punto en el que cambiar algo es gratis.
 
-⚠ **En esta plantilla el programa no se para ahí**: sigue de largo hacia las
-imágenes. Tienes dos formas de aprovechar el punto de control:
+⚠ **El programa no se para solo ahí**: si pediste el video completo, sigue de
+largo hacia las imágenes. Para detenerte justo en ese punto, elige
+**«Hasta el guion gráfico»** en el desplegable **antes** de pulsar Generar.
+Es la costumbre que más dinero ahorra. Después aprovecha para:
 
-- **La barata**: genera el video entero con un modelo de imágenes de céntimos
-  (FLUX schnell o el modo híbrido), revisa el resultado y, cuando la
-  estructura te convenza, «Rehacer desde → Imágenes» con el modelo bueno.
-- **La exacta**: cámbiate a la plantilla clásica (capítulo 2.6), que tiene el
-  desplegable **«Hasta el guion gráfico»** para detenerse justo antes de
-  gastar.
-
-En cualquiera de los dos casos, aprovecha para:
-
-1. Leer el **guion** (pestaña Guion) y corregir lo que no te guste.
-2. Revisar las **escenas** una por una (pestaña Escenas).
-3. Subir **tu propio B-roll** a las escenas que quieras (capítulo 10.4).
+1. Leer el **guion** (pestaña 📝 Guion) y corregir lo que no te guste.
+2. Revisar el **storyboard** escena por escena (pestaña 🎞 Storyboard).
+3. Subir **tu propio B-roll** a las escenas que quieras (capítulo 10.2).
+4. Ajustar rótulos y movimiento en el **✂ Editor** (capítulo 10.3).
 
 ---
 
 ## 7. Durante la generación: qué vigilar
 
-En la pestaña **Corrida**, la fase activa se resalta con su porcentaje y el
-tiempo restante. El botón **Log de eventos** de la columna izquierda abre el
-registro en vivo, y la columna **Atención** recoge lo que necesita que
-decidas.
+El panel muestra la barra de progreso, el porcentaje, el tiempo restante
+estimado y, abajo, el registro en vivo.
 
 **Puedes cerrar el navegador**: la generación continúa en la ventana negra.
 Si cierras la ventana negra, se detiene (y luego se reanuda sin perder nada).
@@ -642,58 +628,55 @@ Si cierras la ventana negra, se detiene (y luego se reanuda sin perder nada).
 | `🛡 Descarté una corrección propuesta…` | El programa evitó borrar algo tuyo | Nada: es una buena noticia |
 | `⚠ Sin foto de licencia libre para…` | Ese inserto no se pudo ilustrar | Añade el archivo a tu banco de elementos |
 | `🔊 Detecté habla MUY BAJA en…` | Un tramo tuyo suena flojo | Se conserva igual; valóralo al revisar |
-| `💰 Hay N resultados ya PAGADOS que no se descargaron` | Se cobró algo que no llegó | Pulsa **Generar video** dentro de la hora siguiente: se recuperan **sin volver a cobrar** |
-
-Si la corrida se detiene con un error, la columna **Atención** te ofrece
-**Reintentar** (desde donde se cayó) o **Reintentar desde el principio**.
+| `💰 Hay N resultados ya PAGADOS que no se descargaron` | Se cobró algo que no llegó | Pulsa **▶ Generar video** dentro de la hora siguiente: se recuperan **sin volver a cobrar** |
 
 ---
 
 ## 8. Después: revisar, elegir y publicar
 
-El video terminado se reproduce en la pestaña **Corrida**, y en **Metadatos**
-eliges cómo se presenta en YouTube.
+Al terminar, el programa abre solo la pestaña **▶ Video**.
 
-![La pestaña Metadatos](docs/manual/nueva/09-metadatos.png)
+![El video terminado con las 3 miniaturas y los 3 títulos](docs/manual/clasica/07-video-y-metadatos.png)
 
 **Paso a paso:**
 
 1. **Mira el video entero.** Sí, entero, antes de publicarlo.
-2. **Elige la miniatura**: hay 3 diseños. Un clic la selecciona.
+2. **Elige la miniatura**: hay 3 diseños (🎬 Cine, 💥 Impacto, ◧ Panel).
+   Un clic la selecciona; el ✓ marca la elegida.
 3. **Elige el título**: 3 estrategias distintas para que la gente haga clic
    (curiosidad, dato concreto, contradicción).
 4. **Elige la descripción**: 3 enfoques. Incluyen **capítulos automáticos**
    (los minutos marcados) y los **créditos** del material de archivo.
    ⚠ **No borres los créditos**: son obligatorios por la licencia de las
    fotos libres.
-5. **Revisa el gasto real** en la columna derecha de **Corrida**. Eso es lo
-   que de verdad se consumió, no una predicción.
+5. **Descarga los archivos** desde los enlaces de abajo: `video_final.mp4`,
+   `subtitulos.srt` y `miniatura.jpg`.
+6. **Revisa el gasto real** en el bloque «📊 Gasto real de este proyecto».
+   Eso es lo que de verdad se consumió, no una predicción.
 
-Todos los archivos quedan en la carpeta `projects/<tu-proyecto>/09_final/`:
-`video_final.mp4`, `miniatura.jpg` y `metadata.json`, más los subtítulos en
-`08_subtitles/subtitulos.srt`.
+Todo queda también en la carpeta `projects/<tu-proyecto>/09_final/`.
 
 **Subir el video:** entra a YouTube Studio y sube el mp4, la miniatura y el
 archivo de subtítulos, y pega el título y la descripción que elegiste.
-(Existe una subida automática opcional: se activa poniendo `publish.enabled`
-en verdadero y requiere las credenciales de Google del capítulo 18.1. Por
-defecto está apagada.)
+(Existe una subida automática opcional: se activa poniendo
+`publish.enabled` en verdadero y requiere las credenciales de Google del
+capítulo 18.1. Por defecto está apagada.)
 
 ---
 
 ## 9. Corregir sin volver a pagar
 
 Esta es la tabla que más dinero te va a ahorrar. **Rehacer desde un paso
-regenera ese paso y todos los siguientes**: por eso importa elegir bien desde
-dónde.
+regenera ese paso y todos los siguientes**: por eso importa elegir bien
+desde dónde.
 
 | Quiero cambiar… | Qué hago | ¿Pierdo lo ya pagado? |
 |---|---|---|
-| Una imagen concreta | Subo la mía en **Escenas → Subir** | No |
-| Rótulos, movimiento de cámara, transiciones, efectos | Los cambio en **Escenas** y pulso **Guardar cambios** | No |
-| El sonido de los insertos o el volumen de la música | Lo cambio en **Ajustes** y rehago desde **Montaje** | No |
+| Una imagen concreta | Subo mi propia imagen a esa escena (pestaña 🎞 Storyboard) | No |
+| Rótulos, movimiento de cámara, transiciones, efectos, música | Los cambio en la pestaña ✂ Editor y remonto | No |
+| El sonido de los insertos o el volumen de la música | Lo cambio en ⚙ Configuración y rehago desde **Montaje** | No |
 | Todas las imágenes (cambiar de modelo) | Rehacer desde **Imágenes** | Sí, solo las imágenes |
-| El texto del guion | Lo edito en **Guion** y guardo | Sí, de ahí en adelante |
+| El texto del guion | Lo edito en la pestaña 📝 Guion y guardo | Sí, de ahí en adelante |
 | El estilo visual completo | Rehacer desde **Concepto** | Sí, casi todo |
 
 > ⚠ **Nunca rehagas desde Concepto, Guion o Escenas para arreglar una
@@ -701,109 +684,143 @@ dónde.
 > las vuelve a cobrar. Para una imagen concreta: sube la tuya, o rehaz desde
 > **Imágenes**.
 
+**Otras acciones útiles** (pasa el ratón por el nombre del proyecto en la
+lista de la izquierda):
+
+| Icono | Acción |
+|---|---|
+| ⧉ | **Duplicar** el proyecto (para probar una variante sin perder la buena) |
+| ✎ | **Renombrar** |
+| 🗑 | **Borrar** (no se puede deshacer) |
+
 ---
 
 ## 10. Las pantallas del programa, una por una
 
-### 10.1 Proyectos
+### 10.1 Pestaña 📝 Guion
 
-La lista de todos tus videos, con su avance. Un clic entra al proyecto.
+El texto completo de la narración. Edítalo libremente y pulsa **💾 Guardar
+guion**. Al guardar, los pasos posteriores se regeneran (porque las escenas
+dependen del texto).
 
-### 10.2 Corrida
+### 10.2 Pestaña 🎞 Storyboard
 
-El puesto de mando: las 11 fases a la izquierda, el video y la miniatura en
-el centro, y a la derecha **Atención** y el **gasto real**. Ver capítulo 6.1.
+El plan de todas las escenas: imagen, narración, el prompt (la descripción
+en inglés con la que se genera la imagen), el rótulo, la duración y la voz
+de cada escena para escucharla.
 
-### 10.3 Guion
+![El storyboard, escena por escena](docs/manual/clasica/05-storyboard.png)
 
-El texto completo de la narración. Edítalo libremente y guarda. Al guardar,
-los pasos posteriores se regeneran (porque las escenas dependen del texto).
+**Subir tu propia imagen o video a una escena:**
 
-![La pestaña Guion](docs/manual/nueva/06-guion.png)
+1. Busca la escena.
+2. Pulsa **⬆ Subir imagen para esta escena** (algunas escenas aceptan también
+   video, según lo que planificó el director).
+3. Si te arrepientes, pulsa **✕ Quitar**: esa escena volverá a generarse.
 
-### 10.4 Escenas
-
-Cada escena en una fila: su imagen, su narración, y los controles de lo que
-se puede rehacer **barato** (solo hay que volver a montar, sin coste de
-inteligencia artificial).
-
-![La pestaña Escenas](docs/manual/nueva/07-escenas.png)
-
-| Control | Qué cambia |
-|---|---|
-| **Animación** | Zoom in, zoom out, paneo izquierda/derecha o estática |
-| **Transición** | Corte seco o fundido |
-| **Sonido** | Ninguno, whoosh, riser o boom en la entrada de la escena |
-| **Rótulo** | El texto que aparece en pantalla en esa escena |
-| **Subir** | Tu propia imagen o video para esa escena concreta |
-
-Arriba hay dos casillas que deciden qué hace el programa con tu material:
+Arriba hay dos casillas que controlan qué hace el programa con tu material:
 
 | Casilla | Si está marcada | Si la desmarcas |
 |---|---|---|
-| **Revisar antes de montar** | El director comprueba con visión IA que tu imagen encaje con la escena y te avisa | Tu material se usa tal cual (gasta menos) |
-| **Reemplazar B-roll automáticamente** | Sustituye tu imagen si cree que no pega | Se respeta siempre tu elección y solo te avisa |
+| **El director revisa con visión IA si tu B-roll encaja** | Comprueba que tu imagen tenga que ver con la escena y te avisa | Tu material se usa tal cual (gasta menos) |
+| **Dejar que el director reemplace por IA lo que no encaje** | Sustituye tu imagen si cree que no pega | Se respeta siempre tu elección y solo te avisa |
 
-Cuando termines: **Guardar cambios**.
+### 10.3 Pestaña ✂ Editor de escenas
 
-### 10.5 Personajes
+Aquí ajustas lo que se puede rehacer **barato**: solo hay que volver a
+montar, no a generar. Es rápido y **no cuesta nada de inteligencia
+artificial**.
 
-El elenco del video. Ver capítulo 5.2.
+![El editor de escenas](docs/manual/clasica/06-editor-de-escenas.png)
 
-### 10.6 Material
+| Control | Qué cambia |
+|---|---|
+| 🧑 **B-roll / Personaje** | Quién ocupa la pantalla en esa escena (solo si hay personaje; el personaje se cobra por segundo) |
+| 🎥 **Movimiento** | Zoom in, Zoom out, Paneo ←, Paneo → o Estática |
+| 🔀 **Transición** | Corte seco o Fundido |
+| 🔊 **Efecto** | Ninguno, Whoosh, Riser o Boom en la entrada de la escena |
+| 🎵 **Intensidad musical** | De 0 (mínima) a 1 (clímax): dibuja el arco dramático |
+| ⏱ **Duración** | Solo con voz artificial (con tu voz manda tu narración) |
+| 🔤 **Rótulo** | El texto en pantalla, su encabezado y su tipo (personaje, lugar, fecha, dato, lista, conclusión) |
 
-Todo lo que aportas tú. Ver capítulo 5.1.
+Cuando termines: **💾 Aplicar cambios** y acepta remontar.
 
-### 10.7 Metadatos
+### 10.4 Pestaña ▶ Video
 
-Las 3 propuestas de título, descripción y miniatura. Ver capítulo 8.
+El resultado, las 3 miniaturas, los 3 títulos, las 3 descripciones y las
+descargas. Ver el capítulo 8.
 
-### 10.8 Canales y Biblioteca
+### 10.5 Pestaña 💡 Concepto
 
-**Canales**: la identidad guardada de cada canal (capítulo 5.5).
-**Biblioteca**: el banco de elementos (capítulo 5.4).
+La ficha de identidad del video: títulos propuestos, ángulo, audiencia,
+tono, música, estructura, estilo visual y paleta de colores. Desde aquí se
+guarda el estilo (capítulo 5.5).
 
-### 10.9 Ajustes
+### 10.6 Pestaña 📎 Archivos
 
-Se divide en cinco bloques. Guarda con **Guardar ajustes** (y **Guardar
-proveedores** para el bloque de modelos).
+Tu material subido, el elenco de personajes y el formulario para añadir más
+archivos.
 
-**a) Plantilla de la interfaz** — capítulo 2.6.
+### 10.7 📺 Canales y estilos
 
-**b) Video y voz:**
+Los canales, los estilos guardados y, al final de la página, el **banco de
+elementos** (capítulo 5.4).
 
-![Los ajustes de video](docs/manual/nueva/12-ajustes-plantilla-y-video.png)
+### 10.8 ⚙ Configuración
+
+Se divide en seis bloques. Al terminar, **💾 Guardar configuración**.
+
+**a) 🎨 Plantilla de la interfaz** — capítulo 2.6.
+
+**b) 🔑 Claves de API** — capítulo 2.2.
+
+**c) Estilo por defecto** — el que se propone en los proyectos nuevos:
+
+| Estilo | Qué aspecto da |
+|---|---|
+| **Documental cinematográfico** | Estilo BBC/Netflix: luz natural dramática, colores sobrios, aire de cine |
+| **Cine épico** | Gran escala: paisajes monumentales, contraluces, orquesta |
+| **Misterio / true crime** | Sombras profundas, luz puntual, tensión constante |
+| **Histórico / vintage** | Tonos sepia, grano de película, texturas de época |
+| **Moderno / divulgación** | Limpio, colorido y ágil |
+| **Automático** | La IA decide según el tema |
+
+**d) Video:**
+
+![Los ajustes de video e idioma](docs/manual/clasica/10-configuracion-video.png)
 
 | Ajuste | Qué hace | Recomendación |
 |---|---|---|
-| **Idioma** | Guion, voz, subtítulos y metadatos | El tuyo. Con Edge TTS elige además una voz de ese idioma |
-| **Estilo visual** | El aspecto de fábrica de las imágenes | Documental cinematográfico para historia y divulgación seria |
 | **Duración objetivo** | A cuántos minutos apunta el guion | La normal de tu canal |
-| **Segundos por escena** | Cada cuánto cambia la imagen | ~6 s dinámico · ~8-10 s estándar · ~15 s contemplativo |
-| **Volumen de la música** | Cuánto suena por debajo de la voz | −21 dB va bien casi siempre |
-| **Formato de salida** | Resolución y proporción | Full HD: 2K y 4K tardan mucho más y casi no se nota |
-| **Subtítulos incrustados** | Quemados en la imagen o pista activable | Pista activable en YouTube; incrustados en redes |
-| **Bajar la música cuando hablas** | El «ducking» | Déjalo activado |
-| **Efectos de sonido en los insertos** | El acento sonoro de las tarjetas | Activado |
+| **Resolución** | Full HD, 2K o 4K | Full HD: 2K y 4K tardan mucho más y casi no se nota |
+| **Subtítulos** | Pista activable o quemados | Pista activable en YouTube; quemados en redes |
+| **Idioma del video** | Guion, voz, subtítulos y metadatos | El tuyo. Con Edge TTS elige además una voz de ese idioma |
+| **Ritmo visual** | Cada cuánto cambia la imagen | ~6 s dinámico · ~8-10 s estándar · ~15 s contemplativo |
 
-> 💰 **Los segundos por escena son un interruptor de gasto**: planos más
-> cortos = más imágenes = más costo. En un video de 18 minutos, un plano cada
-> 6 segundos son ~180 imágenes; cada 10 segundos, ~108; cada 13 segundos, ~84.
+> 💰 **El ritmo visual es un interruptor de gasto**: planos más cortos = más
+> imágenes = más costo. En un video de 18 minutos, un plano cada 6 segundos
+> son ~180 imágenes; cada 10 segundos, ~108; cada 13 segundos, ~84.
 
-**c) Proveedores y modelos** — el bloque donde está la factura del programa.
-Cada opción muestra su precio, su punto fuerte y su punto débil.
+**e) Módulo de integraciones (los modelos de IA).** Cada bloque muestra las
+opciones con su precio y su punto fuerte y débil, y un punto verde ● o rojo
+● según tengas la clave.
 
-![La elección de modelos](docs/manual/nueva/13-ajustes-proveedores.png)
+![La elección del modelo de imágenes](docs/manual/clasica/11-configuracion-modelos-imagen.png)
 
-**d) Claves de API** — capítulo 2.2.
+**f) Audio:**
 
-**e) Versión** — qué versión corre, y los avisos de actualización.
+| Ajuste | Qué hace |
+|---|---|
+| **Volumen de música** | Cuánto suena la música por debajo de la voz |
+| **Ducking automático** | Baja la música sola cuando hablas (déjalo activado) |
+| **Sonido de los insertos** | El acento sonoro de las tarjetas: Automático, Archivo (papel y proyector), Sobrio, Épico, Registro (sello), Moderno (pop) o Sin sonido |
 
-### 10.10 Log de eventos
+### 10.9 🧾 Log de eventos
 
 El historial completo: novedades, avisos, errores y el tiempo de cada paso.
+Se filtra por Todo / Avisos / Errores.
 
-![El log de eventos](docs/manual/nueva/15-log-de-eventos.png)
+![El log de eventos](docs/manual/clasica/14-log-de-eventos.png)
 
 ---
 
@@ -844,9 +861,9 @@ Genera las imágenes con un modelo barato y **súbeles la resolución después**
 con un escalador (~$0.002 por imagen). Las 84 imágenes pasan de ~$4 a menos
 de $0.60: un **90% menos**.
 
-**Cómo activarlo:** **Ajustes → Proveedores y modelos → Imágenes IA** →
-elige **FLUX schnell** como modelo y activa **MODO HÍBRIDO: escalar las
-imágenes tras generarlas**.
+**Cómo activarlo:** **⚙ Configuración → Imágenes IA** → elige **FLUX
+schnell** como modelo y activa **MODO HÍBRIDO: escalar las imágenes tras
+generarlas**.
 
 **Lo que el escalado hace y lo que no:** recupera **resolución**, no calidad
 de origen. No inventa la microtextura ni la iluminación fina de un modelo
@@ -865,7 +882,7 @@ saltan solas: activarlo nunca cobra de más por ellas.
    en 0 no se genera ningún clip. 18 clips pueden costar tanto o más que las
    84 imágenes del video entero, y en un documental largo el movimiento de
    cámara (Ken Burns) casi no se distingue de un clip animado.
-4. **Aprovecha el punto de control** (capítulo 6.3).
+4. **Párate en el punto de control.** Corregir el storyboard es gratis.
 5. **Reutiliza estilos** guardados: evitas volver a analizar referencias.
 6. **Llena el banco de elementos**: material gratis, tuyo, para siempre.
 7. **Narra tú.** Es gratis (solo pagas la transcripción, centavos) y suena
@@ -878,7 +895,7 @@ saltan solas: activarlo nunca cobra de más por ellas.
 | `providers.images.model` | **El que más pesa.** De schnell a FLUX 2 Pro hay 20 veces de diferencia |
 | `providers.images.upscale` | El modo híbrido: −90% en imágenes |
 | `providers.videogen.max_scenes` | 0 = sin video generativo. **El mayor ahorro individual** |
-| `providers.lipsync` | Se cobra **por segundo** de personaje en pantalla |
+| `providers.lipsync` y el % de presencia | Se cobra **por segundo** de personaje en pantalla |
 | `video.scene_seconds` | Menos segundos por escena = más imágenes = más costo |
 | `video.elements_ai` | Ilustrar con IA los insertos sin foto libre. **Apagado por defecto**; cada uno cuesta como una imagen |
 | `video.elements_ai_max` | Tope de esas ilustraciones por video (3 por defecto) |
@@ -908,12 +925,12 @@ saltan solas: activarlo nunca cobra de más por ellas.
    tuya, sin costo y sin problemas de derechos.
 8. **Deja el ambiente encendido** (`audio.ambience`): el viento, la multitud
    o la lluvia de fondo hacen que la escena se sienta real.
-9. **Revisa las escenas** antes de la versión final: cinco minutos leyendo
-   evitan diez imágenes equivocadas.
+9. **Revisa el storyboard**: cinco minutos leyendo prompts evitan diez
+   imágenes equivocadas.
 10. **Escucha los primeros 60 segundos** del video terminado comparando con
     tu grabación original, sobre todo la primera vez.
-11. **Para los cortos, elige plantilla narrativa**: la estructura es la mitad
-    del resultado.
+11. **Para los cortos, elige plantilla**: la estructura es la mitad del
+    resultado.
 12. **Para el gancho, un clip con audio nativo.** Veo 3.1 Fast trae su propio
     ambiente sincronizado; con `providers.videogen.max_scenes` en 1 o 2 pagas
     poco y el arranque gana mucho.
@@ -947,21 +964,21 @@ global del 8% de tu grabación.
 | Apagar solo la revisión con IA (la más atrevida) | `audio.fix_narration_ai` en falso |
 | Que no se corrijan las palabras mal transcritas | `audio.polish_transcript` en falso |
 
-> 💡 **La primera vez, escucha los primeros 60 segundos** y compáralos con lo
-> que grabaste. Si notas que falta algo, busca los avisos `✂` y apaga
+> 💡 **La primera vez, escucha los primeros 60 segundos** y compáralos con
+> lo que grabaste. Si notas que falta algo, busca los avisos `✂` y apaga
 > `audio.fix_narration_ai`.
 
 ### 13.2 Cómo grabar para que salga bien
 
 - **Volumen parejo**: no te acerques y te alejes del micrófono. El programa
   avisa si detecta habla muy baja.
-- **Pausas naturales entre frases**: son las que usa el montaje para respirar
-  y para colocar los cambios de imagen.
+- **Pausas naturales entre frases**: son las que usa el montaje para
+  respirar y para colocar los cambios de imagen.
 - **Si te equivocas, para, respira y repite la frase completa** desde el
   principio. Así el corrector la reconoce y la limpia bien.
 - **Un solo archivo** por video, de máximo ~69 minutos.
-- **Sin música de fondo** en la grabación: la música la pone el programa, y
-  así puede bajarla sola cuando hablas.
+- **Sin música de fondo** en la grabación: la música la pone el programa,
+  y así puede bajarla sola cuando hablas.
 
 ---
 
@@ -987,7 +1004,7 @@ Todo esto ocurre solo, sin que tengas que pedirlo.
 | **Auditoría de fidelidad** | Antes de generar, avisa si un prompt se dejó fuera un hecho de tu narración | automático, gratis |
 | **Control de calidad factual** | Compara cada imagen ya generada con los hechos narrados y regenera la que se contradiga | `providers.images.fact_check` |
 | **Escalado del modo híbrido** | Sube la resolución de las imágenes baratas y se salta las que ya dan la talla | `providers.images.upscale` |
-| **Identidad de personajes** | Un personaje del elenco sale con la misma cara en todas sus escenas | pestaña Personajes |
+| **Identidad de personajes** | Un personaje del elenco sale con la misma cara en todas sus escenas | pestaña 📎 Archivos |
 | **Personaje narrador (lipsync)** | Tu presentador habla a cámara con tu voz | `providers.lipsync` |
 | **Ganchos virales** | 970 plantillas probadas para la primera frase de los cortos | automático en formatos cortos |
 | **Pantalla dividida** | Dos imágenes a la vez cuando la escena compara algo (el antes y el después) | automático |
@@ -1001,7 +1018,7 @@ Todo esto ocurre solo, sin que tengas que pedirlo.
 - `assets/music/` — tus pistas de música (nombra el archivo con el ambiente).
 - `assets/sfx/` — tus efectos de sonido.
 - `assets/sfx/ambientes/` — tus fondos ambientales.
-- `assets/elements/` — el banco de elementos (mejor desde la Biblioteca).
+- `assets/elements/` — el banco de elementos (mejor desde la interfaz).
 
 Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 
@@ -1011,20 +1028,21 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| Sale el aviso de «modo vista previa» | Falta una clave de API | Ajustes → Claves de API |
+| Sale el cartel «modo vista previa» | Falta una clave de API | ⚙ Configuración → 🔑 Claves de API |
 | Se detuvo con un error **429** | El proveedor pide ir más despacio | Ya reintenta solo; si insiste, baja `performance.parallel_images` a 2 |
 | Faltan trozos de mi narración | El corrector cortó de más | Busca los avisos `✂`, apaga `audio.fix_narration_ai` y rehaz desde **Análisis** |
-| Costó más de lo estimado | Modelo caro o video generativo encendido | Revisa el capítulo 11.4 |
-| Las imágenes no respetan lo que digo | El prompt era ambiguo | Deja `providers.images.fact_check` encendido, corrige la escena y rehaz desde **Imágenes** |
+| Costó más de lo estimado | Modelo caro o video generativo activo | Revisa el capítulo 11.4 |
+| Las imágenes no respetan lo que digo | El prompt era ambiguo | Deja `providers.images.fact_check` encendido, corrige el prompt en el storyboard y rehaz desde **Imágenes** |
 | Falta un inserto | No había foto de licencia libre | Añade el archivo a tu banco de elementos y rehaz desde **Imágenes** |
 | Las imágenes escaladas se ven planas | El escalado recupera resolución, no microtextura | Genera la versión final con FLUX 1.1 Pro o FLUX 2 |
 | El personaje sale recortado o desincronizado | Clips de una versión anterior | «Rehacer desde → Imágenes»: solo se rehacen los clips antiguos |
 | Los subtítulos van desfasados | Proyecto de una versión antigua | «Rehacer desde → Voz» |
-| Un modelo falla con «no encontrado» | El proveedor lo renombró o lo retiró | Elige otro modelo de la lista en Ajustes |
+| El sonido de los insertos no pega | La paleta por defecto no encaja | ⚙ Configuración → Audio → Sonido de los insertos |
+| Un modelo falla con «no encontrado» | El proveedor lo renombró o lo retiró | Elige otro modelo de la lista en ⚙ Configuración |
 | No arranca / dice que falta ffmpeg | ffmpeg no está instalado | Instálalo (capítulo 2.3); en Windows, en `C:\ffmpeg\bin` |
 | Rutas nuevas responden «No encontrado» | Actualizaste sin reiniciar | Cierra la ventana negra y abre `iniciar.bat` otra vez |
 | El video se ve recortado | El proyecto se creó con otro formato | Crea un proyecto nuevo con el formato correcto (se fija al crearlo) |
-| La interfaz no es la que esperaba | Está activa la otra plantilla | Ajustes → Plantilla de la interfaz (capítulo 2.6) |
+| La interfaz no es la que esperaba | Está activa la otra plantilla | ⚙ Configuración → 🎨 Plantilla de la interfaz (capítulo 2.6) |
 
 ---
 
@@ -1033,7 +1051,7 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 **SÍ:**
 
 - Ejecutar **`probar.bat`** después de cada actualización.
-- Aprovechar el **punto de control** antes de gastar en imágenes.
+- Pararte en el **punto de control** del storyboard.
 - Probar con modelos baratos antes de la versión final.
 - Ver y escuchar el video completo antes de publicarlo.
 - Conservar los créditos del material de archivo en la descripción.
@@ -1046,10 +1064,10 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 - **Nunca rehagas** desde Concepto, Guion o Escenas para arreglar una imagen.
 - No subas material del que no tengas derechos: el programa no puede
   verificarlo por ti.
-- No edites `config.yaml` a mano si puedes hacerlo desde Ajustes (tus
-  ajustes se guardan aparte, en `config.local.yaml`, para que una
+- No edites `config.yaml` a mano si puedes hacerlo desde ⚙ Configuración
+  (tus ajustes se guardan aparte, en `config.local.yaml`, para que una
   actualización no los pise).
-- No des por bueno un video sin leer los avisos de la columna **Atención**.
+- No des por bueno un video sin leer los avisos ⚠ del panel.
 - No cierres la ventana negra durante una generación larga si no quieres
   detenerla.
 
@@ -1058,11 +1076,11 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 ## 17. Glosario en palabras normales
 
 - **B-roll**: las imágenes o los videos que se ven mientras alguien habla.
-- **Storyboard (guion gráfico)**: el plan de todas las escenas, con lo que se
-  verá en cada una, hecho **antes** de generar nada.
+- **Storyboard (guion gráfico)**: el plan de todas las escenas, con lo que
+  se verá en cada una, hecho **antes** de generar nada.
 - **Prompt**: la descripción con la que se le pide una imagen a la IA.
-- **Inserto**: la tarjeta que se superpone al B-roll (una foto, una cifra, un
-  mapa).
+- **Inserto**: la tarjeta que se superpone al B-roll (una foto, una cifra,
+  un mapa).
 - **Rótulo**: el texto que aparece en pantalla (un nombre, una fecha, un
   dato).
 - **Miniatura**: la imagen de portada del video en YouTube.
@@ -1077,19 +1095,19 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 - **Ducking**: bajar la música automáticamente cuando entra la voz.
 - **Clave de API**: la contraseña que permite usar un servicio de IA con tu
   cuenta.
-- **Plantilla de la interfaz**: cómo se ve el programa (nueva o clásica); no
+- **Plantilla de la interfaz**: cómo se ve el programa (clásica o nueva); no
   cambia lo que produce.
-- **Modo vista previa**: el modo sin claves, con contenido de relleno y costo
-  cero.
+- **Modo vista previa**: el modo sin claves, con contenido de relleno y
+  costo cero.
 
 ---
 
 ## 18. Torre de Control: el panel de todos tus canales
 
 ytstudio **hace** los videos; la **Torre de Control** **administra** los
-canales. Se abre con doble clic en **`panel.bat`** (o `./panel.sh`) y vive en
-http://localhost:8766. Todo lo que ve y guarda está **en tu equipo**, no en
-ningún servicio de terceros.
+canales. Se abre con doble clic en **`panel.bat`** (o `./panel.sh`) y vive
+en http://localhost:8766. Todo lo que ve y guarda está **en tu equipo**, no
+en ningún servicio de terceros.
 
 ![La portada de la Torre de Control](docs/manual/panel/01-torre-de-control.png)
 
@@ -1111,8 +1129,8 @@ ningún servicio de terceros.
 > ⚠ **Mientras la aplicación esté «En pruebas», Google caduca los permisos
 > cada 7 días** y el panel te pedirá reconectar los canales. Es molesto pero
 > normal. La solución definitiva es **publicar la aplicación** y pasar la
-> verificación de Google (gratuita; pide una web con política de privacidad y
-> un video de demostración, y tarda de días a semanas).
+> verificación de Google (gratuita; pide una web con política de privacidad
+> y un video de demostración, y tarda de días a semanas).
 
 > 💡 Si Google responde **«Error 400: redirect_uri_mismatch»**, crea la
 > credencial como **«Aplicación web»** y añade en URIs de redireccionamiento
@@ -1121,12 +1139,12 @@ ningún servicio de terceros.
 
 ### 18.2 Conectar los canales
 
-Pulsa **＋ Conectar canal**, elige la cuenta de Google, elige la identidad del
-canal si esa cuenta tiene varios, y acepta los permisos. Repite por cada
+Pulsa **＋ Conectar canal**, elige la cuenta de Google, elige la identidad
+del canal si esa cuenta tiene varios, y acepta los permisos. Repite por cada
 canal: **un permiso por canal**, sin importar de qué cuenta sea.
 
-Al conectar, el panel trae la primera foto: 90 días de métricas diarias y los
-últimos 50 videos. Los **ingresos** solo aparecen en canales dentro del
+Al conectar, el panel trae la primera foto: 90 días de métricas diarias y
+los últimos 50 videos. Los **ingresos** solo aparecen en canales dentro del
 Programa de Socios; en los demás dirá «ingresos sin acceso», y no es un
 error. Además son **estimados**: la cifra real de pago vive en AdSense.
 
@@ -1156,22 +1174,22 @@ Cada video tiene un lápiz **✎** en su fila. Se abre el editor con:
 - **Playlists**: crear listas y añadir, quitar o reordenar videos.
 
 **Edición en lote:** el botón **☑ Edición en lote** activa casillas en la
-tabla. Marcas varios videos, eliges la operación (buscar y reemplazar, añadir
-texto al final de la descripción, añadir etiquetas o añadir a una playlist) y
-pulsas **Vista previa**: verás el antes → después y el costo en cuota
-**antes** de confirmar.
+tabla. Marcas varios videos, eliges la operación (buscar y reemplazar,
+añadir texto al final de la descripción, añadir etiquetas o añadir a una
+playlist) y pulsas **Vista previa**: verás el antes → después y el costo en
+cuota **antes** de confirmar.
 
 **Todo pasa por una cola** (el chip «📋 Cola» de la cabecera). Cada edición
-consume unas 51 unidades de las 10 000 diarias, así que un lote grande puede
-no caber hoy: la cola ejecuta lo que cabe, deja el resto en espera con su
-motivo y lo retoma sola tras el reinicio de cuota (medianoche, hora del
+consume unas 51 unidades de las 10 000 diarias, así que un lote grande
+puede no caber hoy: la cola ejecuta lo que cabe, deja el resto en espera con
+su motivo y lo retoma sola tras el reinicio de cuota (medianoche, hora del
 Pacífico). Además reserva unidades (`panel.quota_reserve`) para que las
 ediciones nunca dejen sin cuota a la sincronización nocturna.
 
 ### 18.5 Reportes y alertas
 
-El botón **📊 Reportes** abre el análisis de toda tu red. Se calcula sobre el
-histórico que ya tienes guardado: **no gasta cuota**, así que puedes
+El botón **📊 Reportes** abre el análisis de toda tu red. Se calcula sobre
+el histórico que ya tienes guardado: **no gasta cuota**, así que puedes
 preguntar lo que quieras las veces que quieras.
 
 ![Los reportes comparando todos los canales](docs/manual/panel/02-reportes-de-la-red.png)
@@ -1201,8 +1219,8 @@ atención hoy:
 | ▲ Las vistas subieron X % | Para que sepas qué está funcionando |
 | ▲ Un video va N× sobre su media | Una oportunidad con fecha de caducidad |
 
-Los umbrales se ajustan en el bloque `panel.alertas` de `config.yaml` (por
-ejemplo `panel.alertas.caida_vistas_pct` o
+Los umbrales se ajustan en el bloque `panel.alertas` de `config.yaml`
+(por ejemplo `panel.alertas.caida_vistas_pct` o
 `panel.alertas.dias_sin_publicar`).
 
 ### 18.6 Tus datos y tu seguridad
@@ -1217,7 +1235,7 @@ ejemplo `panel.alertas.caida_vistas_pct` o
 
 ## 19. Si algo falla: cómo pedir ayuda
 
-1. Abre **Log de eventos** (en la cabecera).
+1. Ve a **🧾 Log de eventos**.
 2. Pulsa **⬇ Descargar**.
 3. Comparte ese archivo describiendo qué esperabas y qué pasó.
 
