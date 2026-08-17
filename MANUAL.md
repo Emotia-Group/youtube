@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.61.0 -->
+<!-- MANUAL_VERSION: 0.62.1 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -199,11 +199,19 @@ cambiar de una a otra **no toca nada de tu trabajo**.
 | **Nueva** (la de este manual) | Editorial, con modo claro y oscuro | Corrida · Material · Guion · Escenas · Personajes · Metadatos |
 | **Clásica** | Oscura, la de las versiones anteriores | Guion · Storyboard · Editor · Video · Concepto · Archivos |
 
-**Para cambiar:** **Ajustes → Plantilla de la interfaz** y pulsa la otra. La
-página se recarga sola y el **manual también cambia**, para que sus capturas
-coincidan con lo que tienes delante.
+**Para cambiar:** ve a **Ajustes → Plantilla de la interfaz**. Cada plantilla
+se presenta en una **ficha con su miniatura**, su nombre y en qué se nota, para
+que veas cómo es antes de probarla. Pulsa **«Usar esta plantilla»** en la que
+quieras y aparece un **aviso de confirmación**: hasta que respondas **«Sí,
+cambiar…»** no cambia nada. Entonces la página se recarga sola y el **manual
+también cambia**, para que sus capturas coincidan con lo que tienes delante.
 
-![El selector de plantilla, arriba de los Ajustes](docs/manual/nueva/12-ajustes-plantilla-y-video.png)
+![El selector de plantillas, con una ficha por plantilla](docs/manual/nueva/12-ajustes-plantilla-y-video.png)
+
+> 💡 **Un clic suelto ya no te cambia de interfaz.** Hasta la v0.61.0 eran dos
+> botones pegados y bastaba con pulsar el otro por curiosidad para acabar en
+> una interfaz distinta. Desde la v0.62.0 hay que elegir y confirmar; si te
+> arrepientes, **Cancelar** deja todo como estaba.
 
 **Las dos tienen los mismos controles.** Desde la v0.61.0 no hay ninguna
 función que solo esté en una: la estimación de costo antes de generar, la

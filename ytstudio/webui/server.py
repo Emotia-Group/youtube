@@ -98,15 +98,60 @@ SERVER_VERSION = get_version().get("version", "")
 # juego de capturas: un manual con pantallas que no coinciden con lo que tienes
 # delante enseña peor que no tener manual.
 
+#
+# Cada entrada lleva además con qué CARA se presenta en Ajustes: un nombre
+# corto, una frase de qué es, unas líneas de en qué se nota, y los colores con
+# los que la interfaz dibuja su miniatura. La miniatura se dibuja SOLA a partir
+# de esos colores y del `layout` (barra arriba o barra lateral), así que una
+# plantilla nueva solo tiene que añadirse aquí: no hay que tocar el selector ni
+# guardar ninguna captura.
+
 TEMPLATES: dict[str, dict] = {
     "nueva": {"label": "Nueva (editorial, clara u oscura)",
               "html": "index.html", "manual": "MANUAL.md",
-              "shots": "nueva"},
+              "shots": "nueva",
+              "name": "Nueva",
+              "tagline": "Editorial · clara u oscura",
+              "desc": "Aire, tipografía de revista y la navegación arriba. "
+                      "Es la única con modo claro, y la que mejor se ve en "
+                      "pantallas anchas y en el móvil.",
+              "bullets": ["Modo claro y modo oscuro",
+                          "Menú arriba, ancho completo",
+                          "Pensada para pantallas grandes y móvil"],
+              "preview": {"layout": "top", "bg": "#f3f2f2",
+                          "surface": "#eae9e9", "ink": "#201f1d",
+                          "line": "#d8d5d2", "accent": "#b68235",
+                          "radius": 2}},
     "clasica": {"label": "Clásica (oscura, la anterior)",
                 "html": "index-clasica.html", "manual": "MANUAL-clasica.md",
-                "shots": "clasica"},
+                "shots": "clasica",
+                "name": "Clásica",
+                "tagline": "Oscura · la de siempre",
+                "desc": "Barra lateral fija con la lista de proyectos siempre "
+                        "a la vista, tarjetas redondeadas y color oscuro. Es "
+                        "la interfaz con la que nació el programa.",
+                "bullets": ["Siempre oscura",
+                            "Lista de proyectos en la barra lateral",
+                            "Todo a un clic, sin cambiar de pantalla"],
+                "preview": {"layout": "side", "bg": "#0c0e13",
+                            "surface": "#141821", "ink": "#e8eaf0",
+                            "line": "#262d3d", "accent": "#f0b429",
+                            "radius": 5}},
 }
 DEFAULT_TEMPLATE = "nueva"
+
+
+def template_cards() -> list[dict]:
+    """Lo que necesita el selector de Ajustes para pintar cada plantilla: cómo
+    se llama, qué es, en qué se nota y con qué colores dibujar su miniatura."""
+    return [{"id": k,
+             "label": v["label"],
+             "name": v.get("name") or v["label"],
+             "tagline": v.get("tagline", ""),
+             "desc": v.get("desc", ""),
+             "bullets": list(v.get("bullets") or []),
+             "preview": dict(v.get("preview") or {})}
+            for k, v in TEMPLATES.items()]
 
 
 def ui_template(cfg: dict | None = None) -> str:
@@ -1014,8 +1059,7 @@ def api_get_config() -> dict:
         "version": get_version(),
         "server_version": SERVER_VERSION,
         "ui_template": ui_template(),
-        "ui_templates": [{"id": k, "label": v["label"]}
-                         for k, v in TEMPLATES.items()],
+        "ui_templates": template_cards(),
         "phases": [{"name": n, "desc": d, "label": PHASE_LABELS.get(n, n)}
                    for n, _, d in PHASES],
     }

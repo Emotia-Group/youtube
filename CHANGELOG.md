@@ -9,6 +9,40 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.62.1 — 2026-08-17
+Arreglo de la batería de pruebas en Windows: `probar.bat` salía en rojo con el
+programa perfectamente sano.
+
+- 🪟 «NO HAY CAPTURAS HUÉRFANAS» daba por huérfanas TODAS las capturas del
+  manual al correr en Windows. La prueba comparaba la ruta del disco
+  (`docs\manual\…`, con barra invertida) contra la que escribe el manual
+  (`docs/manual/…`, con barra normal): nunca coincidían. Ahora se comparan las
+  dos con barra normal, que es como se escriben las rutas en Markdown. Ninguna
+  captura estaba de más: era la prueba la que miraba mal.
+
+## v0.62.0 — 2026-08-17
+Cambiar de plantilla ya no se hace sin querer: el selector pasa de dos botones
+pegados a **una ficha por plantilla, con miniatura**, y el cambio **pide
+confirmación**.
+
+- ⚠️ CONFIRMACIÓN ANTES DE CAMBIAR. Antes, un solo clic en la otra opción te
+  llevaba a una interfaz distinta — bastaba con estar mirando las opciones
+  para acabar en otra plantilla sin querer. Ahora se elige («Usar esta
+  plantilla»), se lee qué va a pasar y se responde «Sí, cambiar a…». Con
+  «Cancelar» todo queda como estaba, y hasta ese momento no se guarda nada.
+- 🖼 UNA FICHA POR PLANTILLA, con miniatura, nombre, una frase de qué es y tres
+  líneas de en qué se nota. La que está puesta lleva la marca «en uso». Se ve
+  cómo es la otra ANTES de probarla, que era justo lo que faltaba para decidir.
+- 🎨 LA MINIATURA SE DIBUJA SOLA con los colores de cada plantilla y su
+  disposición (menú arriba o barra lateral). No es una captura guardada: no
+  envejece con los rediseños ni hay que acordarse de volver a hacerla.
+- 🧩 PENSADO PARA LAS PLANTILLAS QUE VENGAN. Todo sale de un único sitio
+  (`TEMPLATES` en `webui/server.py`): añadir una tercera plantilla es añadir
+  ahí su nombre, su descripción y sus colores — la ficha, la miniatura y el
+  aviso de confirmación aparecen solos, y la rejilla se reacomoda sin tocar
+  ninguna de las dos interfaces.
+- 📖 Los dos manuales, con el capítulo 2.6 y las capturas al día.
+
 ## v0.61.0 — 2026-08-17
 Elegir cómo se ve el programa ya no cuesta funciones: la interfaz nueva
 recupera los cuatro controles que solo tenía la clásica — y son justo los que
