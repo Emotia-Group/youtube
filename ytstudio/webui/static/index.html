@@ -152,7 +152,9 @@ const fmtSec = s => s == null ? '—' : `${Math.floor(s / 60)}:${String(Math.rou
 const money = v => v == null ? '—' : `$${Number(v).toFixed(2)}`;
 const dateOf = ts => ts ? new Date(ts * 1000).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—';
 
-const S = { screen: 'proyectos', slug: null, cfg: null, projects: [], detail: null, run: null, lib: null, script: null, timer: null, offline: false, fail: null };
+// est: la estimación guardada del proyecto abierto · hasta: dónde detener la
+// próxima generación (se recuerda entre repintados de la pantalla).
+const S = { screen: 'proyectos', slug: null, cfg: null, projects: [], detail: null, run: null, lib: null, script: null, timer: null, offline: false, fail: null, est: null, hasta: '' };
 
 async function api(path, opts) {
   const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -202,7 +204,7 @@ $('#btn-eventos').addEventListener('click', showEvents);
 
 function go(screen, slug) {
   S.screen = screen;
-  if (slug !== undefined) S.slug = slug;
+  if (slug !== undefined && slug !== S.slug) { S.slug = slug; S.est = null; S.detail = null; }
   clearInterval(S.timer); S.timer = null;
   for (const b of $('#nav').children) {
     const own = { proyectos: ['proyectos', 'nuevo', 'corrida', 'guion', 'escenas', 'personajes', 'metadatos'], canales: ['canales'], biblioteca: ['biblioteca'], ajustes: ['ajustes'] }[b.dataset.go];
@@ -264,7 +266,9 @@ async function pollRun() {
       api(`/api/projects/${S.slug}/log`)
     ]);
     S.detail = detail; S.run = run;
-    if (!run.running && S.timer) { clearInterval(S.timer); S.timer = null; }
+    // Al terminar una corrida, lo que FALTA por generar cambió: la
+    // estimación guardada se tira para que la próxima sea la de verdad.
+    if (!run.running && S.timer) { clearInterval(S.timer); S.timer = null; S.est = null; }
   });
   if (S.screen === 'corrida') render();
 }
@@ -312,7 +316,27 @@ function viewProyectos() {
       el('td', { class: 'mono', style: 'text-align:right' }, `${p.done}/${p.total}`),
       el('td', { class: 'mono', style: 'text-align:right' }, p.scene_count ? `${p.scene_count} esc.` : '—'),
       el('td', { class: 'mono', style: 'text-align:right' }, p.total_duration ? fmtSec(p.total_duration) : '—'),
-      el('td', { class: 'mono muted', style: 'text-align:right' }, dateOf(p.created_at))));
+      el('td', { class: 'mono muted', style: 'text-align:right' }, dateOf(p.created_at)),
+      // Duplicar y borrar sin entrar al proyecto. El clic no debe abrirlo:
+      // por eso cada botón detiene la propagación de la fila.
+      el('td', { style: 'text-align:right;white-space:nowrap' },
+        el('button', { class: 'btn btn-sm btn-ghost', title: 'Duplicar',
+          onclick: async ev => {
+            ev.stopPropagation();
+            const name = prompt('Nombre de la copia', `${p.display_name || p.slug} (copia)`);
+            if (!name) return;
+            try {
+              const r = await api(`/api/projects/${p.slug}/duplicate`, { method: 'POST', body: JSON.stringify({ name }) });
+              await loadProjects(); go('corrida', r.slug);
+            } catch (e) { alert(e.message); }
+          } }, '⧉'),
+        el('button', { class: 'btn btn-sm btn-ghost', title: 'Borrar',
+          onclick: async ev => {
+            ev.stopPropagation();
+            if (!confirm(`¿Borrar «${p.display_name || p.slug}» y todos sus archivos generados? No se puede deshacer.`)) return;
+            try { await api(`/api/projects/${p.slug}`, { method: 'DELETE' }); await loadProjects(); }
+            catch (e) { alert(e.message); }
+          } }, '🗑'))));
   }
   return el('div', { class: 'wrap' },
     el('div', { style: 'display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap' },
@@ -329,7 +353,8 @@ function viewProyectos() {
         el('th', { style: 'text-align:right' }, 'Fases'),
         el('th', { style: 'text-align:right' }, 'Escenas'),
         el('th', { style: 'text-align:right' }, 'Duración'),
-        el('th', { style: 'text-align:right' }, 'Creado'))),
+        el('th', { style: 'text-align:right' }, 'Creado'),
+        el('th', {}, ''))),
       body));
 }
 
@@ -428,8 +453,72 @@ function viewNuevo() {
         err)));
 }
 
+// ESTIMACIÓN ANTES DE GENERAR: cuánto va a costar y cuánto va a tardar, con
+// el desglose por fase a un clic. Es la cifra que permite decidir ANTES de
+// gastar; el «gasto real» solo se sabe cuando ya se gastó.
+function estimacionCard() {
+  const caja = el('div', { class: 'muted', style: 'font-size:13px' }, 'calculando…');
+  const pintar = e => {
+    const medio = e.total_costo_medio ?? ((e.total_costo[0] + e.total_costo[1]) / 2);
+    const min = e.total_min_medio ?? ((e.total_minutos[0] + e.total_minutos[1]) / 2);
+    const detalle = el('div', { class: 'hide', style: 'margin-top:10px' },
+      el('table', { style: 'font-size:12px' },
+        el('tbody', {}, (e.items || []).map(i => el('tr', {},
+          el('td', { style: 'padding:3px 8px 3px 0' },
+            el('div', {}, i.fase),
+            el('div', { class: 'mono muted' }, i.detalle || '')),
+          el('td', { class: 'mono muted', style: 'text-align:right;white-space:nowrap;vertical-align:top' },
+            i.costo[1] === 0 ? 'gratis' : `$${i.costo[0].toFixed(2)}–$${i.costo[1].toFixed(2)}`))))),
+      (e.notas || []).map(n => el('div', { class: 'muted', style: 'font-size:11.5px;line-height:1.5;margin-top:6px' }, n)));
+    caja.replaceChildren(
+      el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;cursor:pointer',
+        onclick: () => detalle.classList.toggle('hide') },
+        el('span', { style: 'font-family:var(--heading);font-size:16px' },
+          medio < 0.01 ? 'gratis' : `≈ ${money(medio)}`),
+        el('span', { class: 'mono muted' }, `~${Math.round(min)} min · ver detalle`)),
+      el('div', { class: 'mono muted', style: 'margin-top:4px' },
+        `${e.escenas} escenas · ~${e.duracion_min} min de video`),
+      detalle);
+  };
+  // La estimación se GUARDA por proyecto: mientras se genera, esta pantalla
+  // se repinta cada 2,5 s y pedirla cada vez era trabajo de sobra para el
+  // servidor (relee el proyecto entero) sin que el número cambiara.
+  if (S.est && S.est.slug === S.slug) { pintar(S.est.data); return caja; }
+  api(`/api/projects/${S.slug}/estimate`)
+    .then(e => { S.est = { slug: S.slug, data: e }; pintar(e); })
+    .catch(() => { caja.textContent = 'No se pudo estimar todavía.'; });
+  return caja;
+}
+
+// Guardar el estilo del proyecto en la biblioteca del canal.
+function guardarEstilo() {
+  const nombre = el('input', { class: 'input', value: S.detail?.display_name || S.slug || '' });
+  const canal = el('select', { class: 'input' }, el('option', { value: '' }, 'Sin canal'),
+    (S.lib?.channels || []).map(c => el('option', { value: c.id }, c.name || c.id)));
+  const aviso = el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' });
+  const cerrar = overlay('Guardar el estilo de este proyecto',
+    el('div', {},
+      el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin:0 0 14px' },
+        'Se guardan la dirección visual, el prefijo de los prompts, la paleta, el tono, la música, el ritmo y la fórmula narrativa. Podrás elegirlo al crear un proyecto nuevo, sin volver a pagar el análisis.'),
+      el('label', { class: 'f' }, 'Nombre del estilo'), nombre,
+      el('label', { class: 'f', style: 'margin-top:12px' }, 'Canal'), canal,
+      el('div', { style: 'display:flex;gap:8px;margin-top:16px' },
+        el('button', { class: 'btn btn-primary', onclick: async () => {
+          try {
+            await api(`/api/projects/${S.slug}/save-style`, { method: 'POST',
+              body: JSON.stringify({ name: nombre.value, channel_id: canal.value || null }) });
+            aviso.textContent = 'Guardado en Canales.';
+            await loadLibraryQuiet();
+          } catch (e) { aviso.textContent = e.message; }
+        } }, 'Guardar')),
+      aviso), 460);
+  return cerrar;
+}
+async function loadLibraryQuiet() { try { S.lib = await api('/api/library'); } catch (e) {} }
+
 function viewCorrida() {
   const d = S.detail, run = S.run || {};
+  if (!S.lib) loadLibraryQuiet();   // para el desplegable de canales
   if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando la corrida…'));
   const phases = S.cfg?.phases || [];
   const cur = run.phase;
@@ -483,10 +572,22 @@ function viewCorrida() {
     : el('div', { class: 'plate', style: `aspect-ratio:${asp.w}/${asp.h};display:flex;align-items:flex-end;padding:12px${asp.vert ? ';max-height:72vh;margin:0 auto' : ''}` },
       el('span', { class: 'mono muted', style: 'background:var(--bg);padding:4px 6px' }, run.running ? 'montando…' : 'sin video todavía'));
 
+  // HASTA DÓNDE GENERAR. Parar antes de las imágenes es lo que más dinero
+  // ahorra: el guion y el guion gráfico son baratos, y corregirlos ahí es
+  // gratis. Sin este control solo se podía generar el video entero.
+  const hasta = el('select', { class: 'input', style: 'width:auto;font-size:12px',
+    title: 'Dónde detenerse. Parar en el guion gráfico deja la revisión hecha antes de gastar en imágenes.',
+    // La elección se recuerda: esta pantalla se repinta sola y sin esto
+    // volvía a «Video completo» justo antes de que pulsaras Generar.
+    onchange: ev => { S.hasta = ev.target.value; } },
+    [['', 'Video completo'], ['script', 'Solo hasta el guion'], ['scenes', 'Hasta el guion gráfico']]
+      .map(([v, t]) => el('option', { value: v, selected: v === (S.hasta || '') ? 'selected' : null }, t)));
+
   const acciones = el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
     run.running
       ? el('span', { class: 'tag' }, `generando · ${cur || 'iniciando'}`)
-      : el('button', { class: 'btn btn-primary', onclick: () => runFrom() }, 'Generar video'),
+      : el('button', { class: 'btn btn-primary', onclick: () => runFrom(undefined, hasta.value || undefined) }, 'Generar video'),
+    run.running ? null : hasta,
     el('button', { class: 'btn btn-sm', onclick: () => go('guion') }, 'Editar guion'),
     el('button', { class: 'btn btn-sm', onclick: async () => {
       const name = prompt('Nombre nuevo del proyecto', S.detail?.display_name || S.slug);
@@ -496,7 +597,23 @@ function viewCorrida() {
     } }, 'Renombrar'),
     el('select', { class: 'input', style: 'width:auto;font-size:12px', onchange: e => e.target.value && runFrom(e.target.value) },
       el('option', { value: '' }, 'Rehacer desde…'),
-      phases.map(p => el('option', { value: p.name }, p.label || p.name))));
+      phases.map(p => el('option', { value: p.name }, p.label || p.name))),
+    // Guardar el ESTILO de este proyecto para reutilizarlo en el canal sin
+    // volver a pagar el análisis.
+    d.concept ? el('button', { class: 'btn btn-sm', title: 'Guarda la dirección visual, el tono, la música y el ritmo de este proyecto para reutilizarlos', onclick: () => guardarEstilo() }, 'Guardar estilo') : null,
+    el('button', { class: 'btn btn-sm', title: 'Copiar el proyecto para probar una variante sin tocar el bueno', onclick: async () => {
+      const name = prompt('Nombre de la copia', `${d.display_name || S.slug} (copia)`);
+      if (!name) return;
+      try {
+        const r = await api(`/api/projects/${S.slug}/duplicate`, { method: 'POST', body: JSON.stringify({ name }) });
+        await loadProjects(); go('corrida', r.slug);
+      } catch (e) { alert(e.message); }
+    } }, 'Duplicar'),
+    el('button', { class: 'btn btn-sm btn-ghost', onclick: async () => {
+      if (!confirm(`¿Borrar «${d.display_name || S.slug}» y todos sus archivos generados? No se puede deshacer.`)) return;
+      try { await api(`/api/projects/${S.slug}`, { method: 'DELETE' }); S.detail = null; await loadProjects(); go('proyectos'); }
+      catch (e) { alert(e.message); }
+    } }, 'Borrar'));
 
   return el('div', { class: 'split', style: 'grid-template-columns:264px 1fr 320px' },
     el('aside', { class: 'railL' },
@@ -524,6 +641,8 @@ function viewCorrida() {
         el('h2', { style: 'font-size:18px' }, 'Atención'),
         el('span', { class: 'tag' }, String(warnings.length + (run.error ? 1 : 0)))),
       el('div', { style: 'margin-top:12px' }, atencion),
+      el('div', { class: 'kicker', style: 'margin:20px 0 8px;border-top:1px solid var(--divider);padding-top:16px' }, 'Estimado antes de generar'),
+      estimacionCard(),
       el('div', { class: 'kicker', style: 'margin:20px 0 8px;border-top:1px solid var(--divider);padding-top:16px' }, 'Gasto real'),
       total != null
         ? el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline' },
@@ -533,9 +652,12 @@ function viewCorrida() {
       d.time_report ? el('div', { class: 'mono muted', style: 'margin-top:8px' }, `tiempo total ${fmtSec(d.time_report.total_seconds || d.time_report.total || null)}`) : null));
 }
 
-async function runFrom(from) {
+async function runFrom(from, to) {
   try {
-    await api(`/api/projects/${S.slug}/run`, { method: 'POST', body: JSON.stringify(from ? { from } : {}) });
+    const cuerpo = {};
+    if (from) cuerpo.from = from;
+    if (to) cuerpo.to = to;      // dónde detenerse (guion / guion gráfico)
+    await api(`/api/projects/${S.slug}/run`, { method: 'POST', body: JSON.stringify(cuerpo) });
     pollRun(); if (!S.timer) S.timer = setInterval(pollRun, 2500);
   } catch (e) { alert(e.message); }
 }
@@ -1403,6 +1525,9 @@ function viewEscenas() {
   if (!scenes.length) return el('div', { class: 'wrap' }, projHeader('escenas', 'Escenas'),
     el('p', { class: 'muted', style: 'margin-top:22px;max-width:520px;line-height:1.75' }, 'Aún no hay escenas. Genera hasta la fase de escenas (storyboard) para poder subir material propio y ajustar animación, transición y rótulos.'));
 
+  // Con narración propia las escenas van pegadas a TU voz: sus duraciones no
+  // se tocan aquí (el motor las ignora, y verlas editables engañaría).
+  const vozPropia = scenes.some(s => s.audio_start !== undefined && s.audio_start !== null);
   const edits = new Map();
   const mark = (id, field, value) => { const e = edits.get(id) || { id }; e[field] = value; edits.set(id, e); msg.textContent = `${edits.size} escena(s) con cambios sin guardar`; };
   const sel = (id, field, options, current) => el('select', { class: 'input', style: 'width:auto;font-size:12px;padding:5px 8px', onchange: ev => mark(id, field, ev.target.value) },
@@ -1423,10 +1548,33 @@ function viewEscenas() {
       el('td', { style: 'max-width:340px' },
         el('div', { style: 'font-size:13px;line-height:1.55' }, (s.narration || s.text || s.description || '').slice(0, 150) || '—'),
         el('div', { class: 'mono muted', style: 'margin-top:4px' }, [s.shot, s.broll_type, s.duration ? `${Number(s.duration).toFixed(1)} s` : null].filter(Boolean).join(' · '))),
+      // Quién ocupa la pantalla: el personaje hablando (lipsync, se paga por
+      // segundo) o B-roll ilustrativo. Solo tiene sentido si hay narrador.
+      d.has_character
+        ? el('td', {}, sel(s.id, 'shot', ['broll', 'personaje'], s.shot === 'personaje' ? 'personaje' : 'broll'))
+        : null,
       el('td', {}, sel(s.id, 'animation', ['zoom_in', 'zoom_out', 'pan_left', 'pan_right', 'static'], s.animation)),
       el('td', {}, sel(s.id, 'transition', ['corte', 'fundido'], s.transition)),
       el('td', {}, sel(s.id, 'sfx', ['ninguno', 'whoosh', 'riser', 'boom'], s.sfx || 'ninguno')),
-      el('td', {}, el('input', { class: 'input', style: 'width:150px;font-size:12px;padding:5px 8px', value: (s.overlay || {}).text || '', placeholder: 'rótulo…', oninput: ev => mark(s.id, 'overlay_text', ev.target.value) })),
+      // ARCO MUSICAL de la escena: 0 = música mínima, 1 = clímax.
+      el('td', { style: 'white-space:nowrap' },
+        el('input', { type: 'range', min: '0', max: '1', step: '0.05', style: 'width:88px;vertical-align:middle',
+          title: 'Intensidad de la música en esta escena (0 mínima · 1 clímax)',
+          value: String(s.music_intensity ?? 0.55),
+          oninput: ev => mark(s.id, 'music_intensity', Number(ev.target.value)) })),
+      // La DURACIÓN solo es editable con voz artificial: con tu voz grabada
+      // la manda tu narración, y tocarla desincronizaría el video.
+      el('td', {}, vozPropia
+        ? el('span', { class: 'mono muted', title: 'Con tu voz grabada, la duración la manda tu narración' },
+            s.duration ? `${Number(s.duration).toFixed(1)} s` : '—')
+        : el('input', { class: 'input', type: 'number', min: '1', max: '60', step: '0.5',
+            style: 'width:72px;font-size:12px;padding:5px 8px', value: (s.duration || 0).toFixed(1),
+            oninput: ev => mark(s.id, 'duration', Number(ev.target.value)) })),
+      el('td', { style: 'white-space:nowrap' },
+        el('input', { class: 'input', style: 'width:130px;font-size:12px;padding:5px 8px', value: (s.overlay || {}).text || '', placeholder: 'rótulo…', oninput: ev => mark(s.id, 'overlay_text', ev.target.value) }),
+        el('input', { class: 'input', style: 'width:104px;font-size:12px;padding:5px 8px;margin-top:4px', value: (s.overlay || {}).kicker || '', placeholder: 'encabezado…', title: 'La línea pequeña de encima del rótulo', oninput: ev => mark(s.id, 'overlay_kicker', ev.target.value) }),
+        el('div', { style: 'margin-top:4px' },
+          sel(s.id, 'overlay_type', ['personaje', 'lugar', 'fecha', 'dato', 'lista', 'conclusion'], (s.overlay || {}).type || 'dato'))),
       el('td', { style: 'text-align:right;white-space:nowrap' },
         manual ? el('span', { class: 'tag', style: 'margin-right:6px' }, 'propio') : null,
         el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*,video/*', async files => {
@@ -1462,9 +1610,51 @@ function viewEscenas() {
           } catch (e) { msg.textContent = e.message; }
         } }, 'Guardar cambios'))),
     el('table', { style: 'margin-top:16px' },
-      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, 'Escena'), el('th', {}, 'Animación'), el('th', {}, 'Transición'), el('th', {}, 'Sonido'), el('th', {}, 'Rótulo'), el('th', { style: 'text-align:right' }, 'Material propio'))),
+      // OJO con el número de columnas: cada fila pinta id + imagen + texto,
+      // así que la cabecera necesita un título vacío para la imagen. Sin él
+      // todos los títulos salían corridos una columna a la izquierda.
+      el('thead', {}, el('tr', {}, el('th', {}, '#'), el('th', {}, ''), el('th', {}, 'Escena'),
+        d.has_character ? el('th', { title: 'Quién ocupa la pantalla' }, 'En pantalla') : null,
+        el('th', {}, 'Animación'), el('th', {}, 'Transición'), el('th', {}, 'Sonido'),
+        el('th', { title: 'Intensidad de la música' }, 'Música'),
+        el('th', {}, 'Duración'), el('th', {}, 'Rótulo'),
+        el('th', { style: 'text-align:right' }, 'Material propio'))),
       el('tbody', {}, rows)),
     el('div', { class: 'muted', style: 'font-size:13px;margin-top:12px' }, 'Estos ajustes se remontan sin volver a llamar a la IA. La narración y el orden se cambian en el guion.'));
+}
+
+// PRESENCIA DEL NARRADOR EN CÁMARA. Es el ajuste que más manda en la factura
+// cuando hay lipsync: se cobra por SEGUNDO de personaje en pantalla. Antes
+// solo se podía elegir al crear el proyecto.
+const PRESENCIAS = [[15, 'apariciones puntuales'], [30, 'gancho, momentos clave y cierre'],
+                    [45, 'muy presente'], [60, 'el video es sobre todo él']];
+
+function presenciaBloque(d) {
+  const actual = Math.round(((d.character || {}).presence ?? 0.3) * 100);
+  const aviso = el('span', { class: 'muted', style: 'font-size:13px' });
+  const guardar = async (cambio) => {
+    try {
+      const r = await api(`/api/projects/${S.slug}/character`, { method: 'PUT', body: JSON.stringify(cambio) });
+      aviso.textContent = r.hint || 'Guardado.';
+      await pollRun();
+    } catch (e) { aviso.textContent = e.message; }
+  };
+  const seg = el('div', { class: 'seg', style: 'flex-wrap:wrap' }, PRESENCIAS.map(([pct, que]) =>
+    el('button', { 'aria-pressed': String(pct === actual), title: que,
+      onclick: e => {
+        for (const b of seg.children) b.setAttribute('aria-pressed', String(b === e.target));
+        guardar({ presence: pct });
+      } }, `${pct} %`)));
+  const burbuja = el('input', { type: 'checkbox', checked: (d.character || {}).pip ? 'checked' : null,
+    onchange: e => guardar({ pip: e.target.checked }) });
+  return el('div', { style: 'border-top:1px solid var(--divider);margin-top:26px;padding-top:20px;max-width:640px' },
+    el('div', { class: 'kicker' }, 'Presencia del narrador en pantalla'),
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin:8px 0 12px' },
+      'Qué parte del video se le ve hablando a cámara; el resto son imágenes ilustrativas. ⚠ El lipsync se cobra por segundo en pantalla: más presencia, más costo. El director elige EN QUÉ momentos aparece, y puedes forzarlo escena a escena en «Escenas».'),
+    seg,
+    el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;margin-top:14px;line-height:1.6' },
+      burbuja, 'En burbuja: aparece en un círculo sobre el B-roll, en vez de ocupar la pantalla (estilo reacción)'),
+    el('div', { style: 'margin-top:10px' }, aviso));
 }
 
 function viewPersonajes() {
@@ -1498,6 +1688,7 @@ function viewPersonajes() {
   return el('div', { class: 'wrap', style: 'max-width:980px' }, projHeader('personajes', `${chars.length} personajes${d.has_character ? ' · con narrador' : ''}`),
     chars.length ? el('div', { class: 'grid4', style: 'margin-top:20px' }, cards)
       : el('p', { class: 'muted', style: 'margin-top:20px;max-width:540px;line-height:1.75' }, 'Sin personajes. Si añades uno con foto y lo marcas como narrador, el sistema le hace lipsync en parte del video en lugar de mostrar solo B-roll.'),
+    d.has_character ? presenciaBloque(d) : null,
     el('div', { style: 'border-top:1px solid var(--divider);margin-top:26px;padding-top:20px;max-width:560px' },
       el('div', { class: 'kicker' }, 'Añadir personaje'),
       el('div', { style: 'display:flex;flex-direction:column;gap:12px;margin-top:12px' }, nombre, desc,

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.60.0 -->
+<!-- MANUAL_VERSION: 0.61.0 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -201,22 +201,23 @@ cambiar de una a otra **no toca nada de tu trabajo**.
 la otra. La página se recarga sola y el **manual también cambia**, para que
 sus capturas coincidan con lo que tienes delante.
 
-**Qué tiene cada una hoy** (las dos generan exactamente el mismo video; lo
-que cambia es qué controles te ofrece la pantalla):
+**Las dos tienen los mismos controles.** Desde la v0.61.0 no hay ninguna
+función que solo esté en una: la estimación de costo antes de generar, la
+parada en el punto de control, la presencia del personaje, duplicar y borrar
+proyectos, el arco musical y el resto están en las dos. Lo que cambia es
+**cómo se distribuye en pantalla**:
 
-| Control | Clásica | Nueva |
+| Diferencia | Clásica | Nueva |
 |---|---|---|
-| **Estimación de costo antes de generar** | **Sí** | No |
-| **Generar solo hasta el guion o hasta el guion gráfico** | **Sí** | No |
-| **Elegir el % de presencia del personaje y la burbuja** | **Sí** | No |
-| Duplicar y borrar proyectos desde la lista | Sí | No (solo renombrar) |
 | Modo claro y oscuro | No (siempre oscura) | Sí |
-| Subir material en pantallas separadas y ordenadas | Todo en una pestaña | Sí |
+| Material, personajes y escenas | Todo en pestañas de un mismo panel | En pantallas separadas |
+| Subir tu material **al crear** el proyecto | Sí, en el propio formulario | No: se sube después, en Material |
+| Ficha completa del concepto (ángulo, audiencia, estructura, paleta) | Sí, en la pestaña Concepto | No (pero sí «Guardar estilo») |
+| Filtrar proyectos por estado (en curso, completos, con errores) | Sí | No (solo buscador) |
 
-> 💡 **Consejo práctico:** la plantilla clásica es hoy la más completa para
-> **controlar el gasto** (estimación previa y parada en el punto de control).
-> Puedes ir y volver tantas veces como quieras, incluso a mitad de un
-> proyecto.
+> 💡 **Elige la que te resulte más cómoda de leer.** Son dos vistas del mismo
+> programa y los proyectos son los mismos: puedes ir y volver tantas veces
+> como quieras, incluso a mitad de un video.
 
 ---
 
