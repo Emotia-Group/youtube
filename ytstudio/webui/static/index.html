@@ -97,6 +97,17 @@ main{padding:0}
 .center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px}
 .log{font:11px/1.85 var(--mono);color:var(--n700);max-height:210px;overflow:auto;white-space:pre-wrap}
 .grid4{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px}
+/* Selector de plantillas: una ficha por plantilla, con su miniatura dibujada
+   a partir de sus propios colores. Crecen solas si algún día hay una tercera. */
+.tplgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.tplcard{display:flex;flex-direction:column;border:1px solid var(--divider);border-radius:4px;overflow:hidden;background:var(--bg)}
+.tplcard[data-on="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tplcard .shot{display:block;border-bottom:1px solid var(--divider)}
+.tplcard .shot svg{display:block;width:100%;height:auto}
+.tplbody{display:flex;flex-direction:column;gap:7px;flex:1;padding:13px 14px}
+.tplbul{list-style:none;margin:0;padding:0;font-size:12px;color:var(--n700)}
+.tplbul li{position:relative;padding-left:13px;line-height:1.65}
+.tplbul li::before{content:"·";position:absolute;left:4px;color:var(--accent)}
 .hide{display:none!important}
 @media (max-width:1100px){.split{grid-template-columns:1fr!important}.rail,.railL{border:0;border-top:1px solid var(--divider)}}
 @media (max-width:640px){.wrap{padding:18px 16px}header.top{padding:10px 14px;gap:10px}nav.main button{padding:8px 8px;min-height:44px}.btn{min-height:44px}}
@@ -1345,27 +1356,118 @@ function proveedorCard(catKey, cat, cfg, set, keys) {
 // PLANTILLA DE LA INTERFAZ: el programa se ve de dos maneras y el creador
 // elige cuál usar. No se pierde ninguna: se cambia y se vuelve cuando quiera,
 // y el MANUAL se sirve con las capturas de la que esté puesta.
+//
+// Antes eran dos botones pegados y un solo clic cambiaba de interfaz: quien
+// estaba mirando las opciones se iba a la otra plantilla sin querer. Ahora cada
+// plantilla es una FICHA — miniatura, nombre y en qué se nota — y el cambio
+// pide CONFIRMACIÓN antes de tocar nada. Todo sale del servidor (server.py →
+// TEMPLATES), así que una plantilla nueva aparece aquí sola.
+
+// Miniatura: no es una captura guardada (envejecería con cada rediseño), sino
+// un esquema dibujado con los colores de la propia plantilla y su disposición
+// —barra arriba o barra lateral—, que es justo lo que se reconoce de un vistazo.
+function tplMiniatura(o) {
+  const p = o.preview || {};
+  const bg = p.bg || '#f3f2f2', sur = p.surface || '#eae9e9', ink = p.ink || '#201f1d',
+        line = p.line || '#d8d5d2', acc = p.accent || '#b68235', r = p.radius ?? 3;
+  const caja = (x, y, w, h, fill, o2 = {}) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${o2.rx ?? r}" fill="${fill}"`
+    + (o2.stroke ? ` stroke="${o2.stroke}" stroke-width="1"` : '')
+    + (o2.op != null ? ` opacity="${o2.op}"` : '') + '/>';
+  const txt = (x, y, w, op) => caja(x, y, w, 2.6, ink, { rx: 1.3, op });
+  const partes = [caja(0, 0, 200, 125, bg, { rx: 0 })];
+  if (p.layout === 'side') {
+    // Barra lateral fija a la izquierda con la lista de proyectos.
+    partes.push(
+      caja(0, 0, 54, 125, sur, { rx: 0 }), caja(53, 0, 1, 125, line, { rx: 0 }),
+      `<circle cx="14" cy="15" r="5" fill="${acc}"/>`, txt(23, 11, 21, .8), txt(23, 17, 15, .35),
+      caja(8, 31, 38, 9, acc, { op: .9 }), caja(8, 43, 38, 9, ink, { op: .12 }),
+      caja(8, 55, 38, 9, ink, { op: .12 }), caja(8, 71, 38, 20, ink, { op: .07 }),
+      caja(8, 95, 38, 20, ink, { op: .07 }),
+      caja(64, 12, 124, 42, sur, { stroke: line }), txt(74, 23, 46, .85), txt(74, 32, 92, .3), txt(74, 40, 66, .3),
+      caja(64, 62, 58, 51, sur, { stroke: line }), caja(130, 62, 58, 51, sur, { stroke: line }),
+      caja(74, 72, 30, 3, acc), caja(140, 72, 30, 3, acc, { op: .5 }));
+  } else {
+    // Menú arriba, a todo el ancho, y la página respirando debajo.
+    partes.push(
+      caja(0, 0, 200, 22, bg, { rx: 0 }), caja(0, 21, 200, 1, line, { rx: 0 }),
+      `<circle cx="14" cy="11" r="4" fill="${acc}"/>`, txt(22, 10, 18, .8),
+      caja(66, 9, 22, 3, acc), caja(96, 9, 22, 3, ink, { op: .3 }),
+      caja(126, 9, 22, 3, ink, { op: .3 }), caja(156, 9, 22, 3, ink, { op: .3 }),
+      caja(18, 34, 26, 2.5, acc, { rx: 1.3 }),
+      txt(18, 42, 96, .85), txt(18, 51, 74, .85),
+      caja(18, 66, 76, 47, sur, { stroke: line }), caja(106, 66, 76, 47, sur, { stroke: line }),
+      txt(27, 76, 40, .55), txt(27, 84, 56, .25), txt(27, 91, 48, .25),
+      txt(115, 76, 40, .55), txt(115, 84, 56, .25), txt(115, 91, 48, .25));
+  }
+  return `<svg viewBox="0 0 200 125" role="img" aria-label="Vista en miniatura de la plantilla ${(o.name || o.label || '').replace(/[<>"]/g, '')}">${partes.join('')}</svg>`;
+}
+
 function plantillaSelector() {
   const actual = S.cfg?.ui_template || 'nueva';
   const opciones = S.cfg?.ui_templates || [];
   if (opciones.length < 2) return null;
-  const aviso = el('span', { class: 'muted', style: 'font-size:13px' });
+  const grid = el('div', { class: 'tplgrid' });
+  const zona = el('div', { style: 'margin-top:14px' });
+  let cambiando = false;
+  const nombre = o => o.name || o.label;
+
+  const tarjeta = (o, elegida) => {
+    const enUso = o.id === actual;
+    return el('div', { class: 'tplcard', 'data-on': String(enUso || elegida) },
+      el('div', { class: 'shot', html: tplMiniatura(o) }),
+      el('div', { class: 'tplbody' },
+        el('div', { style: 'display:flex;align-items:baseline;gap:9px;justify-content:space-between' },
+          el('span', { style: 'font-family:var(--heading);font-size:17px' }, nombre(o)),
+          enUso ? el('span', { class: 'tag' }, 'en uso') : null),
+        o.tagline ? el('div', { class: 'mono', style: 'font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--n600)' }, o.tagline) : null,
+        o.desc ? el('p', { class: 'muted', style: 'font-size:12.5px;line-height:1.65;margin:0' }, o.desc) : null,
+        (o.bullets || []).length ? el('ul', { class: 'tplbul' }, o.bullets.map(b => el('li', {}, b))) : null,
+        el('div', { style: 'margin-top:auto;padding-top:11px' },
+          enUso
+            ? el('span', { class: 'muted', style: 'font-size:12px' }, 'Es la que estás viendo ahora.')
+            : el('button', { class: 'btn btn-sm' + (elegida ? ' btn-primary' : ''), onclick: () => pintar(elegida ? null : o) },
+                elegida ? 'Elegida · confirma abajo' : 'Usar esta plantilla'))));
+  };
+
+  // El paso que faltaba: se dice qué va a pasar y hay que decir que sí. Un clic
+  // suelto ya no cambia de interfaz.
+  const confirmacion = (o) => {
+    const aviso = el('span', { class: 'muted', style: 'font-size:12.5px' });
+    return el('div', { class: 'warn' },
+      el('div', { style: 'font-size:13.5px;line-height:1.7;max-width:70ch' },
+        `¿Cambiar la interfaz a «${nombre(o)}»? La página se recarga para cargarla. `
+        + 'Tus proyectos, tus claves y tus ajustes no se tocan, y puedes volver a la de ahora cuando quieras desde este mismo sitio.'),
+      el('div', { style: 'display:flex;gap:9px;align-items:center;margin-top:12px;flex-wrap:wrap' },
+        el('button', {
+          class: 'btn btn-sm btn-primary',
+          onclick: async () => {
+            if (cambiando) return;
+            cambiando = true;
+            aviso.textContent = 'Cambiando…';
+            try {
+              await api('/api/ui-template', { method: 'PUT', body: JSON.stringify({ template: o.id }) });
+              location.reload();
+            } catch (e) { cambiando = false; aviso.textContent = e.message; }
+          },
+        }, `Sí, cambiar a ${nombre(o)}`),
+        el('button', { class: 'btn btn-sm', onclick: () => pintar(null) }, 'Cancelar'),
+        aviso));
+  };
+
+  function pintar(elegida) {
+    grid.textContent = '';
+    zona.textContent = '';
+    for (const o of opciones) grid.append(tarjeta(o, !!elegida && elegida.id === o.id));
+    if (elegida) zona.append(confirmacion(elegida));
+  }
+
+  pintar(null);
   return el('div', { style: 'margin-top:26px' },
     el('div', { class: 'kicker' }, 'Plantilla de la interfaz'),
-    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin:8px 0 12px' },
-      'Cómo se ve el programa. Las dos plantillas trabajan con el mismo motor y con los mismos proyectos: cambiar de una a otra no toca nada de tu trabajo. El manual de uso también cambia, para que sus capturas coincidan con lo que tienes delante.'),
-    el('div', { class: 'seg' }, opciones.map(o => el('button', {
-      'aria-pressed': String(o.id === actual),
-      onclick: async () => {
-        if (o.id === actual) return;
-        aviso.textContent = 'Cambiando…';
-        try {
-          await api('/api/ui-template', { method: 'PUT', body: JSON.stringify({ template: o.id }) });
-          location.reload();
-        } catch (e) { aviso.textContent = e.message; }
-      },
-    }, o.label))),
-    el('div', { style: 'margin-top:8px' }, aviso));
+    el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;max-width:70ch;margin:8px 0 14px' },
+      'Cómo se ve el programa. Todas las plantillas trabajan con el mismo motor y con los mismos proyectos: cambiar de una a otra no toca nada de tu trabajo. El manual de uso también cambia, para que sus capturas coincidan con lo que tienes delante. Elige una y confirma: nada cambia hasta entonces.'),
+    grid, zona);
 }
 
 function viewAjustes() {
