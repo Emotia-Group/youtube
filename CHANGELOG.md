@@ -9,6 +9,44 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.60.0 — 2026-08-17
+Dos plantillas de interfaz para elegir, y un manual para cada una. La
+interfaz nueva pasa a ser la de por defecto **sin perder la anterior**: se
+cambia de una a otra con un clic, y el manual cambia con ella para que sus
+capturas coincidan siempre con lo que tienes delante.
+
+- 🎨 PLANTILLA DE LA INTERFAZ (`ui.template`): **nueva** (la editorial de la
+  v0.59, clara u oscura) o **clásica** (la oscura anterior, que vuelve tal
+  cual con su menú lateral). Se elige en Ajustes / ⚙ Configuración, la
+  elección se guarda en `config.local.yaml` y el servidor sirve la interfaz
+  que toca. Las dos hablan con el mismo motor y con los mismos proyectos:
+  cambiar de plantilla no toca nada de tu trabajo, ni siquiera a mitad de un
+  proyecto. Un valor desconocido en el config no puede dejarte sin interfaz:
+  se cae a la nueva.
+- 📖 UN MANUAL POR PLANTILLA: `MANUAL.md` (nueva) y `MANUAL-clasica.md`
+  (clásica), con **31 capturas reales** repartidas en `docs/manual/nueva/`,
+  `docs/manual/clasica/` y `docs/manual/panel/` (las de la Torre de Control,
+  compartidas). El menú «Manual de uso» sirve el que corresponde a la
+  plantilla activa, y ambos declaran su versión: si uno se queda atrás,
+  `probar.bat` lo dice.
+- 🧭 Los dos manuales tienen los MISMOS 19 capítulos y el mismo contenido
+  compartido (costos, calidad, narración, funciones automáticas, problemas,
+  glosario y Torre de Control); solo cambian las partes que dependen de la
+  pantalla. Así una mejora del manual se aplica igual a las dos versiones, y
+  una batería falla si los capítulos dejan de coincidir.
+- 🔍 Cada manual dice qué ofrece SU plantilla y qué solo tiene la otra: hoy
+  la estimación de costo antes de generar, la parada en el punto de control
+  («Solo el guion» / «Hasta el guion gráfico»), el % de presencia del
+  personaje y duplicar/borrar proyectos **solo están en la clásica**. Estaba
+  sin documentar y es justo lo que decide cuánto gastas.
+- 💰 Manuales al día con los modelos de la v0.58-0.59: modo híbrido
+  (generar barato + escalar, −90% en imágenes), FLUX 2, GPT Image 2, Veo 3.1
+  con audio nativo, Hedra, Cartesia y AssemblyAI, con sus precios reales.
+- ✅ Batería v0.60.0: comprueba el selector (guarda, sirve la interfaz
+  correcta y rechaza un valor inválido), que ninguna captura falte ni sobre,
+  que el servidor las sirva sin salirse de su carpeta, que el manual servido
+  sea el de la plantilla activa y que los dos manuales sigan sincronizados.
+
 ## v0.59.1 — 2026-08-14
 El sonido propio de los clips de Veo, por fin en el video.
 
