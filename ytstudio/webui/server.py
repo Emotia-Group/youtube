@@ -748,6 +748,32 @@ def api_character_update(slug: str, cid: str, body: dict) -> dict:
     return {"characters": chars}
 
 
+def api_set_character_presence(slug: str, body: dict) -> dict:
+    """Cuánto sale EN CÁMARA el personaje narrador (y si va en burbuja).
+
+    Hasta ahora solo se podía elegir al CREAR el proyecto: quien se lo pensaba
+    después tenía que empezar de cero. Y es el ajuste que más manda en la
+    factura del lipsync, que se cobra por segundo en pantalla."""
+    project = Project(slug)
+    if not project.state_path.exists():
+        raise ApiError(404, "Proyecto no encontrado.")
+    actual = dict(project.get("character") or {})
+    if "presence" in body:
+        try:
+            pres = int(body.get("presence"))
+        except (TypeError, ValueError):
+            raise ApiError(400, "La presencia se indica en porcentaje (0-60).")
+        # El tope de 60 % es el mismo de la creación: por encima, el video deja
+        # de ser un documental ilustrado y el lipsync se dispara de precio.
+        actual["presence"] = min(60, max(0, pres)) / 100
+    if "pip" in body:
+        actual["pip"] = bool(body.get("pip"))
+    project.set("character", actual)
+    return {"character": actual,
+            "hint": "Rehaz desde «Escenas» para que el director reparta las "
+                    "apariciones con la presencia nueva."}
+
+
 def api_character_add_files(slug: str, cid: str, body: dict) -> dict:
     from ytstudio.phases.ingest import add_asset
 
@@ -1334,6 +1360,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_rename_project(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/broll-policy", path):
                 self._json(api_set_broll_policy(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/character", path):
+                self._json(api_set_character_presence(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/scenes", path):
                 self._json(api_edit_scenes(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):

@@ -9,6 +9,43 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.61.0 — 2026-08-17
+Elegir cómo se ve el programa ya no cuesta funciones: la interfaz nueva
+recupera los cuatro controles que solo tenía la clásica — y son justo los que
+deciden cuánto gastas.
+
+- 💰 ESTIMACIÓN ANTES DE GENERAR en la columna derecha de «Corrida»: la cifra
+  aproximada, el tiempo y, a un clic, el desglose por fases con sus notas. El
+  «gasto real» dice lo que YA gastaste; esto dice lo que vas a gastar, que es
+  lo que permite decidir.
+- 🛑 HASTA DÓNDE GENERAR, junto a «Generar video»: video completo · solo
+  hasta el guion · hasta el guion gráfico. Sin esto no había forma de pararse
+  en el punto de control, que es la costumbre que más dinero ahorra: revisar
+  guion y escenas cuesta cero, las imágenes no.
+- 🧑 PRESENCIA DEL NARRADOR EN CÁMARA (15/30/45/60 %) y modo BURBUJA, en la
+  pestaña «Personajes». Además ahora se puede cambiar **después** de crear el
+  proyecto (nuevo `PUT /api/projects/<slug>/character`): hasta hoy, quien se
+  lo pensaba después tenía que empezar de cero — y es el ajuste que más manda
+  en la factura del lipsync, que se cobra por segundo en pantalla.
+- ⧉ DUPLICAR y 🗑 BORRAR proyectos, en la lista y dentro del proyecto, y
+  «Guardar estilo» para llevarse la identidad del video a la biblioteca del
+  canal sin volver a pagar el análisis.
+- 🎬 La tabla de «Escenas» completa el editor: arco musical por escena,
+  duración (solo con voz artificial: con tu voz manda tu narración),
+  encabezado y tipo de rótulo, y quién ocupa la pantalla (B-roll o el
+  personaje). De paso se arregla un desajuste que venía de antes: la cabecera
+  tenía un título menos que columnas, así que cada dato salía bajo el título
+  del vecino.
+- 📖 Los dos manuales al día, con la tabla comparativa del capítulo 2.6
+  reescrita: ya no hay controles exclusivos de una plantilla, solo formas
+  distintas de repartir la pantalla.
+- ✅ Batería v0.61.0: comprueba los topes de la presencia (un 300 % se
+  recorta, un texto se rechaza, cambiar la burbuja no borra el porcentaje),
+  que la interfaz nueva no deje fuera NINGUNA ruta del motor que use la
+  clásica —si mañana una función aparece en una sola, se pone rojo—, que cada
+  control esté presente, que la tabla de escenas cuadre y que los manuales no
+  sigan prometiendo carencias ya resueltas.
+
 ## v0.60.0 — 2026-08-17
 Dos plantillas de interfaz para elegir, y un manual para cada una. La
 interfaz nueva pasa a ser la de por defecto **sin perder la anterior**: se

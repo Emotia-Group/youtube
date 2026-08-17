@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.60.0 -->
+<!-- MANUAL_VERSION: 0.61.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -205,23 +205,23 @@ coincidan con lo que tienes delante.
 
 ![El selector de plantilla, arriba de los Ajustes](docs/manual/nueva/12-ajustes-plantilla-y-video.png)
 
-**Qué tiene cada una hoy** (las dos generan exactamente el mismo video; lo
-que cambia es qué controles te ofrece la pantalla):
+**Las dos tienen los mismos controles.** Desde la v0.61.0 no hay ninguna
+función que solo esté en una: la estimación de costo antes de generar, la
+parada en el punto de control, la presencia del personaje, duplicar y borrar
+proyectos, el arco musical y el resto están en las dos. Lo que cambia es
+**cómo se distribuye en pantalla**:
 
-| Control | Nueva | Clásica |
+| Diferencia | Nueva | Clásica |
 |---|---|---|
 | Modo claro y oscuro | Sí | No (siempre oscura) |
-| Subir material en pantallas separadas y ordenadas | Sí | Todo en una pestaña |
-| **Estimación de costo antes de generar** | No | **Sí** |
-| **Generar solo hasta el guion o hasta el guion gráfico** | No | **Sí** |
-| **Elegir el % de presencia del personaje y la burbuja** | No | **Sí** |
-| Duplicar y borrar proyectos desde la lista | No (solo renombrar) | Sí |
+| Material, personajes y escenas | En pantallas separadas | Todo en pestañas de un mismo panel |
+| Subir tu material **al crear** el proyecto | No: se sube después, en Material | Sí, en el propio formulario |
+| Ficha completa del concepto (ángulo, audiencia, estructura, paleta) | No (pero sí «Guardar estilo») | Sí, en la pestaña Concepto |
+| Filtrar proyectos por estado (en curso, completos, con errores) | No (solo buscador) | Sí |
 
-> 💡 **Consejo práctico:** trabaja en la que te resulte más cómoda y cámbiate
-> a la **clásica** cuando quieras **parar en el punto de control** antes de
-> gastar en imágenes, ver la **estimación previa** o ajustar la **presencia
-> del personaje**. Son dos vistas del mismo programa: puedes ir y volver
-> tantas veces como quieras, incluso a mitad de un proyecto.
+> 💡 **Elige la que te resulte más cómoda de leer.** Son dos vistas del mismo
+> programa y los proyectos son los mismos: puedes ir y volver tantas veces
+> como quieras, incluso a mitad de un video.
 
 ---
 
@@ -252,22 +252,37 @@ derecha):
    documental sobre los fareros que salvaron miles de vidas en el siglo XIX:
    soledad, tormentas y la luz que nunca se apagó».
 4. **Estilo visual de fábrica**: elige **Documental cinematográfico**.
-5. Pulsa **Crear y generar** (o **Solo crear** si quieres subir material
-   tuyo antes de empezar).
+5. Pulsa **Solo crear** (para revisar antes de gastar) o **Crear y generar**
+   (para lanzarlo entero de una vez).
 
-**Paso 3 — Mira cómo trabaja.** Entras a la pestaña **Corrida**: a la
-izquierda, las 11 fases con su estado; en el centro, el video cuando exista;
-a la derecha, **Atención** (lo que necesita tu decisión) y el **gasto real**.
+**Paso 3 — Mira lo que va a costar.** En la pestaña **Corrida**, la columna
+de la derecha muestra **Estimado antes de generar**: la cifra aproximada y
+el tiempo. Haz clic para desplegar el desglose por fases. Ese número es tu
+presupuesto.
+
+**Paso 4 — Genera solo hasta el guion gráfico.** Junto al botón **Generar
+video** hay un desplegable: elige **Hasta el guion gráfico** y pulsa Generar.
+En unos minutos tendrás concepto, guion y todas las escenas planificadas
+**sin haber generado ninguna imagen**, que es lo que cuesta.
+
+**Paso 5 — Mira cómo trabaja.** En **Corrida**: a la izquierda, las 11 fases
+con su estado; en el centro, el video cuando exista; a la derecha,
+**Atención** (lo que necesita tu decisión), el estimado y el **gasto real**.
 
 ![La pantalla de la corrida](docs/manual/nueva/04-corrida.png)
 
 Puedes cerrar el navegador: **el trabajo sigue** en la ventana negra.
 
-**Paso 4 — Revisa el guion y las escenas.** Mientras trabaja (o al terminar),
-entra a **Guion** para leerlo y corregirlo, y a **Escenas** para ver qué se
-va a ilustrar en cada momento.
+**Paso 6 — Revisa antes de gastar.** Entra a **Guion** para leerlo y
+corregirlo, y a **Escenas** para ver qué se va a ilustrar en cada momento.
+Aquí todo es gratis todavía.
 
-**Paso 5 — Elige y descarga.** En **Metadatos** eliges entre 3 miniaturas, 3
+**Paso 7 — Genera el video completo.** Vuelve a **Corrida**, pon el
+desplegable en **Video completo** y pulsa **Generar video**. Ahora sí se
+crean las imágenes, la voz, la música y el montaje. Puedes cerrar el
+navegador: el trabajo sigue en la ventana negra.
+
+**Paso 8 — Elige y descarga.** En **Metadatos** eliges entre 3 miniaturas, 3
 títulos y 3 descripciones. En **Corrida** tienes el video para reproducirlo.
 
 Ya está: ese es el ciclo completo. Todo lo demás en este manual es para
@@ -405,9 +420,12 @@ queda o pasa de largo.
 > Character-3** unos $9-16; con **OmniHuman** $18-29. **Estrategia: itera con
 > SadTalker y deja el modelo caro para la versión final.**
 
-> 💡 El **porcentaje de presencia** del personaje (15%, 30%, 45%, 60%) y el
-> modo **burbuja** solo se eligen en la plantilla clásica (capítulo 2.6). En
-> la nueva, el director decide los momentos con criterio narrativo.
+> 💡 En la misma pestaña **Personajes**, debajo del elenco, eliges el
+> **porcentaje de presencia** (15 %, 30 %, 45 % o 60 %) y el modo
+> **burbuja** (aparece en un círculo sobre el B-roll, estilo reacción). El
+> director decide **en qué momentos** aparece con criterio narrativo, y tú
+> puedes forzarlo escena a escena en **Escenas → En pantalla**. Tras
+> cambiarlo, rehaz desde **Escenas**.
 
 ### 4.6 Receta F — Video de reacción
 
@@ -478,13 +496,25 @@ En la pestaña **Personajes**:
 Un personaje sin fotos recibe una referencia generada una sola vez, y esa se
 reutiliza en todas sus escenas.
 
+**Cuánto sale en cámara.** Debajo del elenco, si hay narrador, aparece
+**Presencia del narrador en pantalla**: 15 %, 30 %, 45 % o 60 % del video
+hablando a cámara, y la casilla de **burbuja**. ⚠ Es el ajuste que más manda
+en la factura cuando hay lipsync, porque se cobra **por segundo en
+pantalla**. Tras cambiarlo, rehaz desde **Escenas**.
+
 ### 5.3 Cuánto va a costar y el freno automático
 
-El programa se pone a sí mismo un **tope de presupuesto** por corrida: coge
-la estimación alta de lo que falta por generar y la multiplica por 1.4
-(`budget.margin`). Si la generación intentara pasarse de ahí, **se detiene
-sola**. Ese margen absorbe reintentos normales, pero frena un desbocamiento
-real.
+En la pestaña **Corrida**, la columna de la derecha muestra **Estimado antes
+de generar**: la cifra aproximada del video completo y cuánto tardará. Un
+clic despliega el **desglose por fases**, para ver de dónde sale cada dólar.
+
+![La estimación previa, en la columna derecha de Corrida](docs/manual/nueva/04-corrida.png)
+
+Además, el programa se pone a sí mismo un **tope de presupuesto** por
+corrida: coge la estimación alta de lo que falta por generar y la multiplica
+por 1.4 (`budget.margin`). Si la generación intentara pasarse de ahí, **se
+detiene sola**. Ese margen absorbe reintentos normales, pero frena un
+desbocamiento real.
 
 - ¿Quieres un candado más estricto? Pon un número en `budget.max_usd`
   (0 = sin techo manual). Solo manda cuando es **más** restrictivo que el
@@ -494,9 +524,9 @@ real.
 - El **gasto real** aparece en la columna derecha de **Corrida** en cuanto
   termina cada fase.
 
-> 💡 ¿Quieres ver el **presupuesto detallado antes de pulsar Generar**?
-> Cámbiate un momento a la plantilla clásica (capítulo 2.6): ahí cada
-> proyecto muestra la estimación desglosada por fases.
+> 💡 La estimación es **aproximada**: usa las tarifas públicas de los
+> proveedores y el número de escenas previsto. En cuanto existe el guion
+> gráfico, el cálculo se afina porque ya sabe cuántas escenas hay de verdad.
 
 ### 5.4 El banco de elementos: material tuyo, gratis y para siempre
 
@@ -562,10 +592,15 @@ estilo. Ese proyecto nace con la identidad ya puesta.
 | Control | Qué hace |
 |---|---|
 | **Generar video** | Empieza (o **reanuda** donde se quedó, sin volver a pagar lo hecho) |
+| **Desplegable de al lado** | Hasta dónde llegar: **Video completo**, **Solo hasta el guion** o **Hasta el guion gráfico** |
 | **Editar guion** | Salta a la pestaña Guion |
 | **Renombrar** | Cambia el nombre visible del proyecto |
 | **Rehacer desde…** | Vuelve a hacer un paso concreto **y todos los siguientes** |
+| **Guardar estilo** | Guarda la identidad de este video (dirección visual, tono, música, ritmo, fórmula) para reutilizarla en otros |
+| **Duplicar** | Copia el proyecto entero para probar una variante sin tocar el bueno |
+| **Borrar** | Elimina el proyecto y sus archivos (no se puede deshacer) |
 | **Log de eventos** (columna izquierda) | Despliega el registro en vivo de la corrida |
+| **Estimado antes de generar** (columna derecha) | Cuánto costará y cuánto tardará, con desglose |
 
 ### 6.2 Los 11 pasos, y cuál cuesta dinero
 
@@ -597,17 +632,12 @@ vivo, justo antes del paso que gasta el dinero:
 
 **Léelo siempre.** Es el último punto en el que cambiar algo es gratis.
 
-⚠ **En esta plantilla el programa no se para ahí**: sigue de largo hacia las
-imágenes. Tienes dos formas de aprovechar el punto de control:
+⚠ **El programa no se para solo ahí**: si pediste el video completo, sigue de
+largo hacia las imágenes. Para detenerte justo en ese punto, elige **«Hasta
+el guion gráfico»** en el desplegable de al lado de **Generar video**,
+**antes** de pulsarlo. Es la costumbre que más dinero ahorra.
 
-- **La barata**: genera el video entero con un modelo de imágenes de céntimos
-  (FLUX schnell o el modo híbrido), revisa el resultado y, cuando la
-  estructura te convenza, «Rehacer desde → Imágenes» con el modelo bueno.
-- **La exacta**: cámbiate a la plantilla clásica (capítulo 2.6), que tiene el
-  desplegable **«Hasta el guion gráfico»** para detenerse justo antes de
-  gastar.
-
-En cualquiera de los dos casos, aprovecha para:
+Después aprovecha para:
 
 1. Leer el **guion** (pestaña Guion) y corregir lo que no te guste.
 2. Revisar las **escenas** una por una (pestaña Escenas).
@@ -695,6 +725,7 @@ dónde.
 | Todas las imágenes (cambiar de modelo) | Rehacer desde **Imágenes** | Sí, solo las imágenes |
 | El texto del guion | Lo edito en **Guion** y guardo | Sí, de ahí en adelante |
 | El estilo visual completo | Rehacer desde **Concepto** | Sí, casi todo |
+| Probar una variante sin arriesgar | **Duplicar** el proyecto y trabajar sobre la copia | No: el original queda intacto |
 
 > ⚠ **Nunca rehagas desde Concepto, Guion o Escenas para arreglar una
 > imagen.** Eso reescribe los prompts, **borra las imágenes que ya pagaste** y
@@ -707,12 +738,16 @@ dónde.
 
 ### 10.1 Proyectos
 
-La lista de todos tus videos, con su avance. Un clic entra al proyecto.
+La lista de todos tus videos, con su avance. Un clic en la fila entra al
+proyecto; el buscador de arriba filtra por nombre. Al final de cada fila hay
+dos botones: **⧉ duplicar** (copia el proyecto para probar una variante) y
+**🗑 borrar** (elimina el proyecto y sus archivos; no se puede deshacer).
 
 ### 10.2 Corrida
 
 El puesto de mando: las 11 fases a la izquierda, el video y la miniatura en
-el centro, y a la derecha **Atención** y el **gasto real**. Ver capítulo 6.1.
+el centro, y a la derecha **Atención**, el **estimado antes de generar** y el
+**gasto real**. Todos sus botones están en el capítulo 6.1.
 
 ### 10.3 Guion
 
@@ -731,10 +766,13 @@ inteligencia artificial).
 
 | Control | Qué cambia |
 |---|---|
+| **En pantalla** | Quién ocupa la escena: B-roll ilustrativo o el personaje hablando (solo si hay narrador; el lipsync se cobra por segundo) |
 | **Animación** | Zoom in, zoom out, paneo izquierda/derecha o estática |
 | **Transición** | Corte seco o fundido |
 | **Sonido** | Ninguno, whoosh, riser o boom en la entrada de la escena |
-| **Rótulo** | El texto que aparece en pantalla en esa escena |
+| **Música** | La intensidad musical de esa escena, de mínima a clímax: es el arco dramático del video |
+| **Duración** | Cuántos segundos dura la escena. Solo con voz artificial: con tu voz grabada la manda tu narración y aquí se muestra sin poder tocarla |
+| **Rótulo** | El texto en pantalla, su **encabezado** (la línea pequeña de encima) y su **tipo** (personaje, lugar, fecha, dato, lista, conclusión) |
 | **Subir** | Tu propia imagen o video para esa escena concreta |
 
 Arriba hay dos casillas que deciden qué hace el programa con tu material:
