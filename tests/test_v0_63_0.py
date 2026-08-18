@@ -19,6 +19,7 @@ Y la función nueva: la AUDITORÍA del archivo terminado, en la consola
 Ninguna prueba usa claves ni internet. Las que miden audio necesitan ffmpeg.
 """
 
+import re
 import shutil
 import subprocess
 import sys
@@ -267,13 +268,14 @@ for nombre, ruta in (("nuevo", ROOT / "MANUAL.md"),
           "zona segura" in texto.lower())
     check(f"T8b el manual {nombre} explica la revisión técnica",
           "Revisión técnica" in texto or "revisión técnica" in texto)
-    check(f"T8c el manual {nombre} está marcado en esta versión",
-          "MANUAL_VERSION: 0.63.0" in texto)
+    # Se comprueba que el manual DECLARE una versión, no que sea esta: una
+    # batería no puede exigir seguir siendo la más nueva del programa.
+    check(f"T8c el manual {nombre} declara qué versión documenta",
+          bool(re.search(r"MANUAL_VERSION:\s*[0-9]+\.[0-9]+\.[0-9]+", texto)))
 
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-check("T8d el CHANGELOG abre con la v0.63.0",
-      CHANGELOG.split("## ")[1].startswith("v0.63.0"),
-      CHANGELOG.split("## ")[1][:20])
+check("T8d el CHANGELOG cuenta lo que trajo la v0.63.0",
+      "## v0.63.0" in CHANGELOG)
 
 # ---------------------------------------------------------------------------
 print("\n" + "=" * 62)

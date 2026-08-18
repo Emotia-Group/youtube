@@ -589,7 +589,89 @@ def api_project_detail(slug: str) -> dict:
     detail["video_aspect"] = _project_aspect(project)
     detail["shorts_audit"] = project.get("shorts_audit")
     detail["loudness"] = project.get("loudness")
+    # DE DÓNDE SALIÓ (si es un Short derivado) y ADÓNDE APUNTA: sin esto se
+    # pierde el enlace al video largo, que es todo el objetivo de la pieza.
+    detail["derived_from"] = project.get("derived_from")
+    detail["shorts_plan"] = project.get("shorts_plan")
     return detail
+
+
+def _derive_source(body: dict):
+    """De dónde sale el material: un proyecto de la casa o un enlace."""
+    from ytstudio import derive
+    url = (body.get("url") or "").strip()
+    slug = (body.get("slug") or "").strip()
+    if url:
+        return derive.source_from_url(url, load_config()), load_config()
+    if not slug:
+        raise ApiError(400, "Indica un proyecto o pega el enlace del video "
+                            "largo de YouTube.")
+    try:
+        source = derive.source_from_project(slug)
+    except ValueError as e:
+        raise ApiError(409, str(e))
+    return source, load_config(Project(slug).dir)
+
+
+def api_derive_propose(body: dict) -> dict:
+    """Lee el video largo y propone Shorts. NO crea nada todavía: el creador
+    ve la tanda, la revisa y decide."""
+    from ytstudio import derive
+    try:
+        source, cfg = _derive_source(body)
+    except (RuntimeError, ValueError) as e:
+        raise ApiError(400, str(e))
+    try:
+        n = max(1, min(int(body.get("n") or 5), len(derive.CAMPAIGN)))
+    except (TypeError, ValueError):
+        n = 5
+    candidatos = derive.propose(source, cfg, n=n)
+    if not candidatos:
+        raise ApiError(422, "No se encontró ningún momento que aguante solo "
+                            "como Short en ese video.")
+    plan = derive.save_plan(source, candidatos, body.get("desde") or None)
+    plan["estructuras"] = {k: v["label"]
+                           for k, v in derive.HOOK_STRUCTURES.items()}
+    return plan
+
+
+def api_derive_create(body: dict) -> dict:
+    """Convierte en proyectos de verdad los candidatos elegidos."""
+    from ytstudio import derive
+    candidatos = body.get("candidatos") or []
+    if not candidatos:
+        raise ApiError(400, "No has elegido ningún Short.")
+    cfg = load_config()
+    creados = []
+    for c in candidatos:
+        if c.get("gancho_tipo") not in derive.HOOK_STRUCTURES:
+            raise ApiError(400, "Un candidato llegó con una estructura de "
+                                "gancho desconocida.")
+        c.setdefault("funcion", derive.CAMPAIGN[0]["id"])
+        c.setdefault("dia", derive.CAMPAIGN_BY_ID[c["funcion"]]["dia"])
+        c["plantilla"] = derive.HOOK_STRUCTURES[c["gancho_tipo"]]["plantilla"]
+        slug = derive.create_short_project(
+            c, cfg, channel_id=body.get("channel_id") or "",
+            style_id=body.get("style_id") or "")
+        c["slug"] = slug
+        creados.append({"slug": slug, "nombre": c.get("nombre", ""),
+                        "dia": c.get("dia")})
+    origen = body.get("origen") or {}
+    if origen.get("slug"):
+        try:
+            derive.save_plan(origen, candidatos, body.get("desde") or None)
+        except Exception:
+            pass
+    return {"creados": creados}
+
+
+def api_derive_plan(slug: str) -> dict:
+    """El último plan guardado junto a un video largo de la casa."""
+    from ytstudio import derive
+    p = derive.plan_path({"slug": slug})
+    if p is None or not p.exists():
+        return {}
+    return read_json_tolerant(p)
 
 
 def api_audit_project(slug: str) -> dict:
@@ -1340,6 +1422,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_get_script(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/estimate", path):
                 self._json(api_estimate(m.group(1)))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/shorts-plan", path):
+                self._json(api_derive_plan(m.group(1)))
             elif path == "/api/changelog":
                 self._json(api_changelog())
             elif path == "/api/manual":
@@ -1381,6 +1465,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_add_assets(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/audit", path):
                 self._json(api_audit_project(m.group(1)))
+            elif path == "/api/shorts/propose":
+                self._json(api_derive_propose(self._body()))
+            elif path == "/api/shorts/create":
+                self._json(api_derive_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
                 self._json(api_save_style_from_project(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/metadata/select", path):

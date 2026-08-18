@@ -9,6 +9,48 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.64.0 — 2026-08-18
+**Sacar Shorts de un video largo.** Hasta ahora un Short nacía de cero: le
+dabas un tema y el programa escribía un guion vertical. Ahora se puede partir
+de un video largo —uno de tus proyectos o cualquier enlace de YouTube— y
+sacarle las piezas que aguantan solas.
+
+- 📱 PESTAÑA «SHORTS» en las dos interfaces. Abres el video largo, pulsas
+  «Proponer Shorts» y el director lee la transcripción entera buscando los
+  momentos que se entienden sin haber visto el video. De cada uno escribe la
+  pieza COMPLETA: gancho, promesa, desarrollo, el PAGO de lo prometido (el
+  bloque que casi todo el mundo se salta, y por el que luego no entiende por
+  qué no recibe «me gusta»), la llamada a la acción y un cierre que enlaza con
+  el principio para que se repita sola. Eliges cuáles quieres y se crean como
+  proyectos con el guion ya puesto.
+- 🔗 CADA SHORT NACE APUNTANDO A SU VIDEO LARGO. Es lo que da sentido a todo:
+  un Short viral NO arrastra tu video largo — YouTube usa sistemas de
+  recomendación SEPARADOS para cada formato. El puente lo construyes tú, con
+  el enlace a video relacionado. El programa guarda el enlace, lo enseña en la
+  pestaña Shorts del proyecto y te recuerda el único paso que hay que hacer a
+  mano en Studio (no se puede poner desde fuera). Un Short sin ese enlace es
+  una vista regalada.
+- 🔄 ROTACIÓN DE GANCHOS COMPROBADA. Se le exigen al director seis estructuras
+  distintas (cifra + contradicción, error costeado, mito desmontado,
+  micro-historia, pregunta personal, contraste visual) y se comprueba que la
+  tanda use al menos cuatro sin repetir dos seguidas. No es estética: repetir
+  la misma fórmula es exactamente el patrón que las políticas de YouTube
+  describen como producción en masa, y la rotación es la defensa.
+- 📅 CALENDARIO DE CAMPAÑA de D-4 a D+9 alrededor del día del video largo, con
+  fechas reales. Cada pieza tiene su función —posicionamiento, promesa,
+  activación, profundización, emoción, expansión y puente— y van de lo general
+  a lo específico: las que necesitan contexto se publican DESPUÉS del video
+  largo, cuando ese contexto ya existe para recibir el clic.
+- 🎬 LA PIEZA SE GENERA SOLA. Cada Short creado nace vertical 1080×1920, con su
+  duración objetivo (nunca más de 60 s), con la plantilla de estructura que le
+  toca según su gancho, y con el guion entrando como GUION y no como idea: el
+  programa lo respeta palabra por palabra en vez de reescribirlo.
+- 🖥 «python -m ytstudio shorts MI-VIDEO» hace lo mismo desde la ventana negra.
+  Sin `--crear` solo propone y guarda el plan, sin tocar nada.
+- 📖 Y con cualquier enlace de YouTube: si el video tiene subtítulos, el
+  programa los lee CON SUS MINUTOS y saca los Shorts igual, sin descargar el
+  video (que puede ser de horas).
+
 ## v0.63.0 — 2026-08-18
 Los videos verticales ya no tapan su propio enlace al video largo, y la
 sonoridad deja de estimarse: se **mide** en el archivo terminado.

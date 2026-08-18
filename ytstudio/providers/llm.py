@@ -370,6 +370,69 @@ class MockLLM:
                      "accent_word": "FALSO", "scene_id": 3},
                 ],
             }
+        if purpose == "derive_shorts":
+            # Tres piezas con estructuras de gancho DISTINTAS y funciones de
+            # campaña distintas: así el modo prueba ejercita también la
+            # comprobación de rotación, no solo el camino feliz.
+            return {"candidatos": [
+                {"nombre": "El dato que nadie esperaba",
+                 "idea": "La cifra central de la historia y por qué descoloca",
+                 "gancho_tipo": "cifra_contradiccion",
+                 "texto_pantalla": "EL 73% SE EQUIVOCA",
+                 "guion": "El 73% lo hace mal, y el motivo no es el que crees. "
+                          "En treinta segundos vas a entender de dónde sale esa "
+                          "cifra. Todo empezó con una idea simple que nadie se "
+                          "tomó en serio. Cuando por fin la midieron, el "
+                          "resultado no se parecía en nada a lo que esperaban: "
+                          "el error no estaba en la gente, estaba en cómo se "
+                          "medía. La historia completa está en el video largo, "
+                          "y ahí se ve el momento exacto en que se dieron "
+                          "cuenta. El 73% se equivoca. Tú ya no.",
+                 "cta": "Mira el video completo si quieres ver el momento exacto",
+                 "funcion": "promesa", "desde": 65.0, "hasta": 118.0,
+                 "duracion": 38,
+                 "titulo_youtube": "El 73% lo hace mal y el motivo sorprende",
+                 "descripcion": "El 73% lo hace mal, y el motivo no es el que "
+                                "crees. La historia completa, en el video largo.",
+                 "hashtags": ["#historia", "#datos"]},
+                {"nombre": "El error que costó una fortuna",
+                 "idea": "El error concreto y lo que costó",
+                 "gancho_tipo": "error_costeado",
+                 "texto_pantalla": "COSTÓ UNA FORTUNA",
+                 "guion": "Este error costó una fortuna, y se sigue cometiendo "
+                          "igual. Te cuento cuál fue en menos de un minuto. "
+                          "Durante años todos dieron por buena la misma "
+                          "suposición, sin comprobarla ni una vez. Cuando "
+                          "alguien por fin la comprobó, ya era tarde para "
+                          "deshacerlo. Lo caro no fue el error: fue el tiempo "
+                          "que tardaron en mirarlo. En el video largo está la "
+                          "cuenta completa. Y sigue costando una fortuna.",
+                 "cta": "La cuenta completa está en el video largo",
+                 "funcion": "profundizacion", "desde": 240.0, "hasta": 295.0,
+                 "duracion": 42,
+                 "titulo_youtube": "El error que costó una fortuna y sigue vivo",
+                 "descripcion": "Este error costó una fortuna y se sigue "
+                                "cometiendo. La cuenta completa, en el largo.",
+                 "hashtags": ["#historia", "#errores"]},
+                {"nombre": "El día que lo enterró",
+                 "idea": "La escena que resume toda la historia",
+                 "gancho_tipo": "micro_historia",
+                 "texto_pantalla": "LO ENTERRÓ POR MIEDO",
+                 "guion": "El día que lo enterró, creyó que era prudente. "
+                          "Quédate y verás por qué fue lo contrario. No se lo "
+                          "dijo a nadie, y esa fue la parte que de verdad "
+                          "importó. Cuando volvieron a buscarlo, ya no estaba "
+                          "donde lo había dejado. Lo prudente, resulta, era "
+                          "justo lo que no hizo. Cómo acaba está en el video "
+                          "largo. El día que lo enterró, creyó que era prudente.",
+                 "cta": "Cómo acaba está en el video largo",
+                 "funcion": "emocion", "desde": 430.0, "hasta": 488.0,
+                 "duracion": 40,
+                 "titulo_youtube": "El día que lo enterró creyó que era prudente",
+                 "descripcion": "El día que lo enterró, creyó que era prudente. "
+                                "Se equivocaba. La historia entera, en el largo.",
+                 "hashtags": ["#historia", "#relato"]},
+            ]}
         if purpose == "ingest_analysis":
             return {
                 "topic": "Una historia fascinante de ejemplo",

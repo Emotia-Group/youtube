@@ -428,7 +428,7 @@ async function renderProject(activeTab){
   const running=p.running;
   const mock=!CAT.keys.ANTHROPIC_API_KEY;
   const failed=Object.entries(p.phases).find(([,s])=>s==='failed');
-  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Editor','✂'],['Video','▶'],['Concepto','💡'],['Archivos','📎']];
+  const tabs=[['Guion','📝'],['Storyboard','🎞'],['Editor','✂'],['Video','▶'],['Concepto','💡'],['Archivos','📎'],['Shorts','📱']];
   const tab=activeTab||window._tab||'Guion';window._tab=tab;
   $('#main').innerHTML=`
   <div class="row" style="justify-content:space-between">
@@ -495,6 +495,93 @@ function auditoriaHtml(r){
   h+='<div class="muted" style="margin-top:10px;line-height:1.6">Lo que ninguna medición ve, míralo tú: que haya texto en pantalla desde el primer fotograma (el gancho tiene que entenderse con el sonido apagado), que el cierre no corte en seco, y que la franja de abajo quede libre para el enlace al video largo.</div>';
   return h;
 }
+/* ---------- SACAR SHORTS DE UN VIDEO LARGO ---------- */
+function diaEtiqueta(d){return d===0?'D0':(d>0?`D+${d}`:`D${d}`)}
+
+function origenShortHtml(p){
+  const o=p.derived_from, pl=p.shorts_plan||{};
+  if(!o)return '<div class="card muted">Este vertical no salió de ningún video largo: se creó por su cuenta. Para sacar Shorts de un video largo, abre ese proyecto y entra en su pestaña 📱 Shorts.</div>';
+  const fila=(k,v)=>v?`<div class="row" style="gap:14px;padding:8px 0;border-top:1px solid var(--grid)"><span class="muted" style="min-width:190px">${esc(k)}</span><span style="flex:1">${esc(String(v))}</span></div>`:'';
+  return `<div class="card">
+    <h3 style="margin-top:0">${esc(o.titulo||'el video largo')}</h3>
+    ${o.url?`<a href="${esc(o.url)}" target="_blank" class="muted" style="font-size:12px">${esc(o.url)}</a>`:''}
+    <div style="margin-top:10px">
+      ${fila('Momento del original', o.desde!=null?`${Math.round(o.desde)}s → ${Math.round(o.hasta||0)}s`:'')}
+      ${fila('La idea (una sola)', pl.idea)}
+      ${fila('Texto en pantalla', pl.texto_pantalla)}
+      ${fila('Llamada a la acción', pl.cta)}
+      ${fila('Título para YouTube', pl.titulo_youtube)}
+      ${fila('Descripción', pl.descripcion)}
+      ${fila('Hashtags', (pl.hashtags||[]).join(' '))}
+    </div></div>
+  <div class="card"><b>Lo único que hay que hacer a mano</b>
+    <p style="line-height:1.7">Al subir este Short, entra en YouTube Studio → Contenido → el Short → <b>Video relacionado</b>, y elige el video largo de arriba. No se puede poner desde fuera de Studio. <b>Se puede añadir después de publicar</b>, así que también puedes reapuntar Shorts antiguos a un video largo nuevo. Sin ese enlace, la vista se regala: no lleva a ninguna parte.</p></div>`;
+}
+
+async function cargarPlanShorts(){
+  try{
+    const plan=await api(`/api/projects/${current}/shorts-plan`);
+    if(plan&&(plan.candidatos||[]).length)pintarPropuesta(plan);
+  }catch(e){}
+}
+
+async function proponerShorts(){
+  const btn=$('#sh-btn'),caja=$('#sh-caja');
+  btn.disabled=true;btn.textContent='⏳ Leyendo el video largo…';
+  caja.innerHTML='<div class="card muted">El director está leyendo la transcripción entera y buscando los momentos que aguantan solos. Suele tardar menos de un minuto.</div>';
+  try{
+    const cuerpo={n:Number($('#sh-n').value),desde:$('#sh-fecha').value};
+    const url=$('#sh-url').value.trim();
+    if(url)cuerpo.url=url;else cuerpo.slug=current;
+    pintarPropuesta(await api('/api/shorts/propose',{method:'POST',body:JSON.stringify(cuerpo)}));
+  }catch(e){caja.innerHTML=`<div class="card" style="border-color:var(--err)">${esc(e.message)}</div>`}
+  btn.disabled=false;btn.textContent='📱 Proponer Shorts';
+}
+
+function pintarPropuesta(plan){
+  window._plan=plan;
+  const cands=plan.candidatos||[],rot=plan.rotacion||{};
+  const aviso=rot.suficiente?'':`<div class="banner">⚠ <b>Poca variedad de gancho.</b> Solo ${rot.estructuras} estructura(s) distintas para ${cands.length} piezas (el mínimo sano es ${rot.minimo}). Repetir la misma fórmula cansa a la audiencia, y además es justo el patrón que YouTube describe como producción en masa. Vuelve a proponer, o desmarca las que se repitan.</div>`;
+  const fichas=cands.map((c,i)=>`
+    <div class="card">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <input type="checkbox" class="sh-pick" data-i="${i}" checked style="width:auto;margin-top:4px">
+        <div style="flex:1">
+          <span class="badge">${diaEtiqueta(c.dia)}</span>
+          <span class="badge">${esc((plan.estructuras||{})[c.gancho_tipo]||c.gancho_tipo)}</span>
+          <span class="badge">${c.duracion}s</span>
+          <h3 style="margin:6px 0 2px">${esc(c.nombre)}</h3>
+          <div class="muted" style="line-height:1.6">${esc(c.idea)}</div>
+          <div style="margin-top:8px;line-height:1.7"><b>En pantalla desde el fotograma 1:</b> ${esc(c.texto_pantalla)}</div>
+          <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Ver el guion completo</summary>
+            <div style="white-space:pre-wrap;line-height:1.8;margin-top:8px">${esc(c.guion)}</div>
+            <div class="muted" style="margin-top:8px">Sale del segundo ${Math.round(c.desde||0)} del video largo · ${esc(c.titulo_youtube)} · ${esc((c.hashtags||[]).join(' '))}</div>
+          </details>
+        </div>
+      </div>
+    </div>`).join('');
+  const cal=`<div class="card"><b>Cuándo publicar cada uno</b>
+    <p class="muted" style="line-height:1.7;margin:4px 0 10px">De lo general a lo específico: las piezas que necesitan contexto van DESPUÉS del video largo, cuando ese contexto ya existe para recibir el clic. Tres o cuatro Shorts por semana, no a diario.</p>
+    <table><tbody>${(plan.calendario||[]).map(x=>`<tr><td style="color:var(--accent)">${esc(x.etiqueta)}</td><td class="muted">${esc(x.fecha)}</td><td>${esc(x.funcion)}</td><td class="muted">${esc(x.nombre)}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#sh-caja').innerHTML=aviso+fichas+cal+
+    `<div class="card"><button class="btn" id="sh-crear" onclick="crearShorts()">＋ Crear los proyectos</button>
+     <span class="muted" style="margin-left:10px">Se crean como borradores con el guion ya escrito. No se genera nada ni se gasta hasta que abras cada uno y pulses ▶ Generar.</span></div>`;
+}
+
+async function crearShorts(){
+  const plan=window._plan||{},cands=plan.candidatos||[];
+  const elegidos=[...document.querySelectorAll('.sh-pick')].filter(x=>x.checked).map(x=>cands[Number(x.dataset.i)]);
+  if(!elegidos.length){alert('No has marcado ningún Short.');return}
+  if(!confirm(`Se crearán ${elegidos.length} proyecto(s) de Short, cada uno con su guion ya escrito. Todavía no se genera ningún video ni se gasta nada.`))return;
+  const btn=$('#sh-crear');btn.disabled=true;btn.textContent='⏳ Creando…';
+  try{
+    const r=await api('/api/shorts/create',{method:'POST',
+      body:JSON.stringify({candidatos:elegidos,origen:plan.origen,desde:$('#sh-fecha')?.value})});
+    alert(`Listo: ${r.creados.length} proyecto(s) creados, cada uno con su guion puesto. Ábrelos desde la lista y pulsa ▶ Generar video cuando quieras.`);
+    await refreshList();
+  }catch(e){alert(e.message);btn.disabled=false;btn.textContent='＋ Crear los proyectos'}
+}
+
 function revisionTecnicaHtml(p){
   if(!aspectOf(p).vert)return '';
   return `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
@@ -776,6 +863,26 @@ async function renderTab(tab,p){
       <button class="btn small" onclick="uploadPending()">⬆ Subir seleccionados</button>
     </div>`;
     window._pending=[];
+  }
+  else if(tab==='Shorts'){
+    /* Un Short viral NO arrastra al video largo: las plataformas usan
+       sistemas de recomendación separados para cada formato. El puente lo
+       construyes tú — enlace a video relacionado, llamada a la acción y que
+       el destino continúe ESA idea. Por eso cada Short nace apuntando a su
+       video de origen. */
+    if(aspectOf(p).vert){el.innerHTML=origenShortHtml(p);return}
+    el.innerHTML=`<div class="card">
+      <p class="muted" style="line-height:1.7;margin-top:0">El programa lee el video largo entero, busca los momentos que se entienden solos y de cada uno escribe un Short completo: gancho, promesa, desarrollo, el pago de lo prometido y una llamada a la acción hacia el video largo. Tú eliges cuáles se convierten en proyectos.</p>
+      ${p.scene_count?'':'<div class="banner">Este proyecto todavía no tiene escenas, así que no hay nada que leer. Genera al menos hasta el guion gráfico, o pega abajo el enlace de un video de YouTube ya publicado.</div>'}
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <select id="sh-n" style="width:auto">${[3,4,5,6,7].map(v=>`<option value="${v}" ${v===5?'selected':''}>${v} Shorts</option>`).join('')}</select>
+        <input type="date" id="sh-fecha" style="width:auto" value="${new Date().toISOString().slice(0,10)}" title="Día en que publicas el video largo: de ahí sale el calendario">
+        <button class="btn" id="sh-btn" onclick="proponerShorts()">📱 Proponer Shorts</button>
+      </div>
+      <input id="sh-url" placeholder="o pega el enlace de un video de YouTube (opcional)" style="margin-top:8px;max-width:520px">
+    </div>
+    <div id="sh-caja"></div>`;
+    cargarPlanShorts();
   }
   else if(tab==='Concepto'){
     const c=p.concept;

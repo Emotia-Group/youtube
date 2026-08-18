@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.63.0 -->
+<!-- MANUAL_VERSION: 0.64.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -778,6 +778,111 @@ cambia entre iPhone y Android, y solo ahí ves qué tapa qué.
 > rectángulo verde y **apaga esa pista antes de exportar**. Las instrucciones
 > están en `assets\plantillas\README.md`. Para lo que genera el programa no
 > hace falta: ya lo hace solo.
+
+---
+
+## 8.2 Sacar Shorts de un video largo
+
+Cuando tienes un video largo terminado, el programa puede leerlo entero y
+sacarle los Shorts que lleven gente a verlo.
+
+### Lo primero, porque casi todo el mundo se equivoca aquí
+
+**Un Short viral NO arrastra tu video largo.** YouTube usa dos sistemas de
+recomendación separados, uno para vídeo corto y otro para largo. Que un Short
+haga un millón de visitas no empuja nada hacia tu documental de diez minutos.
+
+Lo único que construye ese puente es el **enlace a video relacionado**: un
+enlace que aparece en el Short, debajo del nombre de tu canal, y que lleva al
+video largo. Lo pones tú, a mano, y **es gratis**. Un Short sin ese enlace es
+una vista regalada: entretiene a alguien y lo deja donde estaba.
+
+Todo lo que hace esta función está pensado alrededor de eso.
+
+### Cómo se hace
+
+1. Abre el **proyecto del video largo** y entra en la pestaña **Shorts**.
+2. Elige **cuántos** quieres (3 a 7) y pon la **fecha** en que publicas —o
+   publicaste— el video largo. De esa fecha sale el calendario.
+3. Pulsa **Proponer Shorts**. Tarda menos de un minuto y cuesta unos pocos
+   céntimos: es una sola consulta al director.
+4. Te salen las piezas propuestas. De cada una ves el guion completo, qué
+   texto va en pantalla y de qué minuto del video largo sale. **Desmarca las
+   que no te convenzan.**
+5. Pulsa **Crear los proyectos**. Se crean como borradores con el guion ya
+   escrito. **Todavía no se genera ningún video ni se gasta nada.**
+6. Abre cada uno y pulsa **Generar video** cuando quieras.
+
+> 💡 **También funciona con cualquier video de YouTube**, no solo con los
+> tuyos: pega el enlace en la casilla de abajo. Si el video tiene subtítulos,
+> el programa los lee con sus minutos y saca los Shorts igual, sin descargar
+> el video (que puede ser de horas).
+
+### Qué escribe exactamente
+
+Cada pieza sale con la estructura completa, no con un trozo recortado:
+
+| Bloque | Qué es |
+|---|---|
+| **Gancho** | La primera frase, dicha antes del medio segundo. Sin saludos ni «en este video te voy a explicar» |
+| **Texto en pantalla** | El mismo gancho, escrito, desde el primer fotograma. La mayoría ve los Shorts **sin sonido**: si tu gancho solo se oye, no existe |
+| **Promesa** | Qué se lleva quien se quede |
+| **Desarrollo** | **Una sola idea.** Si un momento tiene dos, son dos Shorts |
+| **Pago** | Se cumple lo prometido. Es el bloque que casi todos se saltan, y por el que luego no entienden por qué no reciben «me gusta»: el «me gusta» se decide justo ahí |
+| **Llamada a la acción** | Una sola, al final, **hacia tu video largo** — nunca «suscríbete» |
+| **Cierre de bucle** | La última frase enlaza con la primera. Los Shorts se repiten solos: así la gente lo ve dos veces sin darse cuenta |
+
+### Los ganchos se rotan, y no es por gusto
+
+El programa exige al director que use al menos **cuatro estructuras de gancho
+distintas** en cada tanda, y te avisa si no lo consigue. La razón no es
+estética: publicar siempre con la misma fórmula es exactamente lo que las
+normas de YouTube describen como **producción en masa**, y eso sí tiene
+consecuencias. Variar es la defensa.
+
+### El calendario
+
+Las piezas no salen todas de golpe. Cada una recibe un día alrededor del
+video largo (D0 = el día que publicas el largo):
+
+| Día | Función |
+|---|---|
+| **D−4** | Posicionamiento — por qué existe tu canal |
+| **D−2** | Promesa — una curiosidad que el video largo resolverá |
+| **D0** | Activación — pregunta directa, para que haya comentarios el día clave |
+| **D+2** | Profundización — el concepto central |
+| **D+4** | Emoción — la pieza con más carga |
+| **D+7** | Expansión — la que funciona fuera de tu tema: trae público nuevo |
+| **D+9** | Puente — enlaza con tu siguiente video largo |
+
+El orden va de lo general a lo específico a propósito: las piezas que
+necesitan contexto van **después** del video largo, cuando ese contexto ya
+existe para recibir el clic.
+
+**Publica tres o cuatro Shorts por semana, no a diario.** El riesgo del diario
+no es que YouTube te castigue el algoritmo: es que la calidad del gancho se
+degrada cuando el calendario aprieta, y que la cadencia diaria con plantilla
+fija es el patrón de producción en masa otra vez.
+
+### ⚠ El único paso que hay que hacer a mano
+
+**Poner el enlace al video largo.** No se puede hacer desde fuera de YouTube:
+no hay forma. Al subir cada Short:
+
+1. Entra en **YouTube Studio** → **Contenido**
+2. Haz clic en el Short
+3. Busca **Video relacionado** y elige tu video largo
+4. Guarda
+
+El programa te dice exactamente qué video enlazar: está en la pestaña
+**Shorts** de cada Short creado, junto con el título, la descripción y los
+hashtags que le tocan.
+
+> 💡 **Se puede añadir DESPUÉS de publicar**, y esto casi nadie lo aprovecha:
+> el feed de Shorts no caduca. Cuando saques un video largo nuevo, puedes
+> volver a tus Shorts antiguos —los que ya acumularon visitas— y reapuntarlos
+> al video nuevo. Tu catálogo de Shorts se convierte en algo que puedes
+> reutilizar en vez de en piezas de un solo uso.
 
 ---
 
