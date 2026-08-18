@@ -223,7 +223,8 @@ function go(screen, slug) {
   }
   $('#crumb').textContent = ['corrida', 'material', 'guion', 'escenas', 'personajes', 'metadatos'].includes(screen) ? (S.detail?.display_name || S.slug || '') : '';
   render();
-  if (['material', 'escenas', 'personajes', 'metadatos'].includes(screen) && !S.detail) pollRun();
+  if (['material', 'escenas', 'personajes', 'metadatos', 'shorts'].includes(screen) && !S.detail) pollRun();
+  if (screen === 'shorts') loadShortsPlan();
   if (screen === 'corrida') { pollRun(); S.timer = setInterval(pollRun, 2500); }
   if (screen === 'canales') loadLibrary();
   if (screen === 'guion') loadScript();
@@ -288,7 +289,7 @@ async function pollRun() {
 function render() {
   const v = $('#view'); v.textContent = '';
   if (S.fail && !S.cfg) { v.append(viewFallo()); return; }
-  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, material: viewMaterial, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
+  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, material: viewMaterial, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, shorts: viewShorts, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
   try { v.append(fn()); }
   catch (e) { v.append(viewFallo(e.message)); }
 }
@@ -646,7 +647,9 @@ function viewCorrida() {
         el('span', { class: 'mono muted' }, d.total_duration ? fmtSec(d.total_duration) : '—')),
       d.thumbnail ? el('div', { style: 'margin-top:20px' },
         el('div', { class: 'kicker', style: 'margin-bottom:8px' }, 'Miniatura'),
-        el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null),
+        el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null,
+      revisionTecnica(d),
+      checklistPublicacion(d)),
     el('aside', { class: 'rail' },
       el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between' },
         el('h2', { style: 'font-size:18px' }, 'Atención'),
@@ -661,6 +664,216 @@ function viewCorrida() {
           el('span', { style: 'font-family:var(--heading);font-size:20px;color:var(--a700)' }, money(total)))
         : el('div', { class: 'muted', style: 'font-size:13px' }, 'Se calcula al terminar cada fase.'),
       d.time_report ? el('div', { class: 'mono muted', style: 'margin-top:8px' }, `tiempo total ${fmtSec(d.time_report.total_seconds || d.time_report.total || null)}`) : null));
+}
+
+/* ---------- SACAR SHORTS DE UN VIDEO LARGO ----------
+   Un Short viral NO arrastra a tu video largo: las plataformas usan sistemas
+   de recomendación separados para cada formato. El puente lo construyes tú —
+   enlace a video relacionado, llamada a la acción y que el destino continúe
+   ESA idea. Por eso cada Short que sale de aquí nace apuntando a su origen. */
+async function loadShortsPlan() {
+  if (!S.slug) return;
+  await safe(async () => { S.plan = await api(`/api/projects/${S.slug}/shorts-plan`); });
+  render();
+}
+
+function viewShorts() {
+  const d = S.detail || {};
+  const vertical = aspectOf(d).vert;
+  return el('div', { class: 'wrap', style: 'max-width:1000px' },
+    projHeader('shorts', vertical ? 'De dónde sale este Short' : 'Sacar Shorts de este video'),
+    el('div', { style: 'margin-top:22px' },
+      vertical ? panelOrigenShort(d) : panelSacarShorts(d)));
+}
+
+// Un Short DERIVADO: de dónde vino y qué falta por hacer a mano.
+function panelOrigenShort(d) {
+  const o = d.derived_from, p = d.shorts_plan || {};
+  if (!o) return el('div', {},
+    el('p', { class: 'muted', style: 'line-height:1.75;max-width:620px' },
+      'Este vertical no salió de ningún video largo: se creó por su cuenta. Para sacar Shorts de un video largo, abre ese proyecto y entra en su pestaña Shorts.'),
+    el('button', { class: 'btn', style: 'margin-top:14px', onclick: () => go('proyectos') }, 'Ver mis proyectos'));
+  const fila = (k, v) => v ? el('div', { style: 'display:flex;gap:14px;padding:10px 0;border-top:1px solid var(--divider)' },
+    el('div', { class: 'kicker', style: 'min-width:190px' }, k),
+    el('div', { style: 'font-size:14px;line-height:1.6' }, v)) : null;
+  return el('div', { style: 'max-width:720px' },
+    el('h2', { style: 'font-size:20px' }, o.titulo || 'el video largo'),
+    o.url ? el('a', { href: o.url, target: '_blank', class: 'mono', style: 'font-size:12px' }, o.url) : null,
+    el('div', { style: 'margin-top:14px' },
+      fila('Momento del original', o.desde != null ? `${fmtSec(o.desde)} → ${fmtSec(o.hasta)}` : null),
+      fila('La idea (una sola)', p.idea),
+      fila('Texto en pantalla', p.texto_pantalla),
+      fila('Llamada a la acción', p.cta),
+      fila('Título para YouTube', p.titulo_youtube),
+      fila('Descripción', p.descripcion),
+      fila('Hashtags', (p.hashtags || []).join(' '))),
+    el('div', { class: 'plate', style: 'margin-top:22px;padding:16px;line-height:1.75;font-size:14px' },
+      el('div', { class: 'kicker', style: 'margin-bottom:8px' }, 'Lo único que hay que hacer a mano'),
+      'Al subir este Short, entra en YouTube Studio → Contenido → el Short → ',
+      el('b', {}, 'Video relacionado'), ', y elige el video largo de arriba. No se puede poner desde fuera de Studio. ',
+      el('b', {}, 'Se puede añadir después de publicar'), ', así que también puedes reapuntar Shorts antiguos a un video largo nuevo. Sin ese enlace, la vista se regala: no lleva a ninguna parte.'));
+}
+
+// Un video LARGO: proponer, revisar y crear la tanda.
+function panelSacarShorts(d) {
+  const caja = el('div', { style: 'margin-top:20px' });
+  const n = el('select', { class: 'input', style: 'width:auto' },
+    [3, 4, 5, 6, 7].map(v => el('option', { value: String(v), selected: v === 5 ? 'selected' : null }, `${v} Shorts`)));
+  const fecha = el('input', { class: 'input', type: 'date', style: 'width:auto',
+    value: new Date().toISOString().slice(0, 10),
+    title: 'Día en que publicas (o publicaste) el video largo. De ahí sale el calendario.' });
+  const enlace = el('input', { class: 'input', placeholder: 'o pega el enlace de un video de YouTube (opcional)' });
+  const listo = d.scene_count > 0;
+
+  const boton = el('button', { class: 'btn btn-primary', onclick: async () => {
+    boton.disabled = true; boton.textContent = 'Leyendo el video largo…';
+    caja.replaceChildren(el('div', { class: 'muted', style: 'font-size:13px' },
+      'El director está leyendo la transcripción entera y buscando los momentos que aguantan solos. Suele tardar menos de un minuto.'));
+    try {
+      const cuerpo = { n: Number(n.value), desde: fecha.value };
+      if (enlace.value.trim()) cuerpo.url = enlace.value.trim(); else cuerpo.slug = S.slug;
+      S.plan = await api('/api/shorts/propose', { method: 'POST', body: JSON.stringify(cuerpo) });
+      caja.replaceChildren(propuestaShorts(S.plan, fecha.value));
+    } catch (e) {
+      caja.replaceChildren(el('div', { style: 'color:var(--a700);line-height:1.7;font-size:14px' }, e.message));
+    }
+    boton.disabled = false; boton.textContent = 'Proponer Shorts';
+  } }, 'Proponer Shorts');
+
+  if (S.plan && (S.plan.candidatos || []).length) caja.replaceChildren(propuestaShorts(S.plan, fecha.value));
+
+  return el('div', {},
+    el('p', { class: 'muted', style: 'line-height:1.75;max-width:660px' },
+      'El programa lee el video largo entero, busca los momentos que se entienden solos y de cada uno escribe un Short completo: gancho, promesa, desarrollo, el pago de lo prometido y una llamada a la acción hacia el video largo. Tú eliges cuáles se convierten en proyectos.'),
+    !listo ? el('div', { class: 'plate', style: 'margin-top:16px;padding:14px;font-size:14px;line-height:1.7' },
+      'Este proyecto todavía no tiene escenas, así que no hay nada que leer. Genera al menos hasta el guion gráfico, o pega abajo el enlace de un video de YouTube ya publicado.') : null,
+    el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px' },
+      n, fecha, boton),
+    el('div', { style: 'margin-top:10px;max-width:520px' }, enlace),
+    caja);
+}
+
+function propuestaShorts(plan, fecha) {
+  const cands = plan.candidatos || [];
+  const rot = plan.rotacion || {};
+  const marcados = new Set(cands.map((_, i) => i));
+  const wrap = el('div', {});
+
+  if (!rot.suficiente) wrap.append(el('div', { class: 'plate', style: 'padding:14px;margin-bottom:16px;font-size:14px;line-height:1.7' },
+    el('div', { class: 'kicker', style: 'color:var(--a700);margin-bottom:6px' }, 'Poca variedad de gancho'),
+    `Solo ${rot.estructuras} estructura(s) distintas para ${cands.length} piezas (el mínimo sano es ${rot.minimo}). Repetir la misma fórmula cansa a la audiencia, y además es justo el patrón que YouTube describe como producción en masa. Vuelve a proponer, o quita las que se repitan.`));
+
+  cands.forEach((c, i) => {
+    const marca = el('input', { type: 'checkbox', checked: 'checked',
+      onchange: e => { e.target.checked ? marcados.add(i) : marcados.delete(i); } });
+    wrap.append(el('div', { style: 'border-top:1px solid var(--divider);padding:16px 0' },
+      el('div', { style: 'display:flex;gap:12px;align-items:baseline' },
+        marca,
+        el('div', { style: 'flex:1' },
+          el('div', { class: 'kicker' }, `${diaEtiqueta(c.dia)} · ${(plan.estructuras || {})[c.gancho_tipo] || c.gancho_tipo} · ${c.duracion}s`),
+          el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:4px' }, c.nombre),
+          el('div', { class: 'muted', style: 'font-size:13px;margin-top:6px;line-height:1.6' }, c.idea),
+          el('div', { style: 'font-size:14px;line-height:1.7;margin-top:10px' },
+            el('b', {}, 'En pantalla desde el fotograma 1: '), c.texto_pantalla),
+          el('details', { style: 'margin-top:10px' },
+            el('summary', { class: 'muted', style: 'font-size:13px;cursor:pointer' }, 'Ver el guion completo'),
+            el('div', { style: 'font-size:14px;line-height:1.8;margin-top:10px;white-space:pre-wrap' }, c.guion),
+            el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' },
+              `Sale del minuto ${fmtSec(c.desde || 0)} del video largo · ${c.titulo_youtube} · ${(c.hashtags || []).join(' ')}`))))));
+  });
+
+  const cal = el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
+    el('div', { class: 'kicker', style: 'margin-bottom:10px' }, 'Cuándo publicar cada uno'),
+    el('div', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin-bottom:12px' },
+      'De lo general a lo específico: las piezas que necesitan contexto van DESPUÉS del video largo, cuando ese contexto ya existe para recibir el clic. Tres o cuatro Shorts por semana, no a diario.'),
+    (plan.calendario || []).map(x => el('div', { style: 'display:flex;gap:14px;padding:7px 0;font-size:14px' },
+      el('span', { class: 'mono', style: 'min-width:52px;color:var(--a700)' }, x.etiqueta),
+      el('span', { class: 'mono muted', style: 'min-width:100px' }, x.fecha),
+      el('span', { style: 'min-width:130px' }, x.funcion),
+      el('span', { class: 'muted' }, x.nombre))));
+
+  const crear = el('button', { class: 'btn btn-primary', onclick: async () => {
+    const elegidos = cands.filter((_, i) => marcados.has(i));
+    if (!elegidos.length) { alert('No has marcado ningún Short.'); return; }
+    if (!confirm(`Se crearán ${elegidos.length} proyecto(s) de Short, cada uno con su guion ya escrito. Todavía no se genera ningún video ni se gasta nada.`)) return;
+    crear.disabled = true; crear.textContent = 'Creando…';
+    try {
+      const r = await api('/api/shorts/create', { method: 'POST',
+        body: JSON.stringify({ candidatos: elegidos, origen: plan.origen, desde: fecha }) });
+      await loadProjects();
+      alert(`Listo: ${r.creados.length} proyecto(s) creados. Los tienes en «Proyectos», cada uno con su guion puesto — ábrelos y pulsa Generar video cuando quieras.`);
+      go('proyectos');
+    } catch (e) { alert(e.message); crear.disabled = false; crear.textContent = 'Crear los proyectos'; }
+  } }, 'Crear los proyectos');
+
+  wrap.append(cal, el('div', { style: 'margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
+    crear, el('span', { class: 'muted', style: 'font-size:13px' }, 'Se crean como borradores con el guion ya escrito. No se genera nada ni se gasta hasta que abras cada uno y pulses Generar.')));
+  return wrap;
+}
+
+function diaEtiqueta(d) { return d === 0 ? 'D0' : (d > 0 ? `D+${d}` : `D${d}`); }
+
+// LISTA DE COMPROBACIÓN antes de publicar un vertical. Tres estados por
+// punto: ✔ lo comprobó la máquina y está bien · ✖ lo comprobó y está mal ·
+// ☐ solo lo puede mirar una persona (y son justo los que más se olvidan).
+function checklistPublicacion(d) {
+  const items = d.publish_checklist;
+  if (!items || !items.length) return null;
+  const rojos = items.filter(i => i.ok === false).length;
+  return el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
+    el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:12px' },
+      el('div', { class: 'kicker' }, 'Antes de publicar'),
+      el('span', { class: 'tag' }, rojos ? `${rojos} pendiente(s)` : 'todo lo medible en verde')),
+    el('div', { style: 'margin-top:10px' }, items.map(i =>
+      el('div', { style: 'display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--divider);font-size:14px;line-height:1.6' },
+        el('span', { style: `min-width:18px;${i.ok === false ? 'color:var(--a700)' : ''}` },
+          i.ok === true ? '✔' : i.ok === false ? '✖' : '☐'),
+        el('div', {},
+          el('div', { style: i.ok === false ? 'color:var(--a700)' : '' }, i.label),
+          i.detail ? el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px' }, i.detail) : null)))),
+    el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin-top:10px' },
+      'Los puntos con ☐ no los puede comprobar una máquina: míralos tú. Son exactamente los que más se olvidan.'));
+}
+
+// REVISIÓN TÉCNICA del video vertical: lo que se puede MEDIR del archivo
+// terminado (resolución, códecs, duración y sonoridad) contra lo que el feed
+// de Shorts exige. Solo aparece en proyectos verticales, que son los únicos a
+// los que la app les dibuja su interfaz encima.
+function revisionTecnica(d) {
+  if (!aspectOf(d).vert || !d.final_video) return null;
+  const a = d.shorts_audit;
+  const caja = el('div', { style: 'margin-top:12px' });
+  const pintar = r => {
+    caja.textContent = '';
+    if (!r) { caja.append(el('div', { class: 'muted', style: 'font-size:13px' },
+      'Todavía sin medir. Pulsa «Medir el archivo» para comprobarlo.')); return; }
+    const i = r.info || {}, s = r.sonoridad || {};
+    const ficha = [i.duration ? `${i.duration.toFixed(1)}s` : null,
+      i.width ? `${i.width}×${i.height}` : null, i.fps ? `${i.fps}fps` : null,
+      i.vcodec, s.input_i != null ? `${s.input_i.toFixed(1)} LUFS` : null,
+      s.input_tp != null ? `${s.input_tp.toFixed(1)} dBTP` : null].filter(Boolean);
+    caja.append(el('div', { class: 'mono muted', style: 'font-size:12px' }, ficha.join('  ·  ')));
+    (r.problemas || []).forEach(m => caja.append(el('div',
+      { style: 'font-size:13px;line-height:1.6;margin-top:8px;color:var(--a700)' }, `Problema — ${m}`)));
+    (r.avisos || []).forEach(m => caja.append(el('div',
+      { style: 'font-size:13px;line-height:1.6;margin-top:8px' }, `Aviso — ${m}`)));
+    if (!(r.problemas || []).length && !(r.avisos || []).length)
+      caja.append(el('div', { style: 'font-size:13px;margin-top:8px' },
+        'Cumple todas las especificaciones que se pueden medir.'));
+    caja.append(el('div', { class: 'muted', style: 'font-size:12px;line-height:1.6;margin-top:10px' },
+      'Lo que ninguna medición ve, míralo tú: que haya texto en pantalla desde el primer fotograma (el gancho tiene que entenderse con el sonido apagado), que el cierre no corte en seco, y que la franja de abajo quede libre para el enlace al video largo.'));
+  };
+  pintar(a);
+  const boton = el('button', { class: 'btn btn-sm', onclick: async () => {
+    boton.disabled = true; boton.textContent = 'Midiendo…';
+    try { const r = await api(`/api/projects/${S.slug}/audit`, { method: 'POST', body: '{}' }); pintar(r.resultado); }
+    catch (e) { alert(e.message); }
+    boton.disabled = false; boton.textContent = 'Medir el archivo';
+  } }, 'Medir el archivo');
+  return el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
+    el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:12px' },
+      el('div', { class: 'kicker' }, 'Revisión técnica del vertical'), boton),
+    caja);
 }
 
 async function runFrom(from, to) {
@@ -1588,7 +1801,7 @@ function viewAjustes() {
 }
 
 function tabBar(active) {
-  const tabs = [['corrida', 'Corrida'], ['material', 'Material'], ['guion', 'Guion'], ['escenas', 'Escenas'], ['personajes', 'Personajes'], ['metadatos', 'Metadatos']];
+  const tabs = [['corrida', 'Corrida'], ['material', 'Material'], ['guion', 'Guion'], ['escenas', 'Escenas'], ['personajes', 'Personajes'], ['metadatos', 'Metadatos'], ['shorts', 'Shorts']];
   return el('div', { style: 'display:flex;gap:2px;margin-top:14px;border-bottom:1px solid var(--divider)' },
     tabs.map(([k, label]) => el('button', {
       class: 'btn btn-ghost btn-sm',

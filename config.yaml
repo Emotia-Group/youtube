@@ -241,6 +241,16 @@ audio:
                              # apta para YouTube, SIN el loudnorm dinámico que
                              # hundía la voz en las pausas dramáticas)
   final_limit: 0.9           # tope del limitador de picos final (0.9 ≈ -0.9 dB)
+  target_lufs: -14           # SONORIDAD MEDIDA del video terminado. Se mide el
+                             # archivo y, si no cae en el objetivo, se corrige
+                             # con una ganancia CONSTANTE (la dinámica de la
+                             # mezcla no se toca). Importa porque la plataforma
+                             # BAJA lo que suena alto pero NO SUBE lo que suena
+                             # bajo: un video apagado suena apagado para
+                             # siempre, y el espectador no piensa «está bajo»,
+                             # desliza. 0 = no medir (como antes de la v0.63.0)
+  target_tp: -1.0            # pico real objetivo (dBTP) del limitador que
+                             # acompaña a la corrección de sonoridad
   # Modo "narración propia" (cuando subes tu voz grabada):
   fix_narration: true        # CORRIGE los tropiezos evidentes de tu grabación:
                              # falsos arranques («El registró… El registro
@@ -273,6 +283,13 @@ subtitles:
   font: Arial          # familia para subtítulos quemados (Arial existe en Win/Mac;
                        # en Linux fontconfig la sustituye automáticamente)
   font_size: 54
+  safe_zone: true      # ZONA SEGURA del vídeo vertical: en 9:16 los subtítulos
+                       # quemados suben por encima de la franja inferior que la
+                       # app reserva al nombre del canal y al ENLACE A VÍDEO
+                       # RELACIONADO. Es el único enlace que lleva del Short al
+                       # video largo: taparlo es competir contra tu propia
+                       # herramienta de conversión. En horizontal no cambia
+                       # nada. false = volver a pegarlos abajo del todo
 publish:
   enabled: false
   privacy: private

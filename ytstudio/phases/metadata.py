@@ -121,6 +121,41 @@ def run(project, cfg) -> None:
         f"{lang}. Diseñas títulos, descripciones y miniaturas GANADORAS: "
         "específicas, con carga emocional real y cero clickbait engañoso — la "
         "promesa siempre se cumple en el video.")
+
+    # REGLAS DE SHORT para los verticales. El título en el feed casi no se
+    # lee (el video simplemente empieza), pero en BÚSQUEDA es lo que rankea;
+    # y el hashtag de Shorts es un mito de 2021: la clasificación es
+    # automática por proporción y duración.
+    from ytstudio.catalog import is_vertical
+    from ytstudio.shorts import (HASHTAGS_MAX, TAGS_MAX_SHORT, TITLE_MAX,
+                                 TITLE_MIN, short_metadata_fixups)
+    vertical = is_vertical(cfg)
+    reglas_short = ""
+    if vertical:
+        derived = project.get("derived_from") or {}
+        plan = project.get("shorts_plan") or {}
+        reglas_short = (
+            "\n\nESTE VIDEO ES UN SHORT VERTICAL — reglas que mandan sobre "
+            "las de arriba:\n"
+            f"- Títulos de {TITLE_MIN}-{TITLE_MAX} caracteres, palabra clave "
+            "al principio. PROHIBIDO el hashtag #Shorts (la clasificación es "
+            "automática; solo ocupa sitio).\n"
+            "- Descripciones CORTAS: la primera línea es el gancho "
+            "reformulado (es lo único visible sin desplegar), un párrafo "
+            f"breve, y {HASHTAGS_MAX} hashtags temáticos como mucho. Sin "
+            "capítulos.\n"
+            f"- tags: {TAGS_MAX_SHORT} como mucho, y SOLO variantes "
+            "ortográficas o de acentuación de los términos del tema (la "
+            "documentación oficial dice que su papel es mínimo).\n"
+            + (f"- El destino del CTA es el video largo: {derived['url']} — "
+               "menciónalo en la descripción.\n" if derived.get("url") else "")
+            + (("- El plan editorial de este Short ya decidió un título y "
+                "una descripción; úsalo como PRIMERA opción tal cual y crea "
+                "dos variantes:\n"
+                f"  título: {plan.get('titulo_youtube', '')}\n"
+                f"  descripción: {plan.get('descripcion', '')}\n"
+                f"  hashtags: {' '.join(plan.get('hashtags') or [])}\n")
+               if plan.get("titulo_youtube") else ""))
     prompt = (
         f"Concepto del video:\n{json.dumps(concept, ensure_ascii=False)[:4000]}\n\n"
         + (f"Capítulos reales (INCLÚYELOS tal cual en cada descripción):\n"
@@ -145,10 +180,48 @@ def run(project, cfg) -> None:
         "'text' con más carga (se pinta en el color del canal), 'kicker' = "
         "contexto de 1-3 palabras (o vacío), y 'scene_id' = la escena cuya "
         "imagen es más icónica/emocional como fondo (id de la lista; elige "
-        "TRES escenas distintas).")
+        "TRES escenas distintas)." + reglas_short)
     meta = llm.complete_json(system, prompt, schema=METADATA_SCHEMA,
                              purpose="metadata")
     meta = _norm_meta(meta, concept)
+
+    # Red de seguridad de las reglas de Short: lo mecánico se corrige aunque
+    # el modelo (o un proyecto antiguo) lo traiga mal, y cada corrección se
+    # cuenta en el registro de eventos.
+    if vertical:
+        derived = project.get("derived_from") or {}
+        # El PLAN EDITORIAL del Short (si vino de un video largo) ya decidió
+        # título, descripción y hashtags pensando en la campaña completa: se
+        # GARANTIZA como primera opción, no solo se le sugiere al modelo.
+        plan = project.get("shorts_plan") or {}
+        if (plan.get("titulo_youtube") or "").strip():
+            from ytstudio.shorts import strip_shorts_hashtag
+            t0 = strip_shorts_hashtag(plan["titulo_youtube"])
+            if all(o["title"] != t0 for o in meta["title_options"]):
+                meta["title_options"] = ([{"title": t0,
+                                           "angle": "del plan editorial del Short"}]
+                                         + meta["title_options"])[:3]
+            if (plan.get("descripcion") or "").strip():
+                d0 = plan["descripcion"].strip()
+                tags_plan = " ".join(plan.get("hashtags") or [])
+                if tags_plan and "#" not in d0:
+                    d0 += "\n\n" + tags_plan
+                if all(o["description"] != d0
+                       for o in meta["description_options"]):
+                    meta["description_options"] = (
+                        [{"description": d0,
+                          "angle": "del plan editorial del Short"}]
+                        + meta["description_options"])[:3]
+        avisos = short_metadata_fixups(meta, derived.get("url") or "")
+        if avisos:
+            from ytstudio import eventlog
+            for a in avisos:
+                eventlog.log("info", f"Metadatos de Short: {a}",
+                             project=getattr(project, "slug", None),
+                             phase="metadata")
+        # Título y descripción "elegidos" por defecto tras las correcciones
+        meta["title"] = meta["title_options"][0]["title"]
+        meta["description"] = meta["description_options"][0]["description"]
 
     # ATRIBUCIÓN del material de archivo (Wikimedia): las licencias libres
     # piden crédito — se añade solo, a TODAS las opciones de descripción,

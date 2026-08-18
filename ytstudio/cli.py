@@ -7,6 +7,8 @@ Uso típico:
   python -m ytstudio run mi-video --to script    # pausa para revisar el guion
   python -m ytstudio run mi-video --from scenes  # re-ejecuta desde una fase
   python -m ytstudio status mi-video
+  python -m ytstudio auditar C:\\videos\\shorts   # medir verticales ya hechos
+  python -m ytstudio shorts mi-video --crear     # sacar Shorts del video largo
 """
 from __future__ import annotations
 
@@ -85,6 +87,87 @@ def cmd_phases(args) -> None:
         print(f"  {i:>2}. {name:<10} {desc}")
 
 
+def cmd_shorts(args) -> None:
+    """Saca Shorts de un video largo: uno de tus proyectos o cualquier enlace
+    de YouTube."""
+    from ytstudio import derive
+
+    origen = args.origen
+    if origen.startswith(("http://", "https://")):
+        cfg = load_config()
+        source = derive.source_from_url(origen, cfg)
+    else:
+        if not Project.exists(origen):
+            sys.exit(f"No existe el proyecto '{origen}'. Pásale un nombre de "
+                     "proyecto o un enlace de YouTube.")
+        cfg = load_config(Project(origen).dir)
+        source = derive.source_from_project(origen)
+
+    print(f"\nVideo largo: {source['titulo']}")
+    print(f"Material leído: {len(source['marcas'])} líneas con su minuto\n")
+    candidatos = derive.propose(source, cfg, n=args.n)
+    if not candidatos:
+        sys.exit("El director no encontró ningún momento que aguante solo.")
+
+    rot = derive.rotation_report(candidatos)
+    for c in candidatos:
+        h = derive.HOOK_STRUCTURES[c["gancho_tipo"]]["label"]
+        print(f"  {derive.campaign_label(c['dia']):>4}  {c['duracion']:>2}s  "
+              f"{h:<34} {c['nombre']}")
+        print(f"        gancho: {c['guion'].split('.')[0].strip()[:90]}…")
+        print(f"        texto en pantalla: {c['texto_pantalla']}")
+    print()
+    if not rot["suficiente"]:
+        print(f"  ⚠ Solo {rot['estructuras']} estructura(s) de gancho "
+              f"distintas (mínimo {rot['minimo']}). Repetir la misma fórmula "
+              "fatiga a la audiencia y es el patrón que las políticas "
+              "describen como producción en masa.\n")
+
+    plan = derive.save_plan(source, candidatos, args.desde)
+    print("Calendario alrededor del video largo:")
+    for x in plan["calendario"]:
+        print(f"  {x['etiqueta']:>4}  {x['fecha']}  {x['funcion']:<16} "
+              f"{x['nombre']}")
+
+    if not args.crear:
+        print("\n(Nada creado todavía: añade --crear para convertirlos en "
+              "proyectos.)")
+        return
+    print()
+    for c in candidatos:
+        slug = derive.create_short_project(c, cfg)
+        c["slug"] = slug
+        print(f"  ✔ proyecto '{slug}' creado — "
+              f"python -m ytstudio run {slug}")
+    derive.save_plan(source, candidatos, args.desde)
+
+
+def cmd_auditar(args) -> None:
+    """Mide vídeos verticales YA producidos (los del programa o los que
+    vengan de fuera) contra las especificaciones de publicación."""
+    import shutil as _shutil
+
+    from ytstudio import shorts
+
+    for tool in ("ffprobe", "ffmpeg"):
+        if not _shutil.which(tool):
+            sys.exit(f"No se encuentra '{tool}'. Instálalo desde "
+                     "https://ffmpeg.org/download.html")
+
+    rutas = list(args.ruta)
+    # Sin ruta: se audita el video final de los proyectos indicados por nombre
+    if not rutas:
+        sys.exit("Indica una carpeta o uno o más archivos de video.")
+    resultados = shorts.audit_paths(rutas)
+    if not resultados:
+        sys.exit("No se encontraron archivos de video en esa ruta.")
+    if args.json:
+        import json as _json
+        print(_json.dumps(resultados, indent=2, ensure_ascii=False))
+        return
+    print("\n".join(shorts.report_lines(resultados)))
+
+
 def cmd_ui(args) -> None:
     from ytstudio.webui.server import serve
     serve(port=args.port, open_browser=not args.no_browser)
@@ -130,6 +213,29 @@ def main() -> None:
 
     p_phases = sub.add_parser("phases", help="Listar las fases del pipeline")
     p_phases.set_defaults(func=cmd_phases)
+
+    p_sh = sub.add_parser(
+        "shorts", help="Sacar Shorts de un video largo (un proyecto tuyo o un "
+                       "enlace de YouTube)")
+    p_sh.add_argument("origen", help="Nombre de un proyecto o enlace de YouTube")
+    p_sh.add_argument("--n", type=int, default=5,
+                      help="Cuántos Shorts proponer (por defecto 5, máximo 7)")
+    p_sh.add_argument("--crear", action="store_true",
+                      help="Crear los proyectos de verdad (sin esto solo "
+                           "propone y guarda el plan)")
+    p_sh.add_argument("--desde", default=None,
+                      help="Fecha del video largo (AAAA-MM-DD) para el "
+                           "calendario. Por defecto, hoy")
+    p_sh.set_defaults(func=cmd_shorts)
+
+    p_aud = sub.add_parser(
+        "auditar", help="Medir videos verticales contra las especificaciones "
+                        "de publicación (resolución, códecs, duración, sonoridad)")
+    p_aud.add_argument("ruta", nargs="*",
+                       help="Carpeta con videos, o uno o varios archivos")
+    p_aud.add_argument("--json", action="store_true",
+                       help="Salida en JSON en vez del informe legible")
+    p_aud.set_defaults(func=cmd_auditar)
 
     p_ui = sub.add_parser("ui", help="Abrir la interfaz web local")
     p_ui.add_argument("--port", type=int, default=8765)

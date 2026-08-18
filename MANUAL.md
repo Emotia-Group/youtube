@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.62.1 -->
+<!-- MANUAL_VERSION: 0.65.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -716,6 +716,217 @@ archivo de subtítulos, y pega el título y la descripción que elegiste.
 (Existe una subida automática opcional: se activa poniendo `publish.enabled`
 en verdadero y requiere las credenciales de Google del capítulo 18.1. Por
 defecto está apagada.)
+
+---
+
+### 8.1 Los verticales llevan una revisión técnica aparte
+
+Un Short, un Reel o un TikTok no se ven en una pantalla limpia: **la app dibuja
+su interfaz ENCIMA de tu video**. Arriba el título, a la derecha la columna de
+botones (me gusta, comentarios, compartir) y abajo el nombre de tu canal y el
+**enlace al video largo**. Ese enlace es lo único que convierte a alguien que
+ve un Short en alguien que ve tu video de diez minutos.
+
+Al rectángulo del centro que sí es tuyo se le llama **zona segura** (el
+espacio donde ningún botón de la app te va a tapar el texto). Por eso el
+programa ahora trata la franja de abajo como terreno prohibido:
+
+- **Los subtítulos de los verticales suben.** Antes se quemaban pegados al
+  borde inferior, justo encima del enlace: lo tapaban. Ahora se colocan por
+  encima de esa franja, sin que tengas que hacer nada.
+- **En los videos horizontales no cambia nada.** Ahí no hay interfaz encima.
+
+En la pestaña **Corrida**, debajo del video, los proyectos verticales muestran
+una tarjeta de **Revisión técnica del vertical**:
+
+| Qué mide | Por qué importa |
+|---|---|
+| Tamaño y proporción | Si no es vertical, YouTube no lo trata como Short |
+| Duración | Pasando de 3 minutos deja de ser Short; pasando de 60 segundos, una reclamación de música **bloquea el video en todo el mundo** (no lo desmoneta: lo bloquea) |
+| Sonoridad (LUFS) | Lo importante. Ver abajo |
+| Pico de sonido | Por encima del límite, se oye distorsión después de que YouTube recomprima |
+
+**Lo de la sonoridad conviene entenderlo, porque es el error más caro y el más
+barato de arreglar.** YouTube **baja** los videos que suenan demasiado alto,
+pero **no sube** los que suenan bajo. Si tu video sale apagado, sale apagado
+para siempre: sonará a la mitad de volumen que el anterior del feed, en un
+teléfono, con altavoz, probablemente en la calle. Y el espectador no piensa
+«esto está bajo»: desliza y se va.
+
+Antes el programa **suponía** que la mezcla acababa en el nivel correcto.
+Ahora lo **mide** en el archivo terminado y, si no está, lo corrige subiendo o
+bajando todo por igual (las pausas y los silencios de tu montaje quedan
+exactamente como estaban). Lo verás en el registro como
+«🔊 Sonoridad corregida».
+
+**El botón «Medir el archivo»** vuelve a medir cuando quieras. Es gratis: solo
+lee el archivo, no gasta ni un centavo ni llama a ninguna IA.
+
+**Lo que ninguna medición puede ver, y tienes que mirar tú:**
+
+- ¿Hay **texto en pantalla desde el primer fotograma**? La mayoría de la gente
+  ve los Shorts sin sonido: si tu gancho solo se oye, no existe.
+- ¿El final **cierra**, o corta en seco?
+- ¿La franja de abajo quedó libre?
+
+**Míralo en un teléfono de verdad**, no en el ordenador: la interfaz de la app
+cambia entre iPhone y Android, y solo ahí ves qué tapa qué.
+
+> 📐 **Si editas algo a mano en otro programa** (Premiere, DaVinci, CapCut),
+> tienes la guía en `assets\plantillas\PLANTILLA_ZonaSegura_1080x1920.png`:
+> arrástrala a una pista por encima del video, pon tu texto dentro del
+> rectángulo verde y **apaga esa pista antes de exportar**. Las instrucciones
+> están en `assets\plantillas\README.md`. Para lo que genera el programa no
+> hace falta: ya lo hace solo.
+
+---
+
+## 8.2 Sacar Shorts de un video largo
+
+Cuando tienes un video largo terminado, el programa puede leerlo entero y
+sacarle los Shorts que lleven gente a verlo.
+
+### Lo primero, porque casi todo el mundo se equivoca aquí
+
+**Un Short viral NO arrastra tu video largo.** YouTube usa dos sistemas de
+recomendación separados, uno para vídeo corto y otro para largo. Que un Short
+haga un millón de visitas no empuja nada hacia tu documental de diez minutos.
+
+Lo único que construye ese puente es el **enlace a video relacionado**: un
+enlace que aparece en el Short, debajo del nombre de tu canal, y que lleva al
+video largo. Lo pones tú, a mano, y **es gratis**. Un Short sin ese enlace es
+una vista regalada: entretiene a alguien y lo deja donde estaba.
+
+Todo lo que hace esta función está pensado alrededor de eso.
+
+### Cómo se hace
+
+1. Abre el **proyecto del video largo** y entra en la pestaña **Shorts**.
+2. Elige **cuántos** quieres (3 a 7) y pon la **fecha** en que publicas —o
+   publicaste— el video largo. De esa fecha sale el calendario.
+3. Pulsa **Proponer Shorts**. Tarda menos de un minuto y cuesta unos pocos
+   céntimos: es una sola consulta al director.
+4. Te salen las piezas propuestas. De cada una ves el guion completo, qué
+   texto va en pantalla y de qué minuto del video largo sale. **Desmarca las
+   que no te convenzan.**
+5. Pulsa **Crear los proyectos**. Se crean como borradores con el guion ya
+   escrito. **Todavía no se genera ningún video ni se gasta nada.**
+6. Abre cada uno y pulsa **Generar video** cuando quieras.
+
+> 💡 **También funciona con cualquier video de YouTube**, no solo con los
+> tuyos: pega el enlace en la casilla de abajo. Si el video tiene subtítulos,
+> el programa los lee con sus minutos y saca los Shorts igual, sin descargar
+> el video (que puede ser de horas).
+
+### Qué escribe exactamente
+
+Cada pieza sale con la estructura completa, no con un trozo recortado:
+
+| Bloque | Qué es |
+|---|---|
+| **Gancho** | La primera frase, dicha antes del medio segundo. Sin saludos ni «en este video te voy a explicar» |
+| **Texto en pantalla** | El mismo gancho, escrito, desde el primer fotograma. La mayoría ve los Shorts **sin sonido**: si tu gancho solo se oye, no existe |
+| **Promesa** | Qué se lleva quien se quede |
+| **Desarrollo** | **Una sola idea.** Si un momento tiene dos, son dos Shorts |
+| **Pago** | Se cumple lo prometido. Es el bloque que casi todos se saltan, y por el que luego no entienden por qué no reciben «me gusta»: el «me gusta» se decide justo ahí |
+| **Llamada a la acción** | Una sola, al final, **hacia tu video largo** — nunca «suscríbete» |
+| **Cierre de bucle** | La última frase enlaza con la primera. Los Shorts se repiten solos: así la gente lo ve dos veces sin darse cuenta |
+
+### Los ganchos se rotan, y no es por gusto
+
+El programa exige al director que use al menos **cuatro estructuras de gancho
+distintas** en cada tanda, y te avisa si no lo consigue. La razón no es
+estética: publicar siempre con la misma fórmula es exactamente lo que las
+normas de YouTube describen como **producción en masa**, y eso sí tiene
+consecuencias. Variar es la defensa.
+
+### El calendario
+
+Las piezas no salen todas de golpe. Cada una recibe un día alrededor del
+video largo (D0 = el día que publicas el largo):
+
+| Día | Función |
+|---|---|
+| **D−4** | Posicionamiento — por qué existe tu canal |
+| **D−2** | Promesa — una curiosidad que el video largo resolverá |
+| **D0** | Activación — pregunta directa, para que haya comentarios el día clave |
+| **D+2** | Profundización — el concepto central |
+| **D+4** | Emoción — la pieza con más carga |
+| **D+7** | Expansión — la que funciona fuera de tu tema: trae público nuevo |
+| **D+9** | Puente — enlaza con tu siguiente video largo |
+
+El orden va de lo general a lo específico a propósito: las piezas que
+necesitan contexto van **después** del video largo, cuando ese contexto ya
+existe para recibir el clic.
+
+**Publica tres o cuatro Shorts por semana, no a diario.** El riesgo del diario
+no es que YouTube te castigue el algoritmo: es que la calidad del gancho se
+degrada cuando el calendario aprieta, y que la cadencia diaria con plantilla
+fija es el patrón de producción en masa otra vez.
+
+### ⚠ El único paso que hay que hacer a mano
+
+**Poner el enlace al video largo.** No se puede hacer desde fuera de YouTube:
+no hay forma. Al subir cada Short:
+
+1. Entra en **YouTube Studio** → **Contenido**
+2. Haz clic en el Short
+3. Busca **Video relacionado** y elige tu video largo
+4. Guarda
+
+El programa te dice exactamente qué video enlazar: está en la pestaña
+**Shorts** de cada Short creado, junto con el título, la descripción y los
+hashtags que le tocan.
+
+> 💡 **Se puede añadir DESPUÉS de publicar**, y esto casi nadie lo aprovecha:
+> el feed de Shorts no caduca. Cuando saques un video largo nuevo, puedes
+> volver a tus Shorts antiguos —los que ya acumularon visitas— y reapuntarlos
+> al video nuevo. Tu catálogo de Shorts se convierte en algo que puedes
+> reutilizar en vez de en piezas de un solo uso.
+
+---
+
+### 8.3 Antes de publicar un vertical: la lista de comprobación
+
+Cuando un proyecto vertical tiene su video terminado, debajo de la revisión
+técnica aparece la tarjeta **«Antes de publicar»**. Es una lista con tres
+tipos de punto:
+
+| Marca | Qué significa |
+|---|---|
+| ✔ | La máquina lo comprobó y está bien |
+| ✖ | La máquina lo comprobó y está **mal** — arréglalo antes de subir |
+| ☐ | **Solo lo puedes mirar tú.** Son justo los que más se olvidan |
+
+Lo que se comprueba solo: la revisión técnica del archivo, que el título
+tenga entre 40 y 70 caracteres, que no lleve el hashtag de Shorts (no hace
+falta: YouTube clasifica solo por proporción y duración), que la descripción
+tenga 2-3 hashtags y enlace al video largo, que haya como mucho 5 tags y que
+el archivo de subtítulos esté generado.
+
+Lo que miras tú (los ☐): poner el **enlace a video relacionado** en Studio,
+que el gancho se entienda **con el sonido apagado**, declarar **contenido
+sintético** si aplica, y revisarlo **en un teléfono real**.
+
+La lista se actualiza sola: si cambias el título elegido en Metadatos, se
+recalcula.
+
+**Los metadatos de los verticales ya salen con las reglas del formato.** Y si
+el Short salió de un video largo (apartado 8.2), el título y la descripción
+que decidió el plan editorial aparecen como primera opción — el resto son
+variantes.
+
+**Al publicar desde el programa** (con `publish.enabled` activado), además:
+el archivo de subtítulos se sube aparte automáticamente, y si la miniatura de
+Short todavía no está disponible en tu canal (YouTube la está desplegando
+poco a poco), se avisa sin estropear nada: el video ya queda subido.
+
+> 🔑 **Un aviso sobre permisos.** Para subir los subtítulos hizo falta pedir
+> un permiso más en la autorización de Google. Si publicas con una
+> autorización antigua y los subtítulos fallan, el arreglo es: borra el
+> archivo `token.json` de la carpeta del programa y vuelve a publicar (te
+> pedirá autorizar de nuevo, una sola vez). El video y la miniatura suben
+> igual que siempre aunque no lo hagas.
 
 ---
 

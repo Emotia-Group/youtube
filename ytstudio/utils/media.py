@@ -419,3 +419,60 @@ def extract_frames(video: Path, out_dir: Path, count: int = 6) -> list[Path]:
                     "-q:v", "3", str(frame)], "extraer fotograma")
         frames.append(frame)
     return frames
+
+
+def measure_loudness(path: Path) -> dict | None:
+    """SONORIDAD MEDIDA del archivo: integrada (LUFS), pico real (dBTP) y
+    rango (LU). None si no se puede medir.
+
+    Por qué se mide y no se estima: un decibelio es un pico instantáneo, no
+    volumen percibido. Dos archivos pueden picar los dos en -1 dB y sonar uno
+    al doble que el otro. Lo que las plataformas normalizan es la SONORIDAD
+    (LUFS), así que es lo único que sirve para saber si un vídeo va a sonar
+    igual de alto que el anterior del feed."""
+    from ytstudio.shorts import loudness
+    return loudness(path)
+
+
+def normalize_loudness(path: Path, target_i: float = -14.0,
+                       target_tp: float = -1.0, *,
+                       tolerance: float = 0.5) -> dict | None:
+    """Lleva el archivo a `target_i` LUFS con una ganancia CONSTANTE y un
+    limitador de picos. Devuelve {'before', 'after', 'gain_db'} o None si no
+    hizo falta tocar nada.
+
+    GANANCIA CONSTANTE, a propósito: el filtro loudnorm de una pasada hace
+    normalización DINÁMICA — reacciona a las caídas de volumen (una pausa
+    dramática de la voz, un silencio de la música) subiendo la ganancia y
+    frenándola en seco, y hunde la mezcla entera justo en esa escena. Esa fue
+    una avería real de este programa. Aquí se MIDE el archivo, se calcula la
+    diferencia contra el objetivo y se aplica esa misma diferencia a todo por
+    igual: la dinámica de la mezcla queda intacta, milímetro a milímetro.
+
+    El vídeo no se recodifica (-c:v copy): solo se rehace la pista de audio."""
+    before = measure_loudness(path)
+    if not before or before.get("input_i") is None:
+        return None
+    cur = before["input_i"]
+    if cur <= -70:            # silencio: no hay nada que normalizar
+        return None
+    gain = target_i - cur
+    if abs(gain) < tolerance:
+        return {"before": before, "after": before, "gain_db": 0.0}
+
+    limit = 10 ** (target_tp / 20.0)      # -1,0 dBTP -> 0.891 lineal
+    tmp = path.with_name(path.stem + "_lufs.mp4")
+    run_ffmpeg(["-i", str(path), "-c:v", "copy",
+                # level=disabled es OBLIGATORIO: por defecto alimiter
+                # «autonivela» multiplicando la salida por 1/limit, así que
+                # limit=0.891 sube el resultado +1 dB y deja el techo real en
+                # 0 dBFS. Medido en este repositorio. Con level=disabled el
+                # limitador es transparente si no llega a actuar, que es lo
+                # único que queremos aquí.
+                "-af", f"volume={gain:.2f}dB,"
+                       f"alimiter=limit={limit:.4f}:level=disabled",
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+                "-movflags", "+faststart", str(tmp)], "normalizar sonoridad")
+    os.replace(tmp, path)
+    return {"before": before, "after": measure_loudness(path),
+            "gain_db": round(gain, 2)}

@@ -202,6 +202,12 @@ def run(project, cfg) -> None:
     font = sub_cfg.get("font", "Arial")
     size = sub_cfg.get("font_size", 54)
     w, h = cfg["video"]["width"], cfg["video"]["height"]
+    # ZONA SEGURA: en vertical 9:16 los subtítulos SUBEN por encima de la
+    # franja inferior que la app reserva al handle del canal y al ENLACE A
+    # VÍDEO RELACIONADO. Quemarlos ahí (que es donde los pone por defecto
+    # casi cualquier editor) tapa el único enlace que lleva al vídeo largo.
+    from ytstudio.shorts import subtitle_margins
+    ml, mr, mv = subtitle_margins(cfg)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -209,7 +215,7 @@ PlayResY: {h}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font},{size},&H00FFFFFF,&H00FFFFFF,&H00101010,&H96000000,-1,0,0,0,100,100,0,0,1,3,1,2,80,80,60,1
+Style: Default,{font},{size},&H00FFFFFF,&H00FFFFFF,&H00101010,&H96000000,-1,0,0,0,100,100,0,0,1,3,1,2,{ml},{mr},{mv},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -221,3 +227,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ]
     project.path("subtitles", "subtitulos.ass").write_text(header + "\n".join(events) + "\n", encoding="utf-8")
     project.set("subtitle_cues", len(cues))
+    # Se guardan los márgenes usados para que la AUDITORÍA pueda comprobar,
+    # sin mirar píxeles, que la franja del enlace quedó libre.
+    project.set("subtitle_margins", {"l": ml, "r": mr, "v": mv,
+                                     "font_size": size})
