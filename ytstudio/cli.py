@@ -7,6 +7,7 @@ Uso típico:
   python -m ytstudio run mi-video --to script    # pausa para revisar el guion
   python -m ytstudio run mi-video --from scenes  # re-ejecuta desde una fase
   python -m ytstudio status mi-video
+  python -m ytstudio auditar C:\\videos\\shorts   # medir verticales ya hechos
 """
 from __future__ import annotations
 
@@ -85,6 +86,32 @@ def cmd_phases(args) -> None:
         print(f"  {i:>2}. {name:<10} {desc}")
 
 
+def cmd_auditar(args) -> None:
+    """Mide vídeos verticales YA producidos (los del programa o los que
+    vengan de fuera) contra las especificaciones de publicación."""
+    import shutil as _shutil
+
+    from ytstudio import shorts
+
+    for tool in ("ffprobe", "ffmpeg"):
+        if not _shutil.which(tool):
+            sys.exit(f"No se encuentra '{tool}'. Instálalo desde "
+                     "https://ffmpeg.org/download.html")
+
+    rutas = list(args.ruta)
+    # Sin ruta: se audita el video final de los proyectos indicados por nombre
+    if not rutas:
+        sys.exit("Indica una carpeta o uno o más archivos de video.")
+    resultados = shorts.audit_paths(rutas)
+    if not resultados:
+        sys.exit("No se encontraron archivos de video en esa ruta.")
+    if args.json:
+        import json as _json
+        print(_json.dumps(resultados, indent=2, ensure_ascii=False))
+        return
+    print("\n".join(shorts.report_lines(resultados)))
+
+
 def cmd_ui(args) -> None:
     from ytstudio.webui.server import serve
     serve(port=args.port, open_browser=not args.no_browser)
@@ -130,6 +157,15 @@ def main() -> None:
 
     p_phases = sub.add_parser("phases", help="Listar las fases del pipeline")
     p_phases.set_defaults(func=cmd_phases)
+
+    p_aud = sub.add_parser(
+        "auditar", help="Medir videos verticales contra las especificaciones "
+                        "de publicación (resolución, códecs, duración, sonoridad)")
+    p_aud.add_argument("ruta", nargs="*",
+                       help="Carpeta con videos, o uno o varios archivos")
+    p_aud.add_argument("--json", action="store_true",
+                       help="Salida en JSON en vez del informe legible")
+    p_aud.set_defaults(func=cmd_auditar)
 
     p_ui = sub.add_parser("ui", help="Abrir la interfaz web local")
     p_ui.add_argument("--port", type=int, default=8765)

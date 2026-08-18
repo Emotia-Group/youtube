@@ -1390,8 +1390,13 @@ def run(project, cfg) -> None:
     # estable (~−14 LUFS, apta para YouTube) SIN tocar la dinámica de la voz.
     final_gain = float(cfg["audio"].get("final_gain_db", 1.0))
     tp_limit = float(cfg["audio"].get("final_limit", 0.9))
+    # level=disabled en el limitador: por defecto alimiter «autonivela»
+    # multiplicando la salida por 1/limit, de modo que limit=0.9 subía la
+    # mezcla +0,9 dB y dejaba el techo REAL en 0 dBFS en vez de en -0,9 —
+    # justo el pico que la plataforma distorsiona al recomprimir. Medido.
     afilters.append(f"{mix_in}amix=inputs={n_mix}:duration=first:normalize=0,"
-                    f"volume={final_gain}dB,alimiter=limit={tp_limit}{fade}[aout]")
+                    f"volume={final_gain}dB,"
+                    f"alimiter=limit={tp_limit}:level=disabled{fade}[aout]")
 
     output = final_dir / "video_final.mp4"
     graph = list(afilters)
@@ -1420,6 +1425,15 @@ def run(project, cfg) -> None:
                 "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}",
                 "-movflags", "+faststart",
                 str(output)], "mezcla final")
+
+    # SONORIDAD MEDIDA (no estimada): se mide el archivo terminado y, si no
+    # cae en el objetivo, se corrige con una ganancia CONSTANTE. Hasta ahora
+    # se aplicaba una ganancia fija «a ciegas» (+1 dB) confiando en que la
+    # suma diera ~-14 LUFS; con música, ambiente y efectos variando de video
+    # a video, esa cuenta no siempre salía. Y el error importa: la plataforma
+    # BAJA lo que suena alto pero NO SUBE lo que suena bajo, así que un video
+    # apagado suena apagado para siempre.
+    _normalize_final_loudness(project, cfg, output)
 
     # AUTOCOMPROBACIÓN FINAL: el video terminado debe durar lo que el cuerpo.
     # SIEMPRE se registra el diagnóstico por stream en el 🧾 Log de eventos —
@@ -1467,7 +1481,95 @@ def run(project, cfg) -> None:
         _measure_content_sync(project, tl_path)
     except Exception:
         pass
+    # AUDITORÍA de vídeo vertical: mide el archivo entregado contra las
+    # especificaciones de publicación de Shorts y deja los avisos a la vista.
+    try:
+        _audit_vertical(project, cfg, output)
+    except Exception:
+        pass
+
     project.set("final_video", str(output))
+
+
+def _normalize_final_loudness(project, cfg, output: Path) -> None:
+    """Mide el video terminado y lo lleva al objetivo de sonoridad.
+
+    `audio.target_lufs: 0` desactiva el paso (vuelve al comportamiento
+    anterior a la v0.63.0: la ganancia fija de la mezcla y nada más)."""
+    from ytstudio import eventlog
+    from ytstudio.progress import notify
+    from ytstudio.utils.media import normalize_loudness
+    slug = getattr(project, "slug", None)
+    target = float((cfg.get("audio") or {}).get("target_lufs", -14.0) or 0)
+    if not target:
+        return
+    tp = float((cfg.get("audio") or {}).get("target_tp", -1.0))
+    try:
+        res = normalize_loudness(output, target_i=target, target_tp=tp)
+    except Exception as e:
+        eventlog.log("warn", f"No se pudo medir/normalizar la sonoridad: {e}",
+                     project=slug, phase="assembly")
+        return
+    if not res:
+        return
+    before = (res.get("before") or {}).get("input_i")
+    after = (res.get("after") or {}).get("input_i")
+    peak = (res.get("after") or {}).get("input_tp")
+    project.set("loudness", {"lufs": after, "tp": peak,
+                             "gain_db": res.get("gain_db")})
+    if res.get("gain_db"):
+        notify(f"🔊 Sonoridad corregida: {before:.1f} → {after:.1f} LUFS "
+               f"({res['gain_db']:+.1f} dB de ganancia constante).")
+    eventlog.log("info",
+                 f"Sonoridad del video final: {after:.1f} LUFS · "
+                 f"pico real {peak if peak is None else f'{peak:.1f}'} dBTP "
+                 f"(objetivo {target:.0f} LUFS / {tp:.1f} dBTP; corrección "
+                 f"aplicada {res.get('gain_db', 0):+.1f} dB).",
+                 project=slug, phase="assembly")
+
+
+def _audit_vertical(project, cfg, output: Path) -> None:
+    """Comprobaciones que solo aplican al vídeo vertical corto: si el archivo
+    entregado cumple lo que el feed exige, y si algo va a costar dinero o
+    alcance al publicarlo."""
+    from ytstudio import eventlog, shorts
+    if not shorts.is_shorts_frame(cfg):
+        return
+    slug = getattr(project, "slug", None)
+    result = shorts.audit_file(output)
+    project.set("shorts_audit", result)
+    for line in shorts.report_lines([result]):
+        eventlog.log("info", line, project=slug, phase="assembly")
+    for msg in result["problemas"]:
+        project.add_warning(msg)
+
+    # REGLA DURA DE LOS 60 SEGUNDOS: en un Short de más de un minuto, una
+    # reclamación de copyright de cualquier tipo no desmoneta — BLOQUEA el
+    # vídeo en todo el mundo. Con música que no es tuya ni de la biblioteca
+    # de la plataforma, eso deja de ser teórico.
+    dur = (result.get("info") or {}).get("duration") or 0
+    music = (cfg.get("providers") or {}).get("music") or {}
+    if dur > 60 and music.get("name") not in (None, "", "none", "mock"):
+        project.add_warning(
+            f"Este vertical dura {dur:.0f}s (más de 60) y lleva música. En un "
+            "Short de más de un minuto, UNA reclamación de copyright de "
+            "cualquier tipo bloquea el vídeo en todo el mundo — no lo "
+            "desmoneta, lo bloquea. Déjalo por debajo de 60 s o quita la "
+            "música (con locución sola, además, te queda el 100% del "
+            "reparto en vez de prorratearlo con la licencia musical).")
+
+    # La franja inferior tiene que quedar libre para el enlace a vídeo
+    # relacionado: es el único mecanismo por el que una vista de Short se
+    # convierte en un clic al vídeo largo.
+    margins = shorts.safe_margins(cfg)
+    used = project.get("subtitle_margins") or {}
+    if (margins and cfg["video"].get("burn_subtitles")
+            and used.get("v") is not None and used["v"] < margins["bottom"]):
+        project.add_warning(
+            f"Los subtítulos quemados están a {used['v']} px del borde "
+            f"inferior y la franja reservada al enlace a vídeo relacionado "
+            f"ocupa {margins['bottom']} px. Tapan el enlace que lleva a tu "
+            "vídeo largo. Pon «subtitles.safe_zone: true» en los ajustes.")
 
 
 def _measure_content_sync(project, tl_path: Path) -> None:

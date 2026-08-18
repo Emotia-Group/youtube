@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.62.1 -->
+<!-- MANUAL_VERSION: 0.63.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -716,6 +716,68 @@ archivo de subtítulos, y pega el título y la descripción que elegiste.
 (Existe una subida automática opcional: se activa poniendo `publish.enabled`
 en verdadero y requiere las credenciales de Google del capítulo 18.1. Por
 defecto está apagada.)
+
+---
+
+### 8.1 Los verticales llevan una revisión técnica aparte
+
+Un Short, un Reel o un TikTok no se ven en una pantalla limpia: **la app dibuja
+su interfaz ENCIMA de tu video**. Arriba el título, a la derecha la columna de
+botones (me gusta, comentarios, compartir) y abajo el nombre de tu canal y el
+**enlace al video largo**. Ese enlace es lo único que convierte a alguien que
+ve un Short en alguien que ve tu video de diez minutos.
+
+Al rectángulo del centro que sí es tuyo se le llama **zona segura** (el
+espacio donde ningún botón de la app te va a tapar el texto). Por eso el
+programa ahora trata la franja de abajo como terreno prohibido:
+
+- **Los subtítulos de los verticales suben.** Antes se quemaban pegados al
+  borde inferior, justo encima del enlace: lo tapaban. Ahora se colocan por
+  encima de esa franja, sin que tengas que hacer nada.
+- **En los videos horizontales no cambia nada.** Ahí no hay interfaz encima.
+
+En la pestaña **Corrida**, debajo del video, los proyectos verticales muestran
+una tarjeta de **Revisión técnica del vertical**:
+
+| Qué mide | Por qué importa |
+|---|---|
+| Tamaño y proporción | Si no es vertical, YouTube no lo trata como Short |
+| Duración | Pasando de 3 minutos deja de ser Short; pasando de 60 segundos, una reclamación de música **bloquea el video en todo el mundo** (no lo desmoneta: lo bloquea) |
+| Sonoridad (LUFS) | Lo importante. Ver abajo |
+| Pico de sonido | Por encima del límite, se oye distorsión después de que YouTube recomprima |
+
+**Lo de la sonoridad conviene entenderlo, porque es el error más caro y el más
+barato de arreglar.** YouTube **baja** los videos que suenan demasiado alto,
+pero **no sube** los que suenan bajo. Si tu video sale apagado, sale apagado
+para siempre: sonará a la mitad de volumen que el anterior del feed, en un
+teléfono, con altavoz, probablemente en la calle. Y el espectador no piensa
+«esto está bajo»: desliza y se va.
+
+Antes el programa **suponía** que la mezcla acababa en el nivel correcto.
+Ahora lo **mide** en el archivo terminado y, si no está, lo corrige subiendo o
+bajando todo por igual (las pausas y los silencios de tu montaje quedan
+exactamente como estaban). Lo verás en el registro como
+«🔊 Sonoridad corregida».
+
+**El botón «Medir el archivo»** vuelve a medir cuando quieras. Es gratis: solo
+lee el archivo, no gasta ni un centavo ni llama a ninguna IA.
+
+**Lo que ninguna medición puede ver, y tienes que mirar tú:**
+
+- ¿Hay **texto en pantalla desde el primer fotograma**? La mayoría de la gente
+  ve los Shorts sin sonido: si tu gancho solo se oye, no existe.
+- ¿El final **cierra**, o corta en seco?
+- ¿La franja de abajo quedó libre?
+
+**Míralo en un teléfono de verdad**, no en el ordenador: la interfaz de la app
+cambia entre iPhone y Android, y solo ahí ves qué tapa qué.
+
+> 📐 **Si editas algo a mano en otro programa** (Premiere, DaVinci, CapCut),
+> tienes la guía en `assets\plantillas\PLANTILLA_ZonaSegura_1080x1920.png`:
+> arrástrala a una pista por encima del video, pon tu texto dentro del
+> rectángulo verde y **apaga esa pista antes de exportar**. Las instrucciones
+> están en `assets\plantillas\README.md`. Para lo que genera el programa no
+> hace falta: ya lo hace solo.
 
 ---
 

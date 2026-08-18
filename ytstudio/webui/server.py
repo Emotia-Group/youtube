@@ -587,7 +587,23 @@ def api_project_detail(slug: str) -> dict:
     detail["format"] = project.get("format") or "long"
     detail["short_template"] = project.get("short_template")
     detail["video_aspect"] = _project_aspect(project)
+    detail["shorts_audit"] = project.get("shorts_audit")
+    detail["loudness"] = project.get("loudness")
     return detail
+
+
+def api_audit_project(slug: str) -> dict:
+    """Vuelve a MEDIR el video final del proyecto contra las especificaciones
+    de publicación de vídeo vertical. Es gratis: solo lee el archivo."""
+    from ytstudio import shorts
+    project = Project(slug)
+    final = project.dir / DIRS["final"] / "video_final.mp4"
+    if not final.exists():
+        raise ApiError(409, "Todavía no hay video final que medir: genera "
+                            "primero hasta el Montaje.")
+    result = shorts.audit_file(final)
+    project.set("shorts_audit", result)
+    return {"resultado": result, "informe": shorts.report_lines([result])}
 
 
 def _scene_or_404(project, scene_id: int) -> dict:
@@ -1363,6 +1379,8 @@ class Handler(BaseHTTPRequestHandler):
                                                   self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/assets", path):
                 self._json(api_add_assets(m.group(1), self._body()))
+            elif m := re.fullmatch(r"/api/projects/([\w-]+)/audit", path):
+                self._json(api_audit_project(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/save-style", path):
                 self._json(api_save_style_from_project(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/metadata/select", path):

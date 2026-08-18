@@ -476,6 +476,32 @@ function aspectOf(p){
   const a=p.video_aspect||{w:1920,h:1080};
   return {w:a.w,h:a.h,vert:a.h>a.w,short:(p.format||'long')!=='long'};
 }
+// REVISIÓN TÉCNICA del video vertical: lo que se puede MEDIR del archivo
+// terminado (resolución, códecs, duración y sonoridad) contra lo que el feed
+// de Shorts exige. Solo en proyectos verticales: son los únicos a los que la
+// app les dibuja su interfaz encima del video.
+function auditoriaHtml(r){
+  if(!r)return '<div class="muted">Todavía sin medir. Pulsa «Medir el archivo».</div>';
+  const i=r.info||{},s=r.sonoridad||{};
+  const ficha=[i.duration?`${i.duration.toFixed(1)}s`:null,
+    i.width?`${i.width}×${i.height}`:null,i.fps?`${i.fps}fps`:null,i.vcodec,
+    s.input_i!=null?`${s.input_i.toFixed(1)} LUFS`:null,
+    s.input_tp!=null?`${s.input_tp.toFixed(1)} dBTP`:null].filter(Boolean);
+  let h=`<div class="muted" style="font-size:12px">${esc(ficha.join('  ·  '))}</div>`;
+  (r.problemas||[]).forEach(m=>{h+=`<div style="margin-top:8px;line-height:1.6;color:var(--accent)">Problema — ${esc(m)}</div>`});
+  (r.avisos||[]).forEach(m=>{h+=`<div style="margin-top:8px;line-height:1.6">Aviso — ${esc(m)}</div>`});
+  if(!(r.problemas||[]).length&&!(r.avisos||[]).length)
+    h+='<div style="margin-top:8px">Cumple todas las especificaciones que se pueden medir.</div>';
+  h+='<div class="muted" style="margin-top:10px;line-height:1.6">Lo que ninguna medición ve, míralo tú: que haya texto en pantalla desde el primer fotograma (el gancho tiene que entenderse con el sonido apagado), que el cierre no corte en seco, y que la franja de abajo quede libre para el enlace al video largo.</div>';
+  return h;
+}
+function revisionTecnicaHtml(p){
+  if(!aspectOf(p).vert)return '';
+  return `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Revisión técnica del vertical</h3>
+      <button id="btn-auditar" class="btn">Medir el archivo</button></div>
+    <div id="caja-auditoria" style="margin-top:10px">${auditoriaHtml(p.shorts_audit)}</div></div>`;
+}
 function thumbStyle(p,base){
   const a=aspectOf(p);
   const wpx=a.vert?120:(a.w===a.h?170:base||240);
@@ -694,7 +720,15 @@ async function renderTab(tab,p){
       <br><div class="muted">Archivos: <a href="/files/${current}/${p.final_video}" download>video_final.mp4</a> ·
         <a href="/files/${current}/08_subtitles/subtitulos.srt" download>subtitulos.srt</a> ·
         ${p.thumbnail?`<a href="/files/${current}/${p.thumbnail}" download>miniatura.jpg</a>`:''}</div>
-    </div>`;
+    </div>${revisionTecnicaHtml(p)}`;
+    const btn=el.querySelector('#btn-auditar');
+    if(btn)btn.onclick=async()=>{
+      btn.disabled=true;btn.textContent='Midiendo…';
+      try{const r=await api(`/api/projects/${current}/audit`,{method:'POST',body:'{}'});
+        document.getElementById('caja-auditoria').innerHTML=auditoriaHtml(r.resultado);}
+      catch(e){alert(e.message)}
+      btn.disabled=false;btn.textContent='Medir el archivo';
+    };
   }
   else if(tab==='Archivos'){
     const catLabel={guion:'📄 Guion',voz:'🎙 Voz',broll:'🎬 B-roll propio',referencia:'🎨 Referencia',personaje:'🧑 Personaje',reaccion:'🎭 Reacción'};

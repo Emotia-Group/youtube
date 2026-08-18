@@ -9,6 +9,51 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.63.0 — 2026-08-18
+Los videos verticales ya no tapan su propio enlace al video largo, y la
+sonoridad deja de estimarse: se **mide** en el archivo terminado.
+
+- 📱 LOS SUBTÍTULOS DE LOS VERTICALES YA NO TAPAN EL ENLACE. En un Short, la
+  app dibuja su interfaz encima del video: abajo van el nombre del canal y el
+  ENLACE AL VIDEO LARGO — el único mecanismo por el que alguien que ve un
+  Short acaba viendo tu video de diez minutos. Los subtítulos quemados se
+  colocaban a 60 px del borde, justo encima. Ahora suben por encima de esa
+  franja (430 px en 1080×1920) y respetan también el aire lateral. En
+  horizontal no cambia nada: ahí no hay interfaz encima. Se puede volver al
+  comportamiento anterior con `subtitles.safe_zone: false`.
+- 🔊 LA SONORIDAD SE MIDE, NO SE SUPONE. Hasta ahora se aplicaba una ganancia
+  fija de +1 dB confiando en que la mezcla acabara cerca de −14 LUFS; con la
+  música, el ambiente y los efectos variando de video a video, esa cuenta no
+  siempre salía. Ahora se mide el archivo terminado y, si no cae en el
+  objetivo, se corrige con una ganancia CONSTANTE — las pausas y los
+  silencios del montaje quedan intactos, que era justo lo que rompía el
+  loudnorm dinámico. Importa porque YouTube BAJA lo que suena alto pero NO
+  SUBE lo que suena bajo: un video apagado suena apagado para siempre, y el
+  espectador no piensa «está bajo», desliza.
+- 🐞 EL LIMITADOR DE PICOS SUBÍA EL VOLUMEN POR SU CUENTA. Fallo de fondo,
+  medido en este repositorio: el filtro `alimiter` «autonivela» por defecto,
+  así que pedirle un techo de 0.9 multiplicaba toda la mezcla por 1/0.9
+  (+0,9 dB) y dejaba el techo REAL en 0 dBFS en lugar de −0,9 — exactamente
+  el pico que se distorsiona cuando YouTube recomprime. Afectaba a TODOS los
+  videos, no solo a los verticales.
+- 🔍 REVISIÓN TÉCNICA DEL VERTICAL, en las dos interfaces. Debajo del video,
+  los proyectos verticales muestran lo que se puede medir del archivo
+  entregado —tamaño, códec, fps, duración, sonoridad y pico— con los avisos
+  en lenguaje llano y un botón «Medir el archivo» para repetirlo cuando
+  quieras. Es gratis: solo lee el archivo.
+- ⏱ AVISO DE LA REGLA DE LOS 60 SEGUNDOS. En un Short de más de un minuto,
+  UNA reclamación de copyright de cualquier tipo no desmoneta: **bloquea el
+  video en todo el mundo**. Si un vertical pasa de 60 s y lleva música, ahora
+  se avisa antes de que lo subas.
+- 🖥 «python -m ytstudio auditar CARPETA» mide verticales ya producidos,
+  vengan de este programa o de fuera. Con `--json` para automatizar.
+- 📐 PLANTILLA DE ZONA SEGURA incluida en `assets/plantillas/`, para cuando
+  edites algo a mano en otro programa: se arrastra a una pista encima del
+  video y marca dónde SÍ puede ir el texto. Con sus instrucciones al lado.
+- 📐 El texto de los subtítulos verticales pasa de 88 a 80 px para que las
+  líneas quepan enteras en los 900 px útiles: al subir el margen lateral, con
+  88 px una línea larga se partía y aparecía una tercera fila.
+
 ## v0.62.1 — 2026-08-17
 Arreglo de la batería de pruebas en Windows: `probar.bat` salía en rojo con el
 programa perfectamente sano.

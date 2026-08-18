@@ -406,7 +406,7 @@ FORMATS: dict = {
         "overrides": {
             "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
                       "target_minutes": 0.9, "burn_subtitles": True},
-            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+            "subtitles": {"font_size": 80, "max_chars_per_line": 20,
                           "max_lines": 2},
             "providers": {"images": {"size": "1024x1536"}},
         },
@@ -417,7 +417,7 @@ FORMATS: dict = {
         "overrides": {
             "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
                       "target_minutes": 1.4, "burn_subtitles": True},
-            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+            "subtitles": {"font_size": 80, "max_chars_per_line": 20,
                           "max_lines": 2},
             "providers": {"images": {"size": "1024x1536"}},
         },
@@ -428,7 +428,7 @@ FORMATS: dict = {
         "overrides": {
             "video": {"width": 1080, "height": 1920, "scene_seconds": 3,
                       "target_minutes": 1.0, "burn_subtitles": True},
-            "subtitles": {"font_size": 88, "max_chars_per_line": 20,
+            "subtitles": {"font_size": 80, "max_chars_per_line": 20,
                           "max_lines": 2},
             "providers": {"images": {"size": "1024x1536"}},
         },

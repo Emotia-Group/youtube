@@ -646,7 +646,8 @@ function viewCorrida() {
         el('span', { class: 'mono muted' }, d.total_duration ? fmtSec(d.total_duration) : '—')),
       d.thumbnail ? el('div', { style: 'margin-top:20px' },
         el('div', { class: 'kicker', style: 'margin-bottom:8px' }, 'Miniatura'),
-        el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null),
+        el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null,
+      revisionTecnica(d)),
     el('aside', { class: 'rail' },
       el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between' },
         el('h2', { style: 'font-size:18px' }, 'Atención'),
@@ -661,6 +662,47 @@ function viewCorrida() {
           el('span', { style: 'font-family:var(--heading);font-size:20px;color:var(--a700)' }, money(total)))
         : el('div', { class: 'muted', style: 'font-size:13px' }, 'Se calcula al terminar cada fase.'),
       d.time_report ? el('div', { class: 'mono muted', style: 'margin-top:8px' }, `tiempo total ${fmtSec(d.time_report.total_seconds || d.time_report.total || null)}`) : null));
+}
+
+// REVISIÓN TÉCNICA del video vertical: lo que se puede MEDIR del archivo
+// terminado (resolución, códecs, duración y sonoridad) contra lo que el feed
+// de Shorts exige. Solo aparece en proyectos verticales, que son los únicos a
+// los que la app les dibuja su interfaz encima.
+function revisionTecnica(d) {
+  if (!aspectOf(d).vert || !d.final_video) return null;
+  const a = d.shorts_audit;
+  const caja = el('div', { style: 'margin-top:12px' });
+  const pintar = r => {
+    caja.textContent = '';
+    if (!r) { caja.append(el('div', { class: 'muted', style: 'font-size:13px' },
+      'Todavía sin medir. Pulsa «Medir el archivo» para comprobarlo.')); return; }
+    const i = r.info || {}, s = r.sonoridad || {};
+    const ficha = [i.duration ? `${i.duration.toFixed(1)}s` : null,
+      i.width ? `${i.width}×${i.height}` : null, i.fps ? `${i.fps}fps` : null,
+      i.vcodec, s.input_i != null ? `${s.input_i.toFixed(1)} LUFS` : null,
+      s.input_tp != null ? `${s.input_tp.toFixed(1)} dBTP` : null].filter(Boolean);
+    caja.append(el('div', { class: 'mono muted', style: 'font-size:12px' }, ficha.join('  ·  ')));
+    (r.problemas || []).forEach(m => caja.append(el('div',
+      { style: 'font-size:13px;line-height:1.6;margin-top:8px;color:var(--a700)' }, `Problema — ${m}`)));
+    (r.avisos || []).forEach(m => caja.append(el('div',
+      { style: 'font-size:13px;line-height:1.6;margin-top:8px' }, `Aviso — ${m}`)));
+    if (!(r.problemas || []).length && !(r.avisos || []).length)
+      caja.append(el('div', { style: 'font-size:13px;margin-top:8px' },
+        'Cumple todas las especificaciones que se pueden medir.'));
+    caja.append(el('div', { class: 'muted', style: 'font-size:12px;line-height:1.6;margin-top:10px' },
+      'Lo que ninguna medición ve, míralo tú: que haya texto en pantalla desde el primer fotograma (el gancho tiene que entenderse con el sonido apagado), que el cierre no corte en seco, y que la franja de abajo quede libre para el enlace al video largo.'));
+  };
+  pintar(a);
+  const boton = el('button', { class: 'btn btn-sm', onclick: async () => {
+    boton.disabled = true; boton.textContent = 'Midiendo…';
+    try { const r = await api(`/api/projects/${S.slug}/audit`, { method: 'POST', body: '{}' }); pintar(r.resultado); }
+    catch (e) { alert(e.message); }
+    boton.disabled = false; boton.textContent = 'Medir el archivo';
+  } }, 'Medir el archivo');
+  return el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
+    el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:12px' },
+      el('div', { class: 'kicker' }, 'Revisión técnica del vertical'), boton),
+    caja);
 }
 
 async function runFrom(from, to) {
