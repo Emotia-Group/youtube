@@ -1459,11 +1459,33 @@ class Handler(BaseHTTPRequestHandler):
         """Sirve un archivo del BANCO DE ELEMENTOS para la vista previa."""
         from ytstudio.utils.elements import BANK_DIR
         base = BANK_DIR.resolve()
-        target = (base / category / urllib.parse.unquote(name)).resolve()
+        target = (base / category / name).resolve()
         if not str(target).startswith(str(base)):
             self._json({"error": "Ruta inválida"}, 403)
             return
         self._serve_file(target)
+
+    def _ruta(self) -> str:
+        """La ruta pedida, YA DESCODIFICADA.
+
+        POR QUÉ ESTO EXISTE: un proyecto llamado «conservó-la-fortuna» viaja
+        del navegador al servidor como «conserv%C3%B3-la-fortuna» — el
+        navegador codifica los acentos, siempre. Las rutas del servidor se
+        comparaban contra el texto SIN descodificar, así que ninguna casaba y
+        cualquier proyecto con tilde o eñe respondía «No encontrado» al
+        abrirlo. Descodificar aquí, una sola vez, lo arregla para todas.
+
+        Servir archivos sigue siendo seguro: las tres funciones que lo hacen
+        resuelven la ruta y comprueban que caiga DENTRO de su carpeta."""
+        return urllib.parse.unquote(self.path.split("?")[0])
+
+    def _no_encontrado(self) -> None:
+        """404 que deja rastro. Un 404 no es una excepción, así que no pasaba
+        por el manejador de errores y el registro no se enteraba: justo el
+        aviso que habría señalado el fallo de los acentos a la primera."""
+        _log_derive("warn", f"Dirección no reconocida: {self.command} "
+                            f"{self._ruta()}")
+        self._json({"error": "No encontrado"}, 404)
 
     def log_message(self, fmt, *args):  # silenciar el log por request
         pass
@@ -1471,7 +1493,7 @@ class Handler(BaseHTTPRequestHandler):
     # --- rutas ---
     def do_GET(self):
         try:
-            path = self.path.split("?")[0]
+            path = self._ruta()
             query = parse_qs(urlparse(self.path).query)
             if path in ("/", "/index.html"):
                 # La PLANTILLA elegida decide qué interfaz se sirve. Las dos
@@ -1517,7 +1539,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/files/([\w-]+)/(.+)", path):
                 self._project_file(m.group(1), m.group(2))
             else:
-                self._json({"error": "No encontrado"}, 404)
+                self._no_encontrado()
         except ApiError as e:
             self._json({"error": e.message}, e.status)
         except Exception as e:
@@ -1530,7 +1552,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            path = self.path.split("?")[0]
+            path = self._ruta()
             if path == "/api/projects":
                 self._json(api_create_project(self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/run", path):
@@ -1567,7 +1589,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
                 self._json(api_style_update(m.group(1), self._body()))
             else:
-                self._json({"error": "No encontrado"}, 404)
+                self._no_encontrado()
         except ApiError as e:
             self._json({"error": e.message}, e.status)
         except Exception as e:
@@ -1580,7 +1602,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         try:
-            path = self.path.split("?")[0]
+            path = self._ruta()
             if path == "/api/config":
                 self._json(api_save_config(self._body()))
             elif path == "/api/keys":
@@ -1600,7 +1622,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):
                 self._json(api_character_update(m.group(1), m.group(2), self._body()))
             else:
-                self._json({"error": "No encontrado"}, 404)
+                self._no_encontrado()
         except ApiError as e:
             self._json({"error": e.message}, e.status)
         except Exception as e:
@@ -1613,7 +1635,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         try:
-            path = self.path.split("?")[0]
+            path = self._ruta()
             if m := re.fullmatch(r"/api/projects/([\w-]+)/assets/(\d+)", path):
                 self._json(api_delete_asset(m.group(1), int(m.group(2))))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):
@@ -1629,7 +1651,7 @@ class Handler(BaseHTTPRequestHandler):
             elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
                 self._json(api_delete_project(m.group(1)))
             else:
-                self._json({"error": "No encontrado"}, 404)
+                self._no_encontrado()
         except ApiError as e:
             self._json({"error": e.message}, e.status)
         except Exception as e:

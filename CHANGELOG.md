@@ -9,6 +9,34 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.2 — 2026-08-18
+Arreglo del caso real: los Shorts se crearon bien, pero al abrir los que
+tenían tilde en el nombre salía «El servidor respondió con error · No
+encontrado».
+
+- ✏ LOS PROYECTOS CON TILDE O EÑE NO SE ENCONTRABAN. Y la causa es de manual:
+  el navegador CODIFICA los acentos al pedir una dirección — «conservó» viaja
+  como «conserv%C3%B3». El servidor comparaba sus rutas contra el texto SIN
+  descodificar, y el símbolo «%» no encaja en ninguna, así que ningún proyecto
+  con acentos se encontraba jamás. Los que no tenían tildes funcionaban, que
+  es exactamente por qué no se había visto antes. Ahora la dirección se
+  descodifica una sola vez, antes de compararla: **los proyectos que ya tienes
+  con acentos vuelven a abrirse solos, sin tocar nada**.
+- 🆕 LOS NOMBRES NUEVOS SE FABRICAN SIN ACENTOS («Conservó la fortuna» →
+  carpeta `conservo-la-fortuna`), para que el problema no vuelva por otra vía:
+  las carpetas con tildes también dan guerra en Windows y en Git según la
+  codificación del equipo. **El nombre bonito no se pierde**: se guarda aparte
+  y es el que se ve en pantalla; lo que se simplifica es solo el nombre de la
+  carpeta.
+- 🧾 UN 404 YA NO ES MUDO. «No encontrado» no es un error del programa sino
+  una respuesta normal, así que no pasaba por el manejador de errores y el
+  registro no se enteraba — justo el aviso que habría señalado esto a la
+  primera. Ahora cada dirección no reconocida queda en el 🧾 Log de eventos
+  con su método y su ruta.
+- 🔒 Descodificar la dirección NO abre ningún agujero: las tres funciones que
+  sirven archivos ya resolvían la ruta y comprobaban que cayera dentro de su
+  carpeta. Hay prueba que lo verifica.
+
 ## v0.65.1 — 2026-08-18
 Arreglo del caso real: pedir Shorts pegando el enlace de un video de YouTube
 fallaba con una traza cruda en pantalla, y el registro de eventos no se

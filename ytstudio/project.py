@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 from pathlib import Path
 
 from ytstudio.config import ROOT
@@ -25,7 +26,30 @@ DIRS = {
 
 
 def slugify(text: str) -> str:
+    """Nombre de carpeta a partir de un título, SIN acentos ni eñes.
+
+    El nombre bonito (con sus tildes) se guarda aparte en `display_name` y es
+    el que se ve en pantalla: aquí solo se fabrica el nombre de la CARPETA.
+
+    Por qué se quitan los acentos: ese texto acaba siendo una carpeta en el
+    disco y una dirección web. Un proyecto llamado «conservó-la-fortuna»
+    viajaba del navegador al servidor como «conserv%C3%B3-la-fortuna» y
+    dejaba de encontrarse; y las carpetas con acentos dan guerra además en
+    Windows y en Git según la codificación del equipo. Con nombres simples
+    no hay nada que pueda torcerse.
+
+    Los proyectos que YA existen con acentos siguen funcionando: el servidor
+    descodifica la dirección antes de buscarlos."""
+    # NFKD separa la letra de su tilde («ó» -> «o» + acento) y luego se
+    # descartan los acentos sueltos. La ñ se trata igual (-> n).
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
     text = re.sub(r"[^\w\s-]", "", text.lower(), flags=re.UNICODE)
+    # Lo que no sea a-z, 0-9, guion o espacio (alfabetos no latinos, símbolos
+    # raros) se cambia por un guion. Un título escrito ENTERO en otro
+    # alfabeto acabaría en «proyecto»: quien lo cree recibe un aviso de
+    # nombre repetido y puede ponerle uno en el alfabeto latino.
+    text = re.sub(r"[^a-z0-9_\s-]", "-", text)
     return re.sub(r"[-\s]+", "-", text).strip("-")[:60] or "proyecto"
 
 
