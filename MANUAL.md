@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.64.0 -->
+<!-- MANUAL_VERSION: 0.65.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -883,6 +883,50 @@ hashtags que le tocan.
 > volver a tus Shorts antiguos —los que ya acumularon visitas— y reapuntarlos
 > al video nuevo. Tu catálogo de Shorts se convierte en algo que puedes
 > reutilizar en vez de en piezas de un solo uso.
+
+---
+
+### 8.3 Antes de publicar un vertical: la lista de comprobación
+
+Cuando un proyecto vertical tiene su video terminado, debajo de la revisión
+técnica aparece la tarjeta **«Antes de publicar»**. Es una lista con tres
+tipos de punto:
+
+| Marca | Qué significa |
+|---|---|
+| ✔ | La máquina lo comprobó y está bien |
+| ✖ | La máquina lo comprobó y está **mal** — arréglalo antes de subir |
+| ☐ | **Solo lo puedes mirar tú.** Son justo los que más se olvidan |
+
+Lo que se comprueba solo: la revisión técnica del archivo, que el título
+tenga entre 40 y 70 caracteres, que no lleve el hashtag de Shorts (no hace
+falta: YouTube clasifica solo por proporción y duración), que la descripción
+tenga 2-3 hashtags y enlace al video largo, que haya como mucho 5 tags y que
+el archivo de subtítulos esté generado.
+
+Lo que miras tú (los ☐): poner el **enlace a video relacionado** en Studio,
+que el gancho se entienda **con el sonido apagado**, declarar **contenido
+sintético** si aplica, y revisarlo **en un teléfono real**.
+
+La lista se actualiza sola: si cambias el título elegido en Metadatos, se
+recalcula.
+
+**Los metadatos de los verticales ya salen con las reglas del formato.** Y si
+el Short salió de un video largo (apartado 8.2), el título y la descripción
+que decidió el plan editorial aparecen como primera opción — el resto son
+variantes.
+
+**Al publicar desde el programa** (con `publish.enabled` activado), además:
+el archivo de subtítulos se sube aparte automáticamente, y si la miniatura de
+Short todavía no está disponible en tu canal (YouTube la está desplegando
+poco a poco), se avisa sin estropear nada: el video ya queda subido.
+
+> 🔑 **Un aviso sobre permisos.** Para subir los subtítulos hizo falta pedir
+> un permiso más en la autorización de Google. Si publicas con una
+> autorización antigua y los subtítulos fallan, el arreglo es: borra el
+> archivo `token.json` de la carpeta del programa y vuelve a publicar (te
+> pedirá autorizar de nuevo, una sola vez). El video y la miniatura suben
+> igual que siempre aunque no lo hagas.
 
 ---
 

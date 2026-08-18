@@ -648,7 +648,8 @@ function viewCorrida() {
       d.thumbnail ? el('div', { style: 'margin-top:20px' },
         el('div', { class: 'kicker', style: 'margin-bottom:8px' }, 'Miniatura'),
         el('img', { src: `/files/${S.slug}/${d.thumbnail}`, style: 'width:220px;display:block;border:6px solid var(--surface);outline:1px solid var(--divider)' })) : null,
-      revisionTecnica(d)),
+      revisionTecnica(d),
+      checklistPublicacion(d)),
     el('aside', { class: 'rail' },
       el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between' },
         el('h2', { style: 'font-size:18px' }, 'Atención'),
@@ -811,6 +812,28 @@ function propuestaShorts(plan, fecha) {
 }
 
 function diaEtiqueta(d) { return d === 0 ? 'D0' : (d > 0 ? `D+${d}` : `D${d}`); }
+
+// LISTA DE COMPROBACIÓN antes de publicar un vertical. Tres estados por
+// punto: ✔ lo comprobó la máquina y está bien · ✖ lo comprobó y está mal ·
+// ☐ solo lo puede mirar una persona (y son justo los que más se olvidan).
+function checklistPublicacion(d) {
+  const items = d.publish_checklist;
+  if (!items || !items.length) return null;
+  const rojos = items.filter(i => i.ok === false).length;
+  return el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
+    el('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:12px' },
+      el('div', { class: 'kicker' }, 'Antes de publicar'),
+      el('span', { class: 'tag' }, rojos ? `${rojos} pendiente(s)` : 'todo lo medible en verde')),
+    el('div', { style: 'margin-top:10px' }, items.map(i =>
+      el('div', { style: 'display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--divider);font-size:14px;line-height:1.6' },
+        el('span', { style: `min-width:18px;${i.ok === false ? 'color:var(--a700)' : ''}` },
+          i.ok === true ? '✔' : i.ok === false ? '✖' : '☐'),
+        el('div', {},
+          el('div', { style: i.ok === false ? 'color:var(--a700)' : '' }, i.label),
+          i.detail ? el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px' }, i.detail) : null)))),
+    el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6;margin-top:10px' },
+      'Los puntos con ☐ no los puede comprobar una máquina: míralos tú. Son exactamente los que más se olvidan.'));
+}
 
 // REVISIÓN TÉCNICA del video vertical: lo que se puede MEDIR del archivo
 // terminado (resolución, códecs, duración y sonoridad) contra lo que el feed

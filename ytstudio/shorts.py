@@ -364,3 +364,168 @@ def report_lines(results: list[dict]) -> list[str]:
             "  · Que haya UN cierre con llamada a la acción, no un corte seco",
             "  · Que el primer fotograma prometa algo"]
     return out
+
+
+# ---------------------------------------------------------------------------
+# METADATOS DE SHORT y LISTA DE COMPROBACIÓN antes de publicar
+# ---------------------------------------------------------------------------
+# Las reglas vienen del framework y de la documentación de la plataforma:
+#
+# - Título de 40-70 caracteres con la palabra clave al principio. En el feed
+#   casi no se lee (el video simplemente empieza), pero en BÚSQUEDA es lo que
+#   rankea.
+# - SIN el hashtag de Shorts: la clasificación es automática por proporción y
+#   duración. Ese hashtag es un mito residual de 2021 que solo ocupa sitio.
+# - 2-3 hashtags temáticos. La plataforma muestra hasta 3; pasarse de 60 hace
+#   que se ignoren TODOS.
+# - 3-5 tags, y solo para variantes ortográficas: la documentación oficial
+#   dice literalmente que juegan un papel mínimo en el descubrimiento.
+# - La primera línea de la descripción es lo único visible sin desplegar:
+#   ahí va el gancho, y el enlace al video largo va en el cuerpo.
+
+_RE_SHORTS_TAG = re.compile(r"#shorts?\b", re.IGNORECASE)
+
+TITLE_MIN, TITLE_MAX = 40, 70
+HASHTAGS_MAX = 3
+TAGS_MAX_SHORT = 5
+
+
+def strip_shorts_hashtag(text: str) -> str:
+    """Quita #Shorts/#Short de un texto, sin dejar dobles espacios."""
+    return re.sub(r"\s{2,}", " ", _RE_SHORTS_TAG.sub("", text or "")).strip()
+
+
+def count_hashtags(text: str) -> int:
+    return len(re.findall(r"#\w+", text or ""))
+
+
+def short_metadata_fixups(meta: dict, related_url: str = "") -> list[str]:
+    """Corrige EN SITIO lo corregible de los metadatos de un Short y devuelve
+    la lista de avisos de lo que se tocó (para que el creador lo sepa).
+
+    Se corrige solo lo mecánico e indiscutible: quitar el hashtag de Shorts,
+    recortar el exceso de tags y asegurar que la descripción lleve el enlace
+    al video largo. Lo opinable (largo del título, número de hashtags) se
+    REPORTA en la lista de comprobación, no se reescribe a ciegas."""
+    avisos: list[str] = []
+
+    for o in meta.get("title_options") or []:
+        limpio = strip_shorts_hashtag(o.get("title") or "")
+        if limpio != (o.get("title") or "").strip():
+            avisos.append("Se quitó el hashtag de Shorts de un título: la "
+                          "clasificación es automática y ahí solo resta "
+                          "caracteres útiles.")
+        o["title"] = limpio
+    if meta.get("title"):
+        meta["title"] = strip_shorts_hashtag(meta["title"])
+
+    # Un tag 'shorts' puede venir con o sin almohadilla: fuera igual.
+    tags = [t for t in (meta.get("tags") or [])
+            if not re.fullmatch(r"shorts?", (t or "").strip().lstrip("#"),
+                                re.IGNORECASE)
+            and not _RE_SHORTS_TAG.search(t or "")]
+    if len(tags) != len(meta.get("tags") or []):
+        avisos.append("Se quitó 'shorts' de los tags (no interviene en la "
+                      "clasificación).")
+    if len(tags) > TAGS_MAX_SHORT:
+        tags = tags[:TAGS_MAX_SHORT]
+        avisos.append(f"Tags recortados a {TAGS_MAX_SHORT}: la documentación "
+                      "oficial dice que juegan un papel mínimo — solo valen "
+                      "para variantes ortográficas.")
+    meta["tags"] = tags
+
+    if related_url:
+        linea = f"▶ El video completo: {related_url}"
+        for o in meta.get("description_options") or []:
+            desc = o.get("description") or ""
+            if related_url not in desc:
+                # Tras el primer párrafo (la primera línea es el gancho y es
+                # lo único visible sin desplegar: no se toca).
+                partes = desc.split("\n\n", 1)
+                o["description"] = (partes[0] + "\n\n" + linea
+                                    + ("\n\n" + partes[1] if len(partes) > 1
+                                       else ""))
+                avisos.append("Se añadió el enlace al video largo en una "
+                              "descripción (es el destino del CTA).")
+        if meta.get("description") and related_url not in meta["description"]:
+            partes = meta["description"].split("\n\n", 1)
+            meta["description"] = (partes[0] + "\n\n" + linea
+                                   + ("\n\n" + partes[1] if len(partes) > 1
+                                      else ""))
+    return avisos
+
+
+def publish_checklist(project, cfg: dict) -> list[dict]:
+    """Lista de comprobación ANTES de publicar un vertical.
+
+    Cada punto: {ok: True/False/None, label, detail}. `ok=None` significa
+    «esto no lo puede comprobar una máquina: míralo tú» — y esos puntos son
+    exactamente los que más se olvidan."""
+    from ytstudio.project import DIRS, read_json_tolerant
+
+    items: list[dict] = []
+
+    def punto(ok, label, detail=""):
+        items.append({"ok": ok, "label": label, "detail": detail})
+
+    # 1. La medición técnica del archivo (ya hecha por el montaje)
+    audit = project.get("shorts_audit") or {}
+    problemas = audit.get("problemas") or []
+    if audit:
+        punto(not problemas, "El archivo pasa la revisión técnica",
+              "; ".join(problemas) if problemas else
+              "resolución, duración, códecs y sonoridad medidos")
+    else:
+        punto(False, "El archivo pasa la revisión técnica",
+              "todavía sin medir: genera el video o pulsa «Medir el archivo»")
+
+    # 2. Metadatos elegidos
+    meta_path = project.dir / DIRS["final"] / "metadata.json"
+    meta = read_json_tolerant(meta_path) if meta_path.exists() else {}
+    titulo = (meta.get("title") or "").strip()
+    desc = meta.get("description") or ""
+    if titulo:
+        punto(TITLE_MIN <= len(titulo) <= TITLE_MAX,
+              f"Título de {TITLE_MIN}-{TITLE_MAX} caracteres",
+              f"tiene {len(titulo)}: «{titulo[:60]}»")
+        punto(not _RE_SHORTS_TAG.search(titulo + " ".join(meta.get("tags") or [])),
+              "Sin el hashtag de Shorts",
+              "la clasificación es automática; ese hashtag es un mito de 2021")
+        n_hash = count_hashtags(desc)
+        punto(1 <= n_hash <= HASHTAGS_MAX,
+              f"2-3 hashtags en la descripción (hay {n_hash})",
+              "se muestran hasta 3; más solo hace ruido")
+        punto(len(meta.get("tags") or []) <= TAGS_MAX_SHORT,
+              f"Como mucho {TAGS_MAX_SHORT} tags",
+              "solo valen para variantes ortográficas")
+    else:
+        punto(False, "Metadatos generados",
+              "ejecuta hasta la fase de Metadatos")
+
+    # 3. El puente al video largo
+    derived = project.get("derived_from") or {}
+    if derived.get("url"):
+        punto(derived["url"] in desc,
+              "La descripción enlaza al video largo",
+              derived["url"])
+    punto(None, "Enlace a VIDEO RELACIONADO puesto en Studio",
+          "Studio → Contenido → el Short → Video relacionado. No se puede "
+          "poner desde fuera, y sin él la vista se regala. Se puede añadir "
+          "después de publicar")
+
+    # 4. Subtítulos aparte (accesibilidad + texto indexable para búsqueda)
+    srt = project.dir / DIRS["subtitles"] / "subtitulos.srt"
+    punto(srt.exists(), "Archivo de subtítulos (SRT) generado",
+          "se sube aparte: accesibilidad y texto indexable para búsqueda")
+
+    # 5. Lo que solo puede mirar una persona
+    punto(None, "El gancho se entiende CON EL SONIDO APAGADO",
+          "texto en pantalla desde el primer fotograma — la mayoría lo verá "
+          "sin sonido")
+    punto(None, "Contenido sintético declarado si aplica",
+          "Studio → Atributos → Contenido alterado o sintético. Declarar no "
+          "reduce el alcance; no declarar sí es un riesgo")
+    punto(None, "Revisado en un teléfono real",
+          "la interfaz de la app cambia entre iPhone y Android: solo ahí se "
+          "ve qué tapa qué")
+    return items

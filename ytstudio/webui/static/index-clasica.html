@@ -582,6 +582,28 @@ async function crearShorts(){
   }catch(e){alert(e.message);btn.disabled=false;btn.textContent='＋ Crear los proyectos'}
 }
 
+/* LISTA DE COMPROBACIÓN antes de publicar un vertical. Tres estados:
+   ✔ lo comprobó la máquina y está bien · ✖ lo comprobó y está mal ·
+   ☐ solo lo puede mirar una persona (y son justo los que más se olvidan). */
+function checklistPublicacionHtml(p){
+  const items=p.publish_checklist;
+  if(!items||!items.length)return '';
+  const rojos=items.filter(i=>i.ok===false).length;
+  const fila=i=>`<div class="row" style="gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--grid)">
+      <span style="min-width:18px;${i.ok===false?'color:var(--err)':''}">${i.ok===true?'✔':i.ok===false?'✖':'☐'}</span>
+      <div style="flex:1;line-height:1.6">
+        <div ${i.ok===false?'style="color:var(--err)"':''}>${esc(i.label)}</div>
+        ${i.detail?`<div class="muted" style="font-size:12px">${esc(i.detail)}</div>`:''}
+      </div></div>`;
+  return `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Antes de publicar</h3>
+      <span class="badge">${rojos?`${rojos} pendiente(s)`:'todo lo medible en verde'}</span>
+    </div>
+    <div style="margin-top:8px">${items.map(fila).join('')}</div>
+    <div class="muted" style="font-size:12px;line-height:1.6;margin-top:8px">Los puntos con ☐ no los puede comprobar una máquina: míralos tú. Son exactamente los que más se olvidan.</div>
+  </div>`;
+}
 function revisionTecnicaHtml(p){
   if(!aspectOf(p).vert)return '';
   return `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
@@ -807,7 +829,7 @@ async function renderTab(tab,p){
       <br><div class="muted">Archivos: <a href="/files/${current}/${p.final_video}" download>video_final.mp4</a> ·
         <a href="/files/${current}/08_subtitles/subtitulos.srt" download>subtitulos.srt</a> ·
         ${p.thumbnail?`<a href="/files/${current}/${p.thumbnail}" download>miniatura.jpg</a>`:''}</div>
-    </div>${revisionTecnicaHtml(p)}`;
+    </div>${revisionTecnicaHtml(p)}${checklistPublicacionHtml(p)}`;
     const btn=el.querySelector('#btn-auditar');
     if(btn)btn.onclick=async()=>{
       btn.disabled=true;btn.textContent='Midiendo…';

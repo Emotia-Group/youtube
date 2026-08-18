@@ -9,6 +9,48 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.0 — 2026-08-18
+**Publicar Shorts sin dejarse nada.** Última fase de la integración del
+framework: los metadatos de los verticales siguen las reglas del formato, y
+antes de publicar aparece una lista de comprobación que separa lo que la
+máquina ya midió de lo que solo puedes mirar tú.
+
+- 📋 LISTA «ANTES DE PUBLICAR», en las dos interfaces y en la consola. Tres
+  estados por punto: ✔ lo comprobó la máquina y está bien · ✖ lo comprobó y
+  está mal · ☐ solo lo puede mirar una persona. Los ☐ son justo los que más
+  se olvidan: el enlace a video relacionado en Studio, que el gancho se
+  entienda con el sonido apagado, declarar contenido sintético si aplica, y
+  revisarlo en un teléfono real. Se calcula en vivo: si cambias el título
+  elegido, la lista se actualiza.
+- 🏷 METADATOS CON LAS REGLAS DE SHORT. En vertical, el estratega recibe las
+  reglas del formato (título de 40-70 caracteres con la palabra clave al
+  principio, descripción corta con el gancho en la primera línea, 2-3
+  hashtags, 3-5 tags) y una red de seguridad corrige lo mecánico aunque
+  venga mal: fuera el hashtag de Shorts (mito de 2021 — la clasificación es
+  automática por proporción y duración), tags de más recortados, y el enlace
+  al video largo añadido a la descripción SIN pisar la primera línea, que es
+  lo único visible sin desplegar.
+- 🧭 EL PLAN EDITORIAL MANDA. Si el Short salió de un video largo (v0.64.0),
+  el título, la descripción y los hashtags que decidió el plan se garantizan
+  como PRIMERA opción de metadatos — el modelo propone variantes, no
+  sustituye la decisión de campaña.
+- 📤 LA SUBIDA A YOUTUBE ENTIENDE LOS SHORTS. Limpia los metadatos elegidos
+  justo antes de subir (por si se editaron a mano), sube el archivo de
+  subtítulos (SRT) como pista aparte —accesibilidad y texto indexable para
+  búsqueda—, y si la miniatura de Short todavía no está disponible en tu
+  canal (se despliega gradualmente), lo avisa sin tirar la fase: el video ya
+  está subido.
+- 🔑 PERMISO NUEVO EN LA AUTORIZACIÓN DE GOOGLE, solo para los subtítulos.
+  Si publicas con una autorización antigua y los subtítulos fallan, el aviso
+  te dice el arreglo exacto: borrar token.json de la carpeta del programa y
+  volver a publicar (pedirá autorizar de nuevo), o subir el SRT a mano. El
+  video y la miniatura siguen subiendo igual que siempre.
+- ⚠ EL PASO QUE NO SE PUEDE AUTOMATIZAR, dicho alto y claro: el enlace a
+  video relacionado NO existe en la API de YouTube — solo se pone a mano en
+  Studio. Tras subir un Short derivado, el programa deja el aviso con la
+  ruta exacta y el video de destino, y el punto queda en la lista ☐ hasta
+  que lo hagas.
+
 ## v0.64.0 — 2026-08-18
 **Sacar Shorts de un video largo.** Hasta ahora un Short nacía de cero: le
 dabas un tema y el programa escribía un guion vertical. Ahora se puede partir

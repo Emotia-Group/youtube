@@ -593,6 +593,16 @@ def api_project_detail(slug: str) -> dict:
     # pierde el enlace al video largo, que es todo el objetivo de la pieza.
     detail["derived_from"] = project.get("derived_from")
     detail["shorts_plan"] = project.get("shorts_plan")
+    # LISTA DE COMPROBACIÓN de publicación (solo verticales): se calcula en
+    # vivo para que refleje el título/descripción que el creador tenga
+    # elegidos AHORA, no los de cuando corrió la fase de publicación.
+    try:
+        from ytstudio import shorts as _shorts
+        cfg = load_config(project.dir)
+        if _shorts.is_shorts_frame(cfg) and detail.get("final_video"):
+            detail["publish_checklist"] = _shorts.publish_checklist(project, cfg)
+    except Exception:
+        detail["publish_checklist"] = project.get("publish_checklist")
     return detail
 
 
