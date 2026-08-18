@@ -9,6 +9,42 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.1 — 2026-08-18
+Arreglo del caso real: pedir Shorts pegando el enlace de un video de YouTube
+fallaba con una traza cruda en pantalla, y el registro de eventos no se
+enteraba de nada.
+
+- 🔗 SE PEDÍAN TRES PISTAS DE SUBTÍTULOS PARA USAR UNA. Por cada consulta se
+  descargaban el idioma del proyecto, su variante «-orig» E INGLÉS, aunque
+  solo se leyera la primera: tres descargas seguidas contra YouTube, que es
+  justo lo que dispara el bloqueo por «demasiadas peticiones» (error 429).
+  Ahora el programa mira PRIMERO qué pistas tiene el video —eso viene en los
+  metadatos, sin descargar nada— y pide exactamente UNA, la que mejor encaja
+  con tu idioma. De cuatro peticiones a dos.
+- 🐞 UN FALLO EN UNA PISTA MATABA TODO. El error de yt-dlp no lo recogía
+  ningún manejador, así que llegaba crudo a la pantalla, con los códigos de
+  color de la consola incluidos («[0;31mERROR:[0m…»). Ahora los errores se
+  traducen: el 429 explica que YouTube está limitando TU CONEXIÓN, que no es
+  un fallo del programa, y qué hacer. Un video privado o borrado también se
+  explican aparte, en vez de soltar la traza.
+- 🛟 RESCATE: si el enlace falla pero el proyecto ya tiene escenas, los Shorts
+  se sacan del material de ESE proyecto —que es mejor fuente, porque tiene tu
+  guion exacto en vez de subtítulos automáticos— y se avisa del cambio en vez
+  de dejarte tirado.
+- ⏳ Y si el 429 fue pasajero, se reintenta solo con dos esperas cortas antes
+  de rendirse.
+- 🧾 TODO QUEDA EN EL LOG DE EVENTOS. La búsqueda de Shorts nunca escribía en
+  él: si fallaba, el error solo se veía en la ventana negra. Ahora se
+  registran el intento, el fallo, el rescate y el resultado — y cualquier
+  error inesperado del servidor, que antes tampoco dejaba rastro.
+- 🪟 LA VENTANA NEGRA YA NO ASUSTA. Cerrar la pestaña o cancelar una consulta
+  larga imprimía treinta líneas de «ConnectionAbortedError [WinError 10053]».
+  Es lo más normal del mundo —el navegador cierra la conexión— y no
+  significa nada: ahora se ignora en silencio.
+- 🌎 Un detalle que encontró la batería: con subtítulos en «es-419»
+  (español de Latinoamérica) y en inglés, un proyecto en español acababa
+  eligiendo el inglés. Ahora las variantes regionales de tu idioma ganan.
+
 ## v0.65.0 — 2026-08-18
 **Publicar Shorts sin dejarse nada.** Última fase de la integración del
 framework: los metadatos de los verticales siguen las reglas del formato, y

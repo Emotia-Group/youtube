@@ -607,12 +607,39 @@ def api_project_detail(slug: str) -> dict:
 
 
 def _derive_source(body: dict):
-    """De dónde sale el material: un proyecto de la casa o un enlace."""
+    """De dónde sale el material: un proyecto de la casa o un enlace.
+
+    Devuelve (source, cfg, nota). `nota` explica un cambio de plan — por
+    ejemplo, que YouTube no dejó leer el enlace y se usó el material del
+    propio proyecto, que es MEJOR fuente y no depende de la red."""
     from ytstudio import derive
     url = (body.get("url") or "").strip()
     slug = (body.get("slug") or "").strip()
+
     if url:
-        return derive.source_from_url(url, load_config()), load_config()
+        try:
+            return derive.source_from_url(url, load_config()), load_config(), ""
+        except Exception as e:
+            motivo = str(e)
+            _log_derive("error", f"No se pudo leer el enlace {url}: {motivo}",
+                        slug or None)
+            # RESCATE: si el proyecto de la casa ya tiene escenas, su
+            # material es más rico que unos subtítulos automáticos y no
+            # depende de YouTube. Mejor eso que dejar al creador tirado.
+            if slug:
+                try:
+                    source = derive.source_from_project(slug)
+                except ValueError:
+                    raise ApiError(400, motivo)
+                nota = ("No se pudo leer el enlace de YouTube, así que los "
+                        "Shorts se sacaron del material de ESTE proyecto, que "
+                        "es incluso mejor fuente (tiene el guion exacto, no "
+                        "subtítulos automáticos). Motivo del enlace: "
+                        + motivo)
+                _log_derive("warn", nota, slug)
+                return source, load_config(Project(slug).dir), nota
+            raise ApiError(400, motivo)
+
     if not slug:
         raise ApiError(400, "Indica un proyecto o pega el enlace del video "
                             "largo de YouTube.")
@@ -620,7 +647,18 @@ def _derive_source(body: dict):
         source = derive.source_from_project(slug)
     except ValueError as e:
         raise ApiError(409, str(e))
-    return source, load_config(Project(slug).dir)
+    return source, load_config(Project(slug).dir), ""
+
+
+def _log_derive(level: str, mensaje: str, slug: str | None = None) -> None:
+    """Deja constancia en el 🧾 Log de eventos. Antes, un fallo al leer el
+    video largo solo se veía en la ventana negra: la interfaz mostraba el
+    error crudo y el registro no se enteraba."""
+    try:
+        from ytstudio import eventlog
+        eventlog.log(level, mensaje, project=slug, phase="shorts")
+    except Exception:
+        pass
 
 
 def api_derive_propose(body: dict) -> dict:
@@ -628,20 +666,32 @@ def api_derive_propose(body: dict) -> dict:
     ve la tanda, la revisa y decide."""
     from ytstudio import derive
     try:
-        source, cfg = _derive_source(body)
+        source, cfg, nota = _derive_source(body)
     except (RuntimeError, ValueError) as e:
+        _log_derive("error", str(e), body.get("slug") or None)
         raise ApiError(400, str(e))
     try:
         n = max(1, min(int(body.get("n") or 5), len(derive.CAMPAIGN)))
     except (TypeError, ValueError):
         n = 5
-    candidatos = derive.propose(source, cfg, n=n)
+    _log_derive("info", f"Buscando {n} Shorts en «{source['titulo']}» "
+                        f"({len(source['marcas'])} líneas de texto leídas).",
+                source.get("slug") or None)
+    try:
+        candidatos = derive.propose(source, cfg, n=n)
+    except Exception as e:
+        _log_derive("error", f"El director falló al proponer Shorts: {e}",
+                    source.get("slug") or None)
+        raise
     if not candidatos:
         raise ApiError(422, "No se encontró ningún momento que aguante solo "
                             "como Short en ese video.")
     plan = derive.save_plan(source, candidatos, body.get("desde") or None)
     plan["estructuras"] = {k: v["label"]
                            for k, v in derive.HOOK_STRUCTURES.items()}
+    plan["nota"] = nota
+    _log_derive("info", f"{len(candidatos)} Short(s) propuestos de "
+                        f"«{source['titulo']}».", source.get("slug") or None)
     return plan
 
 
@@ -1316,6 +1366,21 @@ class ApiError(Exception):
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    def handle_one_request(self):
+        """Igual que el original, pero SIN escupir una traza cuando el
+        navegador corta la conexión.
+
+        Es lo más normal del mundo: recargas la página, cierras la pestaña o
+        una consulta larga se cancela, y el navegador cierra el socket a
+        medias. Python lo trataba como un error grave e imprimía un
+        «ConnectionAbortedError [WinError 10053]» de treinta líneas en la
+        ventana negra — que asusta y no significa nada. No es un fallo del
+        programa: no hay nada que arreglar ni que reportar."""
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
+
     # --- utilidades ---
     def _json(self, data, status: int = 200) -> None:
         raw = json.dumps(data, ensure_ascii=False).encode()
@@ -1457,6 +1522,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": e.message}, e.status)
         except Exception as e:
             traceback.print_exc()
+            # Un fallo inesperado TAMBIÉN queda en el 🧾 Log de eventos: antes
+            # solo se veía en la ventana negra, y la interfaz mostraba el
+            # mensaje crudo del error sin que quedara rastro de nada.
+            _log_derive("error", f"{self.command} {self.path}: {e}")
             self._json({"error": str(e)}, 500)
 
     def do_POST(self):
@@ -1503,6 +1572,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": e.message}, e.status)
         except Exception as e:
             traceback.print_exc()
+            # Un fallo inesperado TAMBIÉN queda en el 🧾 Log de eventos: antes
+            # solo se veía en la ventana negra, y la interfaz mostraba el
+            # mensaje crudo del error sin que quedara rastro de nada.
+            _log_derive("error", f"{self.command} {self.path}: {e}")
             self._json({"error": str(e)}, 500)
 
     def do_PUT(self):
@@ -1532,6 +1605,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": e.message}, e.status)
         except Exception as e:
             traceback.print_exc()
+            # Un fallo inesperado TAMBIÉN queda en el 🧾 Log de eventos: antes
+            # solo se veía en la ventana negra, y la interfaz mostraba el
+            # mensaje crudo del error sin que quedara rastro de nada.
+            _log_derive("error", f"{self.command} {self.path}: {e}")
             self._json({"error": str(e)}, 500)
 
     def do_DELETE(self):
@@ -1557,6 +1634,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": e.message}, e.status)
         except Exception as e:
             traceback.print_exc()
+            # Un fallo inesperado TAMBIÉN queda en el 🧾 Log de eventos: antes
+            # solo se veía en la ventana negra, y la interfaz mostraba el
+            # mensaje crudo del error sin que quedara rastro de nada.
+            _log_derive("error", f"{self.command} {self.path}: {e}")
             self._json({"error": str(e)}, 500)
 
 
