@@ -107,6 +107,20 @@ def run_pipeline(project, cfg, *, from_phase: str | None = None,
     except Exception:
         pass
 
+    # LA VOZ TIENE QUE ENCAJAR CON SU PROVEEDOR. Cada casa nombra sus voces a
+    # su manera y el programa guarda una sola: al cambiar de proveedor, la del
+    # anterior se queda puesta y el nuevo la rechaza. El fallo salía en la
+    # fase 5 de 11, después de gastar dinero y varios minutos — se comprueba
+    # aquí, cuando corregirlo no cuesta nada.
+    try:
+        from ytstudio.catalog import tts_voice_problem
+        problema = tts_voice_problem(cfg)
+        if problema:
+            sink(f"⚠ {problema}")
+            project.add_warning(problema)
+    except Exception:
+        pass
+
     if from_phase:
         project.reset_from(from_phase, PHASE_ORDER)
 

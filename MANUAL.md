@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.65.3 -->
+<!-- MANUAL_VERSION: 0.65.4 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -1294,6 +1294,7 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 |---|---|---|
 | Sale el aviso de «modo vista previa» | Falta una clave de API | Ajustes → Claves de API |
 | «**No encontrado**» al abrir un proyecto | Le pasaba a los proyectos cuyo nombre llevaba **tilde o eñe**. Arreglado en la v0.65.2: actualiza con `actualizar.bat` y vuelven a abrirse solos, sin tocar nada. Los proyectos nuevos ya se guardan con nombres simples (el nombre bonito, con sus tildes, se sigue viendo igual en pantalla) |
+| «**voice ID must be a valid UUID**» u otro error de voz al generar | **Cambiaste de proveedor de voz y la voz del anterior se quedó puesta.** Cada casa nombra sus voces distinto. Ve a **Ajustes → Voz en off** y elige una voz de la lista del proveedor que tengas puesto. Desde la v0.65.4 el programa te avisa antes de empezar y, si llega el caso, usa su voz por defecto en vez de tirar la corrida |
 | «**Error 429** al pedir Shorts de un enlace de YouTube» | YouTube limita las consultas desde tu conexión cuando se hacen varias seguidas. **No es un fallo del programa.** Espera unos minutos; o mejor, si el video largo es un proyecto de este programa, **deja la casilla del enlace vacía**: así el material se lee de tu propio proyecto, que es mejor fuente y no toca YouTube |
 | «Ese video no tiene subtítulos disponibles» | El programa lee lo que se dice en el video a través de sus subtítulos. Si el video es tuyo, actívalos en YouTube Studio; si no, saca los Shorts desde el proyecto de este programa |
 | `ConnectionAbortedError` **en la ventana negra** | Ruido inofensivo: el navegador cerró la conexión (recargaste, cerraste la pestaña…). Desde la v0.65.1 ya no se imprime |

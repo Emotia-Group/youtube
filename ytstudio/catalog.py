@@ -8,6 +8,7 @@ el módulo de configuración se construyen a partir de este catálogo.
 from __future__ import annotations
 
 import os
+import re
 
 # ---------------------------------------------------------------------------
 # Proveedores por categoría
@@ -751,3 +752,66 @@ def get_style_preset(cfg: dict) -> dict | None:
     if not preset or name == "ninguno":
         return None
     return {"name": name, **preset}
+
+
+# ---------------------------------------------------------------------------
+# LA VOZ TIENE QUE ENCAJAR CON SU PROVEEDOR
+# ---------------------------------------------------------------------------
+# Cada casa nombra sus voces a su manera y el programa guarda UNA sola voz.
+# Al cambiar de proveedor, la del anterior se queda puesta y el nuevo la
+# rechaza — un caso real le costó al creador una corrida entera: el fallo
+# aparecía en la fase 5 de 11, tras gastar dinero y varios minutos.
+#
+# Estas comprobaciones son DELIBERADAMENTE laxas: solo cazan el desajuste
+# evidente (un identificador con la forma de otra casa). Una voz nueva que el
+# catálogo aún no conozca pasa sin molestar — más vale dejar pasar una rara
+# que bloquear una legítima.
+
+_VOICE_SHAPES = {
+    # UUID con guiones: 8-4-4-4-12
+    "cartesia": (r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                 r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                 "un identificador tipo «5c5ad5e7-1020-476b-8b91-fdcbe9cc313c» "
+                 "(lo copias de tu cuenta de Cartesia)"),
+    # 20 caracteres alfanuméricos, sin guiones
+    "elevenlabs": (r"[A-Za-z0-9]{18,24}",
+                   "un identificador tipo «onwK4e9ZLuTAKqWW03F9» (lo copias de "
+                   "tu biblioteca de ElevenLabs)"),
+    # idioma-región-NombreNeural
+    "edge": (r"[a-z]{2}-[A-Z]{2}-\w+Neural",
+             "un nombre tipo «es-MX-JorgeNeural»"),
+    # nombres cortos de la lista fija de OpenAI
+    "openai": (r"(onyx|echo|nova|shimmer|alloy|fable|ash|coral|sage|verse)",
+               "uno de los nombres de OpenAI: onyx, echo, nova, shimmer, "
+               "alloy o fable"),
+}
+
+
+def voice_matches_provider(provider: str, voice: str) -> bool:
+    """¿La voz tiene la FORMA que usa ese proveedor? True si encaja o si no
+    sabemos comprobarlo (mock, proveedor desconocido, voz vacía)."""
+    forma = _VOICE_SHAPES.get((provider or "").lower())
+    if not forma or not (voice or "").strip():
+        return True
+    return bool(re.fullmatch(forma[0], voice.strip()))
+
+
+def tts_voice_problem(cfg: dict) -> str | None:
+    """Mensaje en cristiano si la voz configurada NO encaja con el proveedor
+    de voz elegido. None si todo está en orden.
+
+    Se comprueba antes de generar, que es cuando corregirlo es gratis."""
+    tts = (cfg.get("providers") or {}).get("tts") or {}
+    provider = (tts.get("name") or "").lower()
+    voice = (tts.get("voice") or "").strip()
+    if not voice or voice_matches_provider(provider, voice):
+        return None
+    _, ejemplo = _VOICE_SHAPES[provider]
+    etiqueta = next((o.get("label", provider)
+                     for o in CATALOG["tts"]["options"]
+                     if o["name"] == provider), provider)
+    return (f"La voz configurada («{voice}») no tiene el formato que usa "
+            f"{etiqueta.split('—')[0].strip()}. Suele pasar al cambiar de "
+            f"proveedor de voz: la voz del anterior se queda puesta. "
+            f"Necesita {ejemplo}. Cámbiala en Ajustes → Voz en off; mientras "
+            f"tanto se usará la voz por defecto de la casa.")
