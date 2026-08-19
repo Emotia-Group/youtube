@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.66.0 -->
+<!-- MANUAL_VERSION: 0.66.1 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -988,6 +988,12 @@ verdad y no en un trozo suelto:
 - Se **mide y corrige la sonoridad**, porque un recorte hereda el volumen del
   original, que casi nunca está donde debe.
 
+**La duración de un recorte es la del tramo**, no una duración a elegir: si el
+momento va del 1:04 al 1:59, el Short dura esos 55 segundos y eso es lo que
+dice su ficha. Un tramo que se pase de **60 segundos se corta ahí mismo** —por
+encima del minuto, una reclamación de copyright puede bloquear el Short en
+todo el mundo.
+
 > ⚠ **El recorte necesita el enlace del video.** Si sacas los Shorts del
 > material del proyecto (sin pegar enlace), no hay video que descargar y todas
 > las piezas se generarán de cero. El programa te lo dice al proponer.
@@ -1336,6 +1342,7 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 | «**No encontrado**» al abrir un proyecto | Le pasaba a los proyectos cuyo nombre llevaba **tilde o eñe**. Arreglado en la v0.65.2: actualiza con `actualizar.bat` y vuelven a abrirse solos, sin tocar nada. Los proyectos nuevos ya se guardan con nombres simples (el nombre bonito, con sus tildes, se sigue viendo igual en pantalla) |
 | «**voice ID must be a valid UUID**» u otro error de voz al generar | **Cambiaste de proveedor de voz y la voz del anterior se quedó puesta.** Cada casa nombra sus voces distinto. Ve a **Ajustes → Voz en off** y elige una voz de la lista del proveedor que tengas puesto. Desde la v0.65.4 el programa te avisa antes de empezar y, si llega el caso, usa su voz por defecto en vez de tirar la corrida |
 | «**Error 429** al pedir Shorts de un enlace de YouTube» | YouTube limita las consultas desde tu conexión cuando se hacen varias seguidas. **No es un fallo del programa.** Espera unos minutos; o mejor, si el video largo es un proyecto de este programa, **deja la casilla del enlace vacía**: así el material se lee de tu propio proyecto, que es mejor fuente y no toca YouTube |
+| «**No se pudo traer el tramo del video original**» al generar un Short | El recorte necesita bajar ese trozo del video de YouTube y algo se lo impidió: el enlace no es un video, el video es privado o se cayó la conexión. **El mismo mensaje te dice cuál de las tres es.** Comprueba el enlace en la ficha del Short (**De dónde sale**); si el video no se puede descargar, cambia ese Short al modo **«Generar una pieza nueva»** y saldrá desde cero, sin descargar nada |
 | «Ese video no tiene subtítulos disponibles» | El programa lee lo que se dice en el video a través de sus subtítulos. Si el video es tuyo, actívalos en YouTube Studio; si no, saca los Shorts desde el proyecto de este programa |
 | `ConnectionAbortedError` **en la ventana negra** | Ruido inofensivo: el navegador cerró la conexión (recargaste, cerraste la pestaña…). Desde la v0.65.1 ya no se imprime |
 | Se detuvo con un error **429** | El proveedor pide ir más despacio | Ya reintenta solo; si insiste, baja `performance.parallel_images` a 2 |

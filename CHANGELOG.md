@@ -9,6 +9,30 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.66.1 — 2026-08-19
+**Dos arreglos del modo recorte**, vistos nada más estrenarlo.
+
+- ⏱ LA FICHA DEL SHORT DECÍA UNA DURACIÓN Y EL VIDEO DURABA OTRA. Al proponer
+  un recorte, el programa elige un tramo del video largo («del 1:04 al 1:59»)
+  y, por separado, estima cuánto duraría la pieza. Los dos datos se guardaban
+  sin cuadrarlos, así que la ficha podía decir 38 segundos mientras el video
+  que salía duraba 55. En un recorte la pieza **es** ese tramo, así que ahora
+  manda el tramo: la ficha, la duración objetivo del proyecto y el aviso del
+  límite de 60 segundos hablan todos de los mismos segundos. Un tramo que se
+  pase de 60 s se corta ahí mismo (por encima, una reclamación de copyright
+  bloquea el Short en todo el mundo).
+- 🔤 SI EL ENLACE NO SIRVE, AHORA SE ENTIENDE. Cuando la descarga del tramo
+  fallaba, a mitad del montaje aparecía el mensaje crudo del descargador
+  («ERROR: Unsupported URL: https://…»), con códigos de color y todo. Ahora se
+  traduce —enlace que no es un video, video privado, sin conexión— y se dice
+  la salida: cambiar ese Short al modo **«pieza nueva»**, que no necesita
+  descargar nada.
+- 🧪 Y la batería de punta a punta del Short derivado vuelve a probar lo que
+  dice probar. Se escribió cuando solo existía el modo «pieza nueva»; al pasar
+  el recorte a ser el modo por defecto, la prueba empezó a intentar descargar
+  un video de mentira y fallaba. Ahora fija el modo a mano y comprueba que el
+  proyecto nace así. El recorte tiene su propia batería, con un video local.
+
 ## v0.66.0 — 2026-08-19
 **Ahora el Short se puede RECORTAR del video original**, en vez de generarlo
 de cero. Y es el modo por defecto.
