@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.65.2 -->
+<!-- MANUAL_VERSION: 0.65.3 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -927,6 +927,30 @@ poco a poco), se avisa sin estropear nada: el video ya queda subido.
 > archivo `token.json` de la carpeta del programa y vuelve a publicar (te
 > pedirá autorizar de nuevo, una sola vez). El video y la miniatura suben
 > igual que siempre aunque no lo hagas.
+
+---
+
+### Comprobar que la actualización llegó de verdad
+
+Actualizar tiene **dos pasos**, y saltarse el segundo es el despiste más
+común:
+
+1. **`actualizar.bat`** trae los archivos nuevos.
+2. **Cerrar el programa y volver a abrirlo** con `iniciar.bat`. Mientras no lo
+   hagas, sigue corriendo la versión vieja aunque los archivos ya sean nuevos.
+
+**Cómo saber en qué versión estás:** míralo **arriba a la izquierda** en la
+interfaz, junto al nombre `ytstudio`. Ese número sale de los archivos de tu
+equipo, así que es la verdad.
+
+> ⚠ **«Actualicé pero sigo en la versión de antes».** Desde la v0.65.3,
+> `actualizar.bat` te dice si funcionó o no, y en qué versión te deja. Si
+> sale **«NO SE PUDO ACTUALIZAR»**, la causa casi siempre es una de tres, y
+> el propio archivo te da el comando para cada una. Si sale **«YA ESTABAS AL
+> DÍA»** pero esperabas algo más nuevo, es que estás en otra **rama**: el
+> archivo te dice en cuál.
+>
+> En ambos casos: **copia todo lo que salga en la ventana negra y pásamelo.**
 
 ---
 

@@ -9,6 +9,29 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.3 — 2026-08-18
+`actualizar.bat` no decía lo suficiente para saber si te había actualizado.
+
+Caso real: el creador pulsó actualizar.bat varias veces, leyó siempre
+«Listo. Ya puedes abrir el programa» y siguió en v0.65.0. El archivo no
+mentía —no había nada nuevo que traer— pero tampoco daba ni un dato para
+darse cuenta de por qué: los arreglos estaban publicados en otro sitio del
+que su equipo no tiraba. Dos horas buscando el fallo donde no estaba.
+
+- 🔎 AHORA TE DICE DÓNDE ESTÁS: la rama, la versión antes y la versión
+  después. Y distingue **«ACTUALIZADO: v0.65.0 → v0.65.3»** de **«YA ESTABAS
+  AL DÍA»** — antes las dos situaciones daban el mismo «Listo», que es
+  justamente lo que impedía ver el problema. Cuando no hay nada nuevo,
+  sugiere comprobar la rama, que es la causa más habitual.
+- ✅ Y COMPRUEBA SI FUNCIONÓ. El archivo ejecutaba `git pull` y anunciaba el
+  éxito sin mirar el resultado: ante un fallo de verdad (cambios locales,
+  historial separado) habría dado el mismo mensaje. Ahora, si falla, lo dice
+  en grande, recuerda en qué versión te quedas, y lista las causas
+  habituales con el comando exacto para salir de cada una.
+- 🔁 RECUERDA CERRAR Y REABRIR EL PROGRAMA. Actualizar los archivos no cambia
+  el programa que ya está corriendo: hasta que no lo cierras y lo vuelves a
+  abrir con `iniciar.bat`, sigue funcionando el viejo.
+
 ## v0.65.2 — 2026-08-18
 Arreglo del caso real: los Shorts se crearon bien, pero al abrir los que
 tenían tilde en el nombre salía «El servidor respondió con error · No
