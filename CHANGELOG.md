@@ -9,6 +9,47 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.66.0 — 2026-08-19
+**Ahora el Short se puede RECORTAR del video original**, en vez de generarlo
+de cero. Y es el modo por defecto.
+
+Hasta ahora, sacar un Short de un video largo significaba escribir una pieza
+NUEVA: guion nuevo, voz sintetizada, imágenes generadas. Del video largo solo
+se tomaba la idea. Eso sorprendió al creador —esperaba su propia voz— y era
+además lo caro: unos $5 y varios minutos por pieza.
+
+- ✂ MODO RECORTE, el nuevo por defecto. Se descarga **solo el tramo exacto**
+  del video original (no el video entero) y se reencuadra a vertical.
+  **Conserva tu voz, tu edición y tu imagen**, tal como se publicaron. No
+  gasta en voz ni en imágenes generadas: el coste es el rato de descargar y
+  montar. Si editaste el video por fuera del programa, el recorte usa esa
+  versión, que es justo lo que se quería.
+- 🖼 SIN PERDER IMAGEN. Al pasar de 16:9 a 9:16 sobra casi el 70% del ancho.
+  Recortar por el centro se come lo que haya a los lados, así que por defecto
+  el fotograma entero se coloca sobre **su propia imagen ampliada y
+  desenfocada**: la pantalla se llena y no se pierde nada. Quien prefiera
+  llenar el cuadro tiene el recorte centrado, en Ajustes.
+- 💬 LOS SUBTÍTULOS SALEN DEL PROPIO VIDEO, con sus tiempos, colocados en la
+  zona segura — por encima de la franja del enlace al video largo. Y el texto
+  de gancho se pone encima desde el primer fotograma, porque la mayoría verá
+  el Short sin sonido.
+- 🔊 LA SONORIDAD SE MIDE IGUAL. Un recorte hereda el volumen del original,
+  que casi nunca está donde debe: se corrige a −14 LUFS como en cualquier
+  otro video del programa. Y se audita solo, con la misma revisión técnica.
+- 🧬 LA PIEZA NUEVA SIGUE AHÍ, intacta, para cuando lo que quieres decir no
+  está dicho en el largo de forma que aguante sola. **Eliges el modo al
+  proponer, y puedes cambiarlo pieza a pieza** antes de crear los proyectos.
+- 🎯 AL DIRECTOR SE LE ENCARGA DISTINTO según el modo. En recorte no puede
+  cambiar ni una palabra, así que elegir el principio y el final del tramo
+  pasa a ser la decisión más importante: se le exige que el tramo empiece con
+  una frase que funcione como gancho y termine en una idea cerrada.
+- ⏭ Y NO SE PAGA LO QUE NO SE USA: en un recorte, las fases de concepto,
+  guion, escenas, voz, imágenes y música quedan marcadas como hechas. «Generar
+  video» solo recorta, pone metadatos y prepara la publicación.
+- ⚠ Sin el enlace del video original (o sin yt-dlp) no hay nada que recortar:
+  se dice al proponer y esas piezas pasan a generarse de cero, en vez de
+  fallar a mitad.
+
 ## v0.65.4 — 2026-08-18
 La voz de un proveedor puesta en otro tiraba la corrida entera.
 

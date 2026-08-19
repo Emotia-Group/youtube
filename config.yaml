@@ -313,3 +313,29 @@ panel:
     dias_sin_sincronizar: 3
     video_despunta_x: 2.0      # veces la mediana de vistas del canal
     minimo_vistas: 100         # por debajo, los porcentajes son ruido
+
+# ── Shorts: cómo se hacen a partir de un video largo ───────────────────────
+shorts:
+  modo: recorte            # CÓMO se fabrica cada Short sacado de un video
+                           # largo (se puede cambiar pieza a pieza antes de
+                           # crearlos):
+                           #   recorte · se baja el TRAMO EXACTO del video
+                           #             original y se reencuadra a vertical.
+                           #             Conserva tu voz, tu edición y tu
+                           #             imagen. No gasta en voz ni en
+                           #             imágenes: solo tiempo de descarga y
+                           #             montaje. Es el recomendado
+                           #   nuevo   · se escribe un guion nuevo y se genera
+                           #             todo de cero. Cuesta dinero y tiempo,
+                           #             pero permite decir algo que en el
+                           #             video largo no está dicho así
+  reencuadre: fondo_desenfocado
+                           # Cómo pasar de horizontal (16:9) a vertical (9:16):
+                           #   fondo_desenfocado · el fotograma entero, centrado,
+                           #     sobre su propia imagen ampliada y desenfocada.
+                           #     Llena la pantalla SIN perder nada (recomendado)
+                           #   recorte_centrado · se queda con la franja central.
+                           #     Llena el cuadro pero pierde los lados: solo si
+                           #     el sujeto va siempre centrado
+  clip_height: 1080        # calidad máxima que se descarga del original. Bajar
+                           # 4K para entregar 1080 de alto es tirar tiempo
