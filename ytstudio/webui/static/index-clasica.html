@@ -541,6 +541,9 @@ async function proponerShorts(){
 function pintarPropuesta(plan){
   window._plan=plan;
   const cands=plan.candidatos||[],rot=plan.rotacion||{};
+  /* RESCATE: si el enlace de YouTube falló y se usó el material del propio
+     proyecto, hay que decirlo — el creador tiene que saber de dónde salió. */
+  const nota=plan.nota?`<div class="banner">ℹ <b>Se usó otra fuente.</b> ${esc(plan.nota)}</div>`:'';
   const aviso=rot.suficiente?'':`<div class="banner">⚠ <b>Poca variedad de gancho.</b> Solo ${rot.estructuras} estructura(s) distintas para ${cands.length} piezas (el mínimo sano es ${rot.minimo}). Repetir la misma fórmula cansa a la audiencia, y además es justo el patrón que YouTube describe como producción en masa. Vuelve a proponer, o desmarca las que se repitan.</div>`;
   const fichas=cands.map((c,i)=>`
     <div class="card">
@@ -563,7 +566,7 @@ function pintarPropuesta(plan){
   const cal=`<div class="card"><b>Cuándo publicar cada uno</b>
     <p class="muted" style="line-height:1.7;margin:4px 0 10px">De lo general a lo específico: las piezas que necesitan contexto van DESPUÉS del video largo, cuando ese contexto ya existe para recibir el clic. Tres o cuatro Shorts por semana, no a diario.</p>
     <table><tbody>${(plan.calendario||[]).map(x=>`<tr><td style="color:var(--accent)">${esc(x.etiqueta)}</td><td class="muted">${esc(x.fecha)}</td><td>${esc(x.funcion)}</td><td class="muted">${esc(x.nombre)}</td></tr>`).join('')}</tbody></table></div>`;
-  $('#sh-caja').innerHTML=aviso+fichas+cal+
+  $('#sh-caja').innerHTML=nota+aviso+fichas+cal+
     `<div class="card"><button class="btn" id="sh-crear" onclick="crearShorts()">＋ Crear los proyectos</button>
      <span class="muted" style="margin-left:10px">Se crean como borradores con el guion ya escrito. No se genera nada ni se gasta hasta que abras cada uno y pulses ▶ Generar.</span></div>`;
 }

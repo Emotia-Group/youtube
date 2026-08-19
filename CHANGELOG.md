@@ -9,6 +9,93 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.3 — 2026-08-18
+`actualizar.bat` no decía lo suficiente para saber si te había actualizado.
+
+Caso real: el creador pulsó actualizar.bat varias veces, leyó siempre
+«Listo. Ya puedes abrir el programa» y siguió en v0.65.0. El archivo no
+mentía —no había nada nuevo que traer— pero tampoco daba ni un dato para
+darse cuenta de por qué: los arreglos estaban publicados en otro sitio del
+que su equipo no tiraba. Dos horas buscando el fallo donde no estaba.
+
+- 🔎 AHORA TE DICE DÓNDE ESTÁS: la rama, la versión antes y la versión
+  después. Y distingue **«ACTUALIZADO: v0.65.0 → v0.65.3»** de **«YA ESTABAS
+  AL DÍA»** — antes las dos situaciones daban el mismo «Listo», que es
+  justamente lo que impedía ver el problema. Cuando no hay nada nuevo,
+  sugiere comprobar la rama, que es la causa más habitual.
+- ✅ Y COMPRUEBA SI FUNCIONÓ. El archivo ejecutaba `git pull` y anunciaba el
+  éxito sin mirar el resultado: ante un fallo de verdad (cambios locales,
+  historial separado) habría dado el mismo mensaje. Ahora, si falla, lo dice
+  en grande, recuerda en qué versión te quedas, y lista las causas
+  habituales con el comando exacto para salir de cada una.
+- 🔁 RECUERDA CERRAR Y REABRIR EL PROGRAMA. Actualizar los archivos no cambia
+  el programa que ya está corriendo: hasta que no lo cierras y lo vuelves a
+  abrir con `iniciar.bat`, sigue funcionando el viejo.
+
+## v0.65.2 — 2026-08-18
+Arreglo del caso real: los Shorts se crearon bien, pero al abrir los que
+tenían tilde en el nombre salía «El servidor respondió con error · No
+encontrado».
+
+- ✏ LOS PROYECTOS CON TILDE O EÑE NO SE ENCONTRABAN. Y la causa es de manual:
+  el navegador CODIFICA los acentos al pedir una dirección — «conservó» viaja
+  como «conserv%C3%B3». El servidor comparaba sus rutas contra el texto SIN
+  descodificar, y el símbolo «%» no encaja en ninguna, así que ningún proyecto
+  con acentos se encontraba jamás. Los que no tenían tildes funcionaban, que
+  es exactamente por qué no se había visto antes. Ahora la dirección se
+  descodifica una sola vez, antes de compararla: **los proyectos que ya tienes
+  con acentos vuelven a abrirse solos, sin tocar nada**.
+- 🆕 LOS NOMBRES NUEVOS SE FABRICAN SIN ACENTOS («Conservó la fortuna» →
+  carpeta `conservo-la-fortuna`), para que el problema no vuelva por otra vía:
+  las carpetas con tildes también dan guerra en Windows y en Git según la
+  codificación del equipo. **El nombre bonito no se pierde**: se guarda aparte
+  y es el que se ve en pantalla; lo que se simplifica es solo el nombre de la
+  carpeta.
+- 🧾 UN 404 YA NO ES MUDO. «No encontrado» no es un error del programa sino
+  una respuesta normal, así que no pasaba por el manejador de errores y el
+  registro no se enteraba — justo el aviso que habría señalado esto a la
+  primera. Ahora cada dirección no reconocida queda en el 🧾 Log de eventos
+  con su método y su ruta.
+- 🔒 Descodificar la dirección NO abre ningún agujero: las tres funciones que
+  sirven archivos ya resolvían la ruta y comprobaban que cayera dentro de su
+  carpeta. Hay prueba que lo verifica.
+
+## v0.65.1 — 2026-08-18
+Arreglo del caso real: pedir Shorts pegando el enlace de un video de YouTube
+fallaba con una traza cruda en pantalla, y el registro de eventos no se
+enteraba de nada.
+
+- 🔗 SE PEDÍAN TRES PISTAS DE SUBTÍTULOS PARA USAR UNA. Por cada consulta se
+  descargaban el idioma del proyecto, su variante «-orig» E INGLÉS, aunque
+  solo se leyera la primera: tres descargas seguidas contra YouTube, que es
+  justo lo que dispara el bloqueo por «demasiadas peticiones» (error 429).
+  Ahora el programa mira PRIMERO qué pistas tiene el video —eso viene en los
+  metadatos, sin descargar nada— y pide exactamente UNA, la que mejor encaja
+  con tu idioma. De cuatro peticiones a dos.
+- 🐞 UN FALLO EN UNA PISTA MATABA TODO. El error de yt-dlp no lo recogía
+  ningún manejador, así que llegaba crudo a la pantalla, con los códigos de
+  color de la consola incluidos («[0;31mERROR:[0m…»). Ahora los errores se
+  traducen: el 429 explica que YouTube está limitando TU CONEXIÓN, que no es
+  un fallo del programa, y qué hacer. Un video privado o borrado también se
+  explican aparte, en vez de soltar la traza.
+- 🛟 RESCATE: si el enlace falla pero el proyecto ya tiene escenas, los Shorts
+  se sacan del material de ESE proyecto —que es mejor fuente, porque tiene tu
+  guion exacto en vez de subtítulos automáticos— y se avisa del cambio en vez
+  de dejarte tirado.
+- ⏳ Y si el 429 fue pasajero, se reintenta solo con dos esperas cortas antes
+  de rendirse.
+- 🧾 TODO QUEDA EN EL LOG DE EVENTOS. La búsqueda de Shorts nunca escribía en
+  él: si fallaba, el error solo se veía en la ventana negra. Ahora se
+  registran el intento, el fallo, el rescate y el resultado — y cualquier
+  error inesperado del servidor, que antes tampoco dejaba rastro.
+- 🪟 LA VENTANA NEGRA YA NO ASUSTA. Cerrar la pestaña o cancelar una consulta
+  larga imprimía treinta líneas de «ConnectionAbortedError [WinError 10053]».
+  Es lo más normal del mundo —el navegador cierra la conexión— y no
+  significa nada: ahora se ignora en silencio.
+- 🌎 Un detalle que encontró la batería: con subtítulos en «es-419»
+  (español de Latinoamérica) y en inglés, un proyecto en español acababa
+  eligiendo el inglés. Ahora las variantes regionales de tu idioma ganan.
+
 ## v0.65.0 — 2026-08-18
 **Publicar Shorts sin dejarse nada.** Última fase de la integración del
 framework: los metadatos de los verticales siguen las reglas del formato, y

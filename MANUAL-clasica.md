@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.65.0 -->
+<!-- MANUAL_VERSION: 0.65.3 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -887,6 +887,30 @@ poco a poco), se avisa sin estropear nada: el video ya queda subido.
 
 ---
 
+### Comprobar que la actualización llegó de verdad
+
+Actualizar tiene **dos pasos**, y saltarse el segundo es el despiste más
+común:
+
+1. **`actualizar.bat`** trae los archivos nuevos.
+2. **Cerrar el programa y volver a abrirlo** con `iniciar.bat`. Mientras no lo
+   hagas, sigue corriendo la versión vieja aunque los archivos ya sean nuevos.
+
+**Cómo saber en qué versión estás:** míralo **arriba a la izquierda** en la
+interfaz, junto al nombre `ytstudio`. Ese número sale de los archivos de tu
+equipo, así que es la verdad.
+
+> ⚠ **«Actualicé pero sigo en la versión de antes».** Desde la v0.65.3,
+> `actualizar.bat` te dice si funcionó o no, y en qué versión te deja. Si
+> sale **«NO SE PUDO ACTUALIZAR»**, la causa casi siempre es una de tres, y
+> el propio archivo te da el comando para cada una. Si sale **«YA ESTABAS AL
+> DÍA»** pero esperabas algo más nuevo, es que estás en otra **rama**: el
+> archivo te dice en cuál.
+>
+> En ambos casos: **copia todo lo que salga en la ventana negra y pásamelo.**
+
+---
+
 ## 9. Corregir sin volver a pagar
 
 Esta es la tabla que más dinero te va a ahorrar. **Rehacer desde un paso
@@ -1252,6 +1276,10 @@ Cada carpeta tiene dentro un archivo README con los nombres que reconoce.
 | Síntoma | Causa probable | Solución |
 |---|---|---|
 | Sale el cartel «modo vista previa» | Falta una clave de API | ⚙ Configuración → 🔑 Claves de API |
+| «**No encontrado**» al abrir un proyecto | Le pasaba a los proyectos cuyo nombre llevaba **tilde o eñe**. Arreglado en la v0.65.2: actualiza con `actualizar.bat` y vuelven a abrirse solos, sin tocar nada. Los proyectos nuevos ya se guardan con nombres simples (el nombre bonito, con sus tildes, se sigue viendo igual en pantalla) |
+| «**Error 429** al pedir Shorts de un enlace de YouTube» | YouTube limita las consultas desde tu conexión cuando se hacen varias seguidas. **No es un fallo del programa.** Espera unos minutos; o mejor, si el video largo es un proyecto de este programa, **deja la casilla del enlace vacía**: así el material se lee de tu propio proyecto, que es mejor fuente y no toca YouTube |
+| «Ese video no tiene subtítulos disponibles» | El programa lee lo que se dice en el video a través de sus subtítulos. Si el video es tuyo, actívalos en YouTube Studio; si no, saca los Shorts desde el proyecto de este programa |
+| `ConnectionAbortedError` **en la ventana negra** | Ruido inofensivo: el navegador cerró la conexión (recargaste, cerraste la pestaña…). Desde la v0.65.1 ya no se imprime |
 | Se detuvo con un error **429** | El proveedor pide ir más despacio | Ya reintenta solo; si insiste, baja `performance.parallel_images` a 2 |
 | Faltan trozos de mi narración | El corrector cortó de más | Busca los avisos `✂`, apaga `audio.fix_narration_ai` y rehaz desde **Análisis** |
 | Costó más de lo estimado | Modelo caro o video generativo activo | Revisa el capítulo 11.4 |

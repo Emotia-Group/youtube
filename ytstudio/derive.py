@@ -187,11 +187,85 @@ def _parse_vtt_timed(path) -> list:
     return out
 
 
+def _limpiar_error_ytdlp(e) -> str:
+    """Mensaje legible a partir de un error de yt-dlp.
+
+    Los errores de yt-dlp vienen con códigos de color de consola («[0;31m»)
+    y jerga que no dice nada al creador. Aquí se traducen a lo que de verdad
+    importa: qué pasó y qué hacer."""
+    msg = re.sub(r"\x1b?\[[0-9;]*m", "", str(e))
+    msg = re.sub(r"^\s*ERROR:\s*", "", msg).strip()
+    bajo = msg.lower()
+    if "429" in msg or "too many requests" in bajo:
+        return ("YouTube está limitando las peticiones desde tu conexión "
+                "(error 429: «demasiadas peticiones»). NO es un fallo del "
+                "programa ni de tu video: pasa cuando se consultan varios "
+                "videos seguidos. Espera unos minutos y vuelve a intentarlo. "
+                "Mientras tanto, si el video largo es un proyecto de este "
+                "programa, deja la casilla del enlace VACÍA: así el material "
+                "se lee de tu propio proyecto, sin tocar YouTube.")
+    if "private video" in bajo or "sign in" in bajo:
+        return ("Ese video es privado o pide iniciar sesión, así que el "
+                "programa no puede leerlo. Ponlo como «no listado» o público, "
+                "o saca los Shorts desde el proyecto de este programa.")
+    if "video unavailable" in bajo or "not available" in bajo:
+        return ("Ese video no está disponible (puede estar borrado, ser "
+                "privado o tener restricción por país). Comprueba el enlace.")
+    if "unable to download" in bajo and "subtitle" in bajo:
+        return ("No se pudieron descargar los subtítulos de ese video. "
+                f"Detalle técnico: {msg[:200]}")
+    return msg[:400]
+
+
+def _elegir_idioma_subtitulos(info: dict, lang: str):
+    """Qué ÚNICA pista de subtítulos pedir, entre las que el video tiene.
+
+    Antes se pedían tres a la vez (el idioma del proyecto, su variante
+    «-orig» e inglés) aunque solo se usara la primera: tres descargas
+    seguidas contra YouTube por cada consulta, que es justo lo que dispara
+    el error 429 de «demasiadas peticiones». Ahora se mira PRIMERO qué
+    pistas existen (eso viene en los metadatos, sin descargar nada) y se
+    pide exactamente una.
+
+    Devuelve (código de idioma, es_automático) o (None, False)."""
+    manuales = info.get("subtitles") or {}
+    automaticos = info.get("automatic_captions") or {}
+    # Las pistas «live_chat» no son subtítulos
+    manuales = {k: v for k, v in manuales.items() if k != "live_chat"}
+
+    preferidos = [lang, f"{lang}-orig"]
+    idioma_video = info.get("language")
+    if idioma_video:
+        preferidos += [idioma_video, f"{idioma_video}-orig"]
+    preferidos.append("en")
+
+    for tabla, es_auto in ((manuales, False), (automaticos, True)):
+        # Se recorre preferencia por preferencia, probando primero el código
+        # exacto y luego sus variantes regionales («es-419», «es-ES»). Hacerlo
+        # en dos pasadas separadas era un error: con «es-419» e «inglés»
+        # disponibles, un proyecto en español acababa en inglés.
+        for code in preferidos:
+            if code in tabla:
+                return code, es_auto
+            raiz = code.split("-")[0]
+            for disponible in sorted(tabla):
+                if disponible.split("-")[0] == raiz:
+                    return disponible, es_auto
+    # Lo que haya: mejor unos subtítulos en otro idioma que ninguno
+    for tabla, es_auto in ((manuales, False), (automaticos, True)):
+        if tabla:
+            return next(iter(tabla)), es_auto
+    return None, False
+
+
 def source_from_url(url: str, cfg: dict, work_dir=None) -> dict:
     """Material de CUALQUIER video de YouTube a partir de su enlace.
 
     Solo se descargan los subtítulos y los metadatos: no hace falta bajar el
-    video (que puede ser de horas) para saber qué se dice y cuándo."""
+    video (que puede ser de horas). Y se descarga UNA sola pista, elegida
+    entre las que el video tiene de verdad — pedir varias a la vez es lo que
+    dispara el bloqueo por «demasiadas peticiones» de YouTube."""
+    import time
     from pathlib import Path
     import tempfile
 
@@ -205,30 +279,82 @@ def source_from_url(url: str, cfg: dict, work_dir=None) -> dict:
     work = Path(work_dir or tempfile.mkdtemp(prefix="derive_"))
     work.mkdir(parents=True, exist_ok=True)
     lang = cfg.get("language", "es")
-    opts = {
+    base = {
         "quiet": True, "no_warnings": True, "noplaylist": True,
         "socket_timeout": float((cfg.get("reference") or {}).get(
             "timeout_seconds", 45)),
         "retries": 3,
         "skip_download": True,          # los subtítulos bastan
-        "writesubtitles": True, "writeautomaticsub": True,
-        "subtitleslangs": [lang, f"{lang}-orig", "en"],
-        "subtitlesformat": "vtt/srt/best",
-        "outtmpl": str(work / "src.%(ext)s"),
     }
     from ytstudio.progress import notify
+
+    def _con_reintentos(fn, que: str):
+        """YouTube devuelve 429 en rachas: un par de esperas cortas suelen
+        bastar. Si no, el error sale traducido a algo accionable."""
+        esperas = [0, 4, 12]
+        ultimo = None
+        for i, espera in enumerate(esperas):
+            if espera:
+                notify(f"⏳ YouTube pidió esperar; reintentando {que} en "
+                       f"{espera}s… ({i} de {len(esperas) - 1})")
+                time.sleep(espera)
+            try:
+                return fn()
+            except Exception as e:
+                ultimo = e
+                if "429" not in str(e) and "Too Many Requests" not in str(e):
+                    break
+        raise RuntimeError(_limpiar_error_ytdlp(ultimo))
+
+    # 1) METADATOS, sin descargar nada: título, duración y QUÉ subtítulos hay
     notify(f"🔎 Leyendo el video largo… ({url})")
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+
+    def _meta():
+        with yt_dlp.YoutubeDL(base) as ydl:
+            return ydl.extract_info(url, download=False)
+
+    info = _con_reintentos(_meta, "la consulta")
+
+    code, es_auto = _elegir_idioma_subtitulos(info, lang)
+    if not code:
+        raise RuntimeError(
+            "Ese video no tiene subtítulos disponibles, ni propios ni "
+            "automáticos, así que no se puede leer lo que dice. Si es tuyo, "
+            "actívalos en YouTube Studio; si no, saca los Shorts desde el "
+            "proyecto de este programa (deja la casilla del enlace vacía).")
+
+    # 2) UNA sola pista de subtítulos, la elegida
+    notify(f"📥 Descargando los subtítulos en «{code}»"
+           + (" (automáticos)" if es_auto else "") + "…")
+    opts = {
+        **base,
+        "writesubtitles": not es_auto,
+        "writeautomaticsub": es_auto,
+        "subtitleslangs": [code],
+        "subtitlesformat": "vtt/srt/best",
+        "outtmpl": str(work / "src.%(ext)s"),
+        # Si la pista falla, no se tira la operación entera: puede que otra
+        # variante sí haya quedado en disco, y el aviso claro vale más que
+        # una traza de error.
+        "ignoreerrors": True,
+    }
+
+    def _bajar():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(url, download=True)
+
+    _con_reintentos(_bajar, "la descarga de subtítulos")
 
     subs = sorted(work.glob("src*.vtt")) + sorted(work.glob("src*.srt"))
     marcas = _parse_vtt_timed(subs[0]) if subs else []
     if not marcas:
         raise RuntimeError(
-            "Ese video no tiene subtítulos disponibles, ni propios ni "
-            "automáticos, así que no se puede leer lo que dice. Si es tuyo, "
-            "actívalos en Studio; si no, sácale los Shorts desde el proyecto "
-            "de este programa.")
+            f"YouTube no entregó los subtítulos de ese video (pista «{code}»). "
+            "Suele ser un bloqueo temporal por hacer varias consultas "
+            "seguidas: espera unos minutos y reinténtalo. Si el video largo "
+            "es un proyecto de este programa, deja la casilla del enlace "
+            "vacía y el material se lee de tu propio proyecto, sin tocar "
+            "YouTube.")
     notify(f"📝 Leídas {len(marcas)} líneas con su minuto.")
     return {
         "origen": "enlace",
@@ -239,6 +365,7 @@ def source_from_url(url: str, cfg: dict, work_dir=None) -> dict:
         "canal": info.get("uploader") or info.get("channel") or "",
         "marcas": marcas,
         "url": info.get("webpage_url") or url,
+        "subtitulos": {"idioma": code, "automaticos": es_auto},
     }
 
 

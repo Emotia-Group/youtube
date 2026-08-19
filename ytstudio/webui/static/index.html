@@ -759,6 +759,12 @@ function propuestaShorts(plan, fecha) {
   const marcados = new Set(cands.map((_, i) => i));
   const wrap = el('div', {});
 
+  // RESCATE: si el enlace de YouTube falló y se usó el material del propio
+  // proyecto, hay que decirlo — el creador tiene que saber de dónde salió.
+  if (plan.nota) wrap.append(el('div', { class: 'plate', style: 'padding:14px;margin-bottom:16px;font-size:14px;line-height:1.7' },
+    el('div', { class: 'kicker', style: 'margin-bottom:6px' }, 'Se usó otra fuente'),
+    plan.nota));
+
   if (!rot.suficiente) wrap.append(el('div', { class: 'plate', style: 'padding:14px;margin-bottom:16px;font-size:14px;line-height:1.7' },
     el('div', { class: 'kicker', style: 'color:var(--a700);margin-bottom:6px' }, 'Poca variedad de gancho'),
     `Solo ${rot.estructuras} estructura(s) distintas para ${cands.length} piezas (el mínimo sano es ${rot.minimo}). Repetir la misma fórmula cansa a la audiencia, y además es justo el patrón que YouTube describe como producción en masa. Vuelve a proponer, o quita las que se repitan.`));
