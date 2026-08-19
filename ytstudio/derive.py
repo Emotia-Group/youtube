@@ -104,6 +104,32 @@ CAMPAIGN_BY_ID = {c["id"]: c for c in CAMPAIGN}
 # abandono y un denominador más pequeño.
 DURACION_MIN, DURACION_MAX = 20, 60
 
+# ---------------------------------------------------------------------------
+# LOS DOS MODOS de hacer un Short a partir de un video largo
+# ---------------------------------------------------------------------------
+# El de RECORTE es el de por defecto por una razón práctica: conserva tu voz y
+# tu edición, y no cuesta ni voz ni imágenes generadas — solo el rato de
+# descargar el tramo y montarlo. El de PIEZA NUEVA existe para cuando lo que
+# quieres decir no está dicho en el video largo de forma que aguante sola.
+
+MODOS: dict = {
+    "recorte": {
+        "label": "Recorte del video original",
+        "hint": "Se baja el tramo exacto y se reencuadra a vertical. "
+                "Conserva tu voz, tu edición y tu imagen. No gasta en voz ni "
+                "en imágenes: solo tiempo de descarga y montaje.",
+        "requiere_enlace": True,
+    },
+    "nuevo": {
+        "label": "Pieza nueva generada",
+        "hint": "Se escribe un guion nuevo y se genera todo de cero (voz, "
+                "imágenes, montaje). Cuesta dinero y tiempo, pero permite "
+                "decir algo que en el video largo no está dicho así.",
+        "requiere_enlace": False,
+    },
+}
+MODO_POR_DEFECTO = "recorte"
+
 
 # ---------------------------------------------------------------------------
 # DE DÓNDE SALE EL MATERIAL
@@ -167,13 +193,24 @@ def _parse_vtt_timed(path) -> list:
 
     out: list = []
     actual: float | None = None
+    fin_actual: float | None = None
     for raw in Path(path).read_text(encoding="utf-8",
                                     errors="replace").splitlines():
         line = re.sub(r"<[^>]+>", "", raw).strip()
+        m = re.match(r"(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})\s*-->"
+                     r"\s*(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})", line)
+        if m:
+            g = [int(x) for x in m.groups()]
+            actual = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000
+            # El FIN también: sin él no se puede recortar un Short del video
+            # original con sus subtítulos bien temporizados.
+            fin_actual = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000
+            continue
         m = re.match(r"(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})\s*-->", line)
         if m:
             h, mi, s, ms = (int(x) for x in m.groups())
             actual = h * 3600 + mi * 60 + s + ms / 1000
+            fin_actual = None
             continue
         if (not line or line == "WEBVTT" or re.fullmatch(r"\d+", line)
                 or line.startswith(("Kind:", "Language:", "NOTE"))):
@@ -183,7 +220,10 @@ def _parse_vtt_timed(path) -> list:
         # Los subtítulos automáticos repiten la línea anterior al desplazarse
         if out and out[-1]["texto"].endswith(line):
             continue
-        out.append({"t": round(actual, 1), "seccion": "", "texto": line})
+        marca = {"t": round(actual, 1), "seccion": "", "texto": line}
+        if fin_actual is not None:
+            marca["t_fin"] = round(fin_actual, 1)
+        out.append(marca)
     return out
 
 
@@ -398,6 +438,7 @@ CANDIDATE_SCHEMA = {
                 "properties": {
                     "nombre": {"type": "string"},
                     "idea": {"type": "string"},
+                    "modo": {"type": "string", "enum": list(MODOS)},
                     "gancho_tipo": {"type": "string",
                                     "enum": list(HOOK_STRUCTURES)},
                     "texto_pantalla": {"type": "string"},
@@ -412,10 +453,10 @@ CANDIDATE_SCHEMA = {
                     "descripcion": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["nombre", "idea", "gancho_tipo", "texto_pantalla",
-                             "guion", "cta", "funcion", "desde", "hasta",
-                             "duracion", "titulo_youtube", "descripcion",
-                             "hashtags"],
+                "required": ["nombre", "idea", "modo", "gancho_tipo",
+                             "texto_pantalla", "guion", "cta", "funcion",
+                             "desde", "hasta", "duracion", "titulo_youtube",
+                             "descripcion", "hashtags"],
                 "additionalProperties": False,
             },
         },
@@ -440,7 +481,42 @@ def _system_prompt(lang: str) -> str:
         "marcas de tiempo, sin corchetes.")
 
 
-def _prompt(source: dict, n: int, hooks: list) -> str:
+def _bloque_modo(modo_preferido: str, puede_recortar: bool) -> str:
+    """Lo que cambia en el encargo según se vaya a RECORTAR o a REESCRIBIR.
+
+    No es un matiz: en modo recorte el director NO puede cambiar lo que se
+    dice, así que elegir bien el principio y el final del tramo pasa a ser la
+    decisión más importante de todas."""
+    if not puede_recortar:
+        return ("\n\nMODO: PIEZA NUEVA para todas (no hay enlace del video "
+                "original, así que recortarlo no es posible). Escribe el "
+                "guion completo de cada Short.\n")
+    if modo_preferido == "nuevo":
+        return ("\n\nMODO: por defecto PIEZA NUEVA — escribe el guion "
+                "completo. Marca 'modo' como «recorte» SOLO si el momento "
+                "funciona tal cual está grabado, sin tocar una palabra.\n")
+    return (
+        "\n\nMODO: por defecto RECORTE. El Short se hará con el AUDIO Y LA "
+        "IMAGEN REALES del video largo, tal cual: no se puede cambiar ni una "
+        "palabra de lo que se dice. Eso cambia tu trabajo:\n"
+        "- 'desde' y 'hasta' son la decisión MÁS IMPORTANTE. Marcan el corte "
+        "de verdad, así que el tramo tiene que EMPEZAR con una frase que "
+        "funcione como gancho —nada de entrar a media explicación o después "
+        "de un «entonces»— y TERMINAR en una idea cerrada, no a mitad.\n"
+        "- 'guion' pasa a ser la TRANSCRIPCIÓN aproximada de lo que se oye en "
+        "ese tramo, copiada de la transcripción de arriba. No la reescribas: "
+        "sirve para que el creador lea qué va a salir.\n"
+        "- 'texto_pantalla' sigue siendo tuyo y es MÁS importante que nunca: "
+        "es lo único que se le añade encima al video, y es lo que hace que el "
+        "gancho funcione sin sonido.\n"
+        "- 'cta' se escribirá en la descripción, no en el audio.\n"
+        "- Marca 'modo' como «nuevo» SOLO para los momentos que valen la pena "
+        "pero que grabados NO aguantan solos (empiezan mal, van sueltos, les "
+        "falta contexto). Esos se reescriben y se generan de cero.\n")
+
+
+def _prompt(source: dict, n: int, hooks: list,
+            modo: str = MODO_POR_DEFECTO, puede_recortar: bool = True) -> str:
     hook_list = "\n".join(
         f"- {k}: {v['patron']} Ejemplo: {v['ejemplo']}"
         for k, v in HOOK_STRUCTURES.items() if k in hooks)
@@ -496,7 +572,21 @@ def _prompt(source: dict, n: int, hooks: list) -> str:
         "principio, SIN el hashtag de Shorts (la clasificación es automática "
         "por proporción y duración: ese hashtag es un mito de 2021).\n"
         "11. 'descripcion': primera línea = el gancho reformulado (es lo "
-        "único que se ve sin desplegar). 'hashtags': 2 o 3, temáticos.")
+        "único que se ve sin desplegar). 'hashtags': 2 o 3, temáticos."
+        + _bloque_modo(modo, puede_recortar))
+
+
+def modo_disponible(source: dict, cfg: dict) -> tuple[str, bool]:
+    """(modo preferido, ¿se puede recortar?).
+
+    Recortar exige el enlace del video Y yt-dlp: sin cualquiera de los dos,
+    solo queda la pieza nueva — y hay que decirlo, no fallar luego."""
+    from ytstudio import clip
+    preferido = ((cfg.get("shorts") or {}).get("modo") or MODO_POR_DEFECTO)
+    if preferido not in MODOS:
+        preferido = MODO_POR_DEFECTO
+    puede = bool((source.get("url") or "").strip()) and clip.available()
+    return preferido, puede
 
 
 def propose(source: dict, cfg: dict, n: int = 5) -> list:
@@ -509,13 +599,18 @@ def propose(source: dict, cfg: dict, n: int = 5) -> list:
         raise ValueError("El video largo no tiene texto que leer.")
     n = max(1, min(int(n), len(CAMPAIGN)))
     llm = get_llm(cfg)
-    data = llm.complete_json(_system_prompt(lang_name(cfg)),
-                             _prompt(source, n, list(HOOK_STRUCTURES)),
-                             schema=CANDIDATE_SCHEMA, purpose="derive_shorts")
-    return normalize(data.get("candidatos") or [], source, n)
+    modo, puede_recortar = modo_disponible(source, cfg)
+    data = llm.complete_json(
+        _system_prompt(lang_name(cfg)),
+        _prompt(source, n, list(HOOK_STRUCTURES), modo, puede_recortar),
+        schema=CANDIDATE_SCHEMA, purpose="derive_shorts")
+    return normalize(data.get("candidatos") or [], source, n,
+                     modo=modo, puede_recortar=puede_recortar)
 
 
-def normalize(candidatos: list, source: dict, n: int) -> list:
+def normalize(candidatos: list, source: dict, n: int, *,
+              modo: str = MODO_POR_DEFECTO,
+              puede_recortar: bool = True) -> list:
     """Red de seguridad sobre lo que devuelve el modelo: recorta a lo pedido,
     descarta lo incompleto, y garantiza que ninguna pieza pase de 60 s ni
     repita función de campaña."""
@@ -523,6 +618,10 @@ def normalize(candidatos: list, source: dict, n: int) -> list:
     for c in candidatos:
         if not (c.get("guion") or "").strip():
             continue
+        # MODO: sin enlace del video no se puede recortar, diga lo que diga
+        # el modelo. Es la única regla dura.
+        elegido = c.get("modo") if c.get("modo") in MODOS else modo
+        c["modo"] = elegido if puede_recortar else "nuevo"
         c["gancho_tipo"] = (c.get("gancho_tipo") if c.get("gancho_tipo")
                             in HOOK_STRUCTURES else "pregunta_personal")
         c["plantilla"] = HOOK_STRUCTURES[c["gancho_tipo"]]["plantilla"]
@@ -628,6 +727,9 @@ def brief_markdown(c: dict) -> str:
         f"{c.get('texto_pantalla', '')}",
         f"**Llamada a la acción:** {c.get('cta', '')}",
         f"**Duración objetivo:** {c.get('duracion')} s",
+        f"**Cómo se hace:** "
+        f"{MODOS[c.get('modo') or MODO_POR_DEFECTO]['label']} — "
+        f"{MODOS[c.get('modo') or MODO_POR_DEFECTO]['hint']}",
         "",
         f"**En la campaña:** {camp['label']} · {campaign_label(camp['dia'])}",
         f"  {camp['para']}",
@@ -647,7 +749,8 @@ def brief_markdown(c: dict) -> str:
 
 
 def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
-                         channel_id: str = "", style_id: str = "") -> str:
+                         channel_id: str = "", style_id: str = "",
+                         source: dict | None = None) -> str:
     """Crea un proyecto de Short ya rellenado a partir de un candidato.
 
     Nace con el guion puesto (como GUION, no como idea: el programa lo
@@ -705,6 +808,23 @@ def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
     segundos = int(c.get("duracion") or 45)
     overrides.setdefault("video", {})["target_minutes"] = round(
         segundos / 60, 2)
+
+    modo = c.get("modo") if c.get("modo") in MODOS else MODO_POR_DEFECTO
+    project.set("shorts_modo", modo)
+    if modo == "recorte":
+        # RECORTE: el video sale del original, así que no hay concepto que
+        # inventar, ni guion que escribir, ni voz ni imágenes que pagar. Se
+        # deja el andamiaje mínimo y las fases que no aplican, hechas.
+        from ytstudio import clip
+        origen = dict(source or {})
+        origen.setdefault("url", c.get("origen_url", ""))
+        origen.setdefault("titulo", c.get("origen_titulo", ""))
+        clip.scaffold(project, c, origen)
+        # Un recorte hereda la duración del tramo, no una duración objetivo
+        overrides.setdefault("video", {})["target_minutes"] = round(
+            max(5.0, float(c.get("hasta") or 0) - float(c.get("desde") or 0))
+            / 60, 2)
+
     (project.dir / "config.yaml").write_text(
         yaml.safe_dump(overrides, allow_unicode=True), encoding="utf-8")
     return final

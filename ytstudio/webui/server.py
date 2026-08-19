@@ -677,6 +677,10 @@ def api_derive_propose(body: dict) -> dict:
     _log_derive("info", f"Buscando {n} Shorts en «{source['titulo']}» "
                         f"({len(source['marcas'])} líneas de texto leídas).",
                 source.get("slug") or None)
+    # El modo que pidió el creador manda sobre el de la configuración.
+    modo = body.get("modo")
+    if modo in derive.MODOS:
+        cfg = {**cfg, "shorts": {**(cfg.get("shorts") or {}), "modo": modo}}
     try:
         candidatos = derive.propose(source, cfg, n=n)
     except Exception as e:
@@ -689,6 +693,8 @@ def api_derive_propose(body: dict) -> dict:
     plan = derive.save_plan(source, candidatos, body.get("desde") or None)
     plan["estructuras"] = {k: v["label"]
                            for k, v in derive.HOOK_STRUCTURES.items()}
+    plan["modos"] = derive.MODOS
+    _, plan["puede_recortar"] = derive.modo_disponible(source, cfg)
     plan["nota"] = nota
     _log_derive("info", f"{len(candidatos)} Short(s) propuestos de "
                         f"«{source['titulo']}».", source.get("slug") or None)
@@ -702,6 +708,7 @@ def api_derive_create(body: dict) -> dict:
     if not candidatos:
         raise ApiError(400, "No has elegido ningún Short.")
     cfg = load_config()
+    origen = body.get("origen") or {}
     creados = []
     for c in candidatos:
         if c.get("gancho_tipo") not in derive.HOOK_STRUCTURES:
@@ -710,13 +717,14 @@ def api_derive_create(body: dict) -> dict:
         c.setdefault("funcion", derive.CAMPAIGN[0]["id"])
         c.setdefault("dia", derive.CAMPAIGN_BY_ID[c["funcion"]]["dia"])
         c["plantilla"] = derive.HOOK_STRUCTURES[c["gancho_tipo"]]["plantilla"]
+        if c.get("modo") not in derive.MODOS:
+            c["modo"] = derive.MODO_POR_DEFECTO
         slug = derive.create_short_project(
             c, cfg, channel_id=body.get("channel_id") or "",
-            style_id=body.get("style_id") or "")
+            style_id=body.get("style_id") or "", source=origen)
         c["slug"] = slug
         creados.append({"slug": slug, "nombre": c.get("nombre", ""),
                         "dia": c.get("dia")})
-    origen = body.get("origen") or {}
     if origen.get("slug"):
         try:
             derive.save_plan(origen, candidatos, body.get("desde") or None)

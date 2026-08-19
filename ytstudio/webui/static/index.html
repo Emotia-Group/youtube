@@ -724,13 +724,19 @@ function panelSacarShorts(d) {
     title: 'Día en que publicas (o publicaste) el video largo. De ahí sale el calendario.' });
   const enlace = el('input', { class: 'input', placeholder: 'o pega el enlace de un video de YouTube (opcional)' });
   const listo = d.scene_count > 0;
+  // CÓMO se fabrica cada Short. El recorte va primero porque conserva tu voz
+  // y tu edición, y no gasta en voz ni en imágenes generadas.
+  const modo = el('select', { class: 'input', style: 'width:auto',
+    title: 'Recorte: se baja el tramo del video original y se pone vertical. Pieza nueva: se genera todo de cero.' },
+    el('option', { value: 'recorte', selected: 'selected' }, 'Recortar del video original'),
+    el('option', { value: 'nuevo' }, 'Generar una pieza nueva'));
 
   const boton = el('button', { class: 'btn btn-primary', onclick: async () => {
     boton.disabled = true; boton.textContent = 'Leyendo el video largo…';
     caja.replaceChildren(el('div', { class: 'muted', style: 'font-size:13px' },
       'El director está leyendo la transcripción entera y buscando los momentos que aguantan solos. Suele tardar menos de un minuto.'));
     try {
-      const cuerpo = { n: Number(n.value), desde: fecha.value };
+      const cuerpo = { n: Number(n.value), desde: fecha.value, modo: modo.value };
       if (enlace.value.trim()) cuerpo.url = enlace.value.trim(); else cuerpo.slug = S.slug;
       S.plan = await api('/api/shorts/propose', { method: 'POST', body: JSON.stringify(cuerpo) });
       caja.replaceChildren(propuestaShorts(S.plan, fecha.value));
@@ -748,7 +754,7 @@ function panelSacarShorts(d) {
     !listo ? el('div', { class: 'plate', style: 'margin-top:16px;padding:14px;font-size:14px;line-height:1.7' },
       'Este proyecto todavía no tiene escenas, así que no hay nada que leer. Genera al menos hasta el guion gráfico, o pega abajo el enlace de un video de YouTube ya publicado.') : null,
     el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px' },
-      n, fecha, boton),
+      n, modo, fecha, boton),
     el('div', { style: 'margin-top:10px;max-width:520px' }, enlace),
     caja);
 }
@@ -777,6 +783,7 @@ function propuestaShorts(plan, fecha) {
         marca,
         el('div', { style: 'flex:1' },
           el('div', { class: 'kicker' }, `${diaEtiqueta(c.dia)} · ${(plan.estructuras || {})[c.gancho_tipo] || c.gancho_tipo} · ${c.duracion}s`),
+          selectorModo(c, plan),
           el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:4px' }, c.nombre),
           el('div', { class: 'muted', style: 'font-size:13px;margin-top:6px;line-height:1.6' }, c.idea),
           el('div', { style: 'font-size:14px;line-height:1.7;margin-top:10px' },
@@ -818,6 +825,23 @@ function propuestaShorts(plan, fecha) {
 }
 
 function diaEtiqueta(d) { return d === 0 ? 'D0' : (d > 0 ? `D+${d}` : `D${d}`); }
+
+// CÓMO se fabrica ESTA pieza. Se puede cambiar una a una: un momento que
+// grabado aguanta solo se recorta; uno que necesita reescribirse, se genera.
+function selectorModo(c, plan) {
+  const modos = plan.modos || {};
+  if (plan.puede_recortar === false) {
+    return el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:6px' },
+      'Se generará como pieza nueva: sin el enlace del video original no hay nada que recortar.');
+  }
+  const sel = el('select', { class: 'input', style: 'width:auto;font-size:12px;margin-top:6px',
+    onchange: e => { c.modo = e.target.value; nota.textContent = (modos[c.modo] || {}).hint || ''; } },
+    Object.entries(modos).map(([k, v]) =>
+      el('option', { value: k, selected: k === c.modo ? 'selected' : null }, v.label)));
+  const nota = el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:4px;line-height:1.6' },
+    (modos[c.modo] || {}).hint || '');
+  return el('div', {}, sel, nota);
+}
 
 // LISTA DE COMPROBACIÓN antes de publicar un vertical. Tres estados por
 // punto: ✔ lo comprobó la máquina y está bien · ✖ lo comprobó y está mal ·

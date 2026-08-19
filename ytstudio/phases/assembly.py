@@ -1183,6 +1183,14 @@ def _render_signature(scenes, plans, cfg, project) -> str:
 
 
 def run(project, cfg) -> None:
+    # RECORTE DEL VIDEO ORIGINAL: no hay escenas que montar, ni voz, ni
+    # música — el video ya existe y solo hay que traerlo, reencuadrarlo a
+    # vertical y ponerle sus subtítulos. Es otro montaje distinto.
+    if (project.get("shorts_modo") or "") == "recorte":
+        from ytstudio import clip
+        clip.render(project, cfg)
+        return
+
     require_ffmpeg()
     scenes = load_scenes(project)
     final_dir = project.path("final")

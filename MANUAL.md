@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.65.4 -->
+<!-- MANUAL_VERSION: 0.66.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -951,6 +951,46 @@ equipo, así que es la verdad.
 > archivo te dice en cuál.
 >
 > En ambos casos: **copia todo lo que salga en la ventana negra y pásamelo.**
+
+---
+
+### 8.4 Dos maneras de hacer el Short: recortar o generar
+
+Al proponer Shorts de un video largo eliges **cómo se fabrican**. Es la
+decisión que más cambia el resultado y el coste:
+
+| | ✂ **Recortar del video original** | 🧬 **Generar una pieza nueva** |
+|---|---|---|
+| Qué hace | Baja el **tramo exacto** del video y lo pone vertical | Escribe un guion nuevo y genera voz, imágenes y montaje |
+| La voz | **La tuya**, la del video publicado | Sintetizada |
+| La imagen | **Tu edición**, tal como está | Imágenes generadas |
+| Qué cuesta | Solo el rato de descargar y montar. **No gasta** en voz ni en imágenes | Unos dólares y varios minutos por pieza |
+| Cuándo usarlo | Casi siempre. Si el momento ya funciona grabado | Cuando lo que quieres decir **no está dicho** en el largo de forma que aguante solo |
+
+**Viene puesto el recorte**, por tiempo y por dinero. Puedes cambiarlo para
+toda la tanda antes de proponer, y **pieza a pieza** después, en cada ficha.
+
+> 💡 **Si editaste el video por fuera del programa**, el recorte usa la
+> versión **publicada en YouTube** —la buena—, no la que salió del programa.
+> Por eso conviene pegar el enlace del video en la casilla.
+
+**Qué se le añade al recorte**, y es lo que lo convierte en un Short de
+verdad y no en un trozo suelto:
+
+- Se reencuadra a vertical **sin perder imagen**: el fotograma entero va sobre
+  su propia imagen ampliada y desenfocada, de modo que la pantalla se llena.
+  (En **Ajustes** puedes elegir el recorte centrado, que llena el cuadro pero
+  se come los lados: úsalo solo si el sujeto va siempre centrado.)
+- Se le ponen los **subtítulos del propio video**, con sus tiempos, por encima
+  de la franja del enlace al video largo.
+- Se le pone el **texto de gancho arriba desde el primer fotograma**: la
+  mayoría verá el Short sin sonido, y sin ese texto el gancho no existe.
+- Se **mide y corrige la sonoridad**, porque un recorte hereda el volumen del
+  original, que casi nunca está donde debe.
+
+> ⚠ **El recorte necesita el enlace del video.** Si sacas los Shorts del
+> material del proyecto (sin pegar enlace), no hay video que descargar y todas
+> las piezas se generarán de cero. El programa te lo dice al proponer.
 
 ---
 
