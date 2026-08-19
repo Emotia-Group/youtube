@@ -9,6 +9,29 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.65.4 — 2026-08-18
+La voz de un proveedor puesta en otro tiraba la corrida entera.
+
+Caso real: la fase de Voz murió con «Cartesia no pudo sintetizar la voz —
+voice ID must be a valid UUID», después de 4 minutos y $0.67 ya gastados en
+las fases anteriores.
+
+- 🎙 CADA CASA NOMBRA SUS VOCES A SU MANERA y el programa guarda UNA sola.
+  ElevenLabs usa códigos tipo «onwK4e9ZLuTAKqWW03F9», Cartesia exige un
+  identificador con guiones, OpenAI nombres cortos («onyx») y Edge nombres
+  largos («es-MX-JorgeNeural»). Al cambiar de proveedor en Ajustes, **la voz
+  del anterior se quedaba puesta** y el nuevo la rechazaba. Afectaba a los
+  cuatro proveedores, en las dos direcciones.
+- 🛑 SE AVISA ANTES DE EMPEZAR, que es cuando corregirlo es gratis. El aviso
+  sale en la corrida y en el panel de Atención, dice qué voz está mal, por
+  qué pasa, qué formato hace falta con un ejemplo, y dónde cambiarla.
+- 🛟 Y SI AUN ASÍ SE LLEGA A GENERAR, el proveedor usa su voz por defecto y
+  lo avisa, en vez de tirar la corrida. Perder la voz elegida es molesto;
+  perder cuatro fases ya pagadas es caro.
+- 🔍 Las comprobaciones son laxas a propósito: cazan el desajuste evidente y
+  dejan pasar una voz nueva que el catálogo aún no conozca. Bloquear una voz
+  legítima sería peor que dejar pasar una rara.
+
 ## v0.65.3 — 2026-08-18
 `actualizar.bat` no decía lo suficiente para saber si te había actualizado.
 

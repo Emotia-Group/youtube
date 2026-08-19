@@ -1,4 +1,18 @@
-"""Proveedores de texto-a-voz. Todos devuelven la ruta del audio generado."""
+"""Proveedores de texto-a-voz. Todos devuelven la ruta del audio generado.
+
+CADA PROVEEDOR NOMBRA SUS VOCES A SU MANERA, y eso causa un fallo que costó
+una corrida entera al creador: ElevenLabs usa códigos como
+«onwK4e9ZLuTAKqWW03F9», Cartesia exige un UUID, OpenAI nombres cortos
+(«onyx») y Edge nombres largos («es-MX-JorgeNeural»). El programa guarda UNA
+sola voz en la configuración, así que al cambiar de proveedor la voz del
+anterior se queda puesta y el nuevo la rechaza — pero el rechazo llegaba en
+la fase 5 de 11, después de gastar dinero y varios minutos.
+
+Ahora cada proveedor comprueba que la voz configurada tenga SU formato: si no
+lo tiene, usa la suya por defecto y lo avisa, en vez de tirar la corrida. Y
+`ytstudio.catalog.tts_voice_problem()` lo detecta ANTES de empezar, cuando
+corregirlo no cuesta nada.
+"""
 from __future__ import annotations
 
 import os
@@ -7,13 +21,34 @@ from pathlib import Path
 from ytstudio.utils.media import make_silence
 
 
+def _pick_voice(cfg: dict, proveedor: str, por_defecto: str) -> str:
+    """La voz configurada si encaja con el proveedor; si no, la de la casa.
+
+    Nunca lanza: quedarse sin voz a mitad de una corrida es peor que usar la
+    voz por defecto avisando."""
+    from ytstudio.catalog import voice_matches_provider
+    voz = (cfg.get("providers", {}).get("tts", {}).get("voice") or "").strip()
+    if not voz:
+        return por_defecto
+    if voice_matches_provider(proveedor, voz):
+        return voz
+    try:
+        from ytstudio.progress import notify
+        notify(f"⚠ La voz «{voz}» no tiene el formato que usa {proveedor} "
+               f"(seguramente quedó del proveedor anterior). Se usa la voz "
+               f"por defecto. Cámbiala en Ajustes → Voz en off.")
+    except Exception:
+        pass
+    return por_defecto
+
+
 class ElevenLabsTTS:
     DEFAULT_VOICE = "onwK4e9ZLuTAKqWW03F9"  # "Daniel" — multilingüe
 
     def __init__(self, cfg: dict):
         from elevenlabs.client import ElevenLabs
         self.client = ElevenLabs(api_key=os.environ["ELEVENLABS_API_KEY"])
-        self.voice = cfg["providers"]["tts"].get("voice") or self.DEFAULT_VOICE
+        self.voice = _pick_voice(cfg, "elevenlabs", self.DEFAULT_VOICE)
 
     def synthesize(self, text: str, out: Path) -> Path:
         audio = self.client.text_to_speech.convert(
@@ -48,7 +83,7 @@ class CartesiaTTS:
     def __init__(self, cfg: dict):
         self.api_key = os.environ["CARTESIA_API_KEY"]
         tcfg = cfg["providers"]["tts"]
-        self.voice = tcfg.get("voice") or self.DEFAULT_VOICE
+        self.voice = _pick_voice(cfg, "cartesia", self.DEFAULT_VOICE)
         self.model = tcfg.get("model") or self.DEFAULT_MODEL
         # Cartesia necesita saber el idioma del texto (no lo deduce)
         self.language = str(cfg.get("language", "es"))[:2]
@@ -99,7 +134,7 @@ class OpenAITTS:
     def __init__(self, cfg: dict):
         from openai import OpenAI
         self.client = OpenAI()
-        self.voice = cfg["providers"]["tts"].get("voice") or "onyx"
+        self.voice = _pick_voice(cfg, "openai", "onyx")
 
     def synthesize(self, text: str, out: Path) -> Path:
         with self.client.audio.speech.with_streaming_response.create(
@@ -117,7 +152,7 @@ class EdgeTTS:
     """TTS gratuito basado en las voces neuronales de Microsoft Edge."""
 
     def __init__(self, cfg: dict):
-        self.voice = cfg["providers"]["tts"].get("voice") or "es-MX-JorgeNeural"
+        self.voice = _pick_voice(cfg, "edge", "es-MX-JorgeNeural")
 
     def synthesize(self, text: str, out: Path) -> Path:
         import asyncio
