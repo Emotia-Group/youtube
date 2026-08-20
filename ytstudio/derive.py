@@ -457,6 +457,20 @@ CANDIDATE_SCHEMA = {
                                 "enum": [c["id"] for c in CAMPAIGN]},
                     "desde": {"type": "number"},
                     "hasta": {"type": "number"},
+                    # Un Short puede salir de VARIOS fragmentos del largo: el
+                    # momento bueno casi nunca está entero y seguido.
+                    "tramos": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "desde": {"type": "number"},
+                                "hasta": {"type": "number"},
+                            },
+                            "required": ["desde", "hasta"],
+                            "additionalProperties": False,
+                        },
+                    },
                     "duracion": {"type": "integer"},
                     "titulo_youtube": {"type": "string"},
                     "descripcion": {"type": "string"},
@@ -518,6 +532,15 @@ def _bloque_modo(modo_preferido: str, puede_recortar: bool) -> str:
         "- 'texto_pantalla' sigue siendo tuyo y es MÁS importante que nunca: "
         "es lo único que se le añade encima al video, y es lo que hace que el "
         "gancho funcione sin sonido.\n"
+        "- 'tramos' es opcional y sirve para lo que casi siempre hace falta: "
+        "el momento bueno rara vez está entero y seguido. Puedes dar 2, 3 o "
+        "4 fragmentos del largo y el programa los encadena en ese orden, con "
+        "fundidos, aire entre ellos y una cama musical continua por debajo "
+        "que tapa los empalmes. Úsalo para poner delante la frase que "
+        "funciona como gancho aunque en el video vaya después, y para saltar "
+        "las digresiones. Cada fragmento tiene que empezar y terminar en "
+        "frase completa: si cortas a media palabra, se oye. Si el momento SÍ "
+        "está entero y seguido, deja 'tramos' vacío y usa solo desde/hasta.\n"
         "- 'cta' se escribirá en la descripción, no en el audio.\n"
         "- Marca 'modo' como «nuevo» SOLO para los momentos que valen la pena "
         "pero que grabados NO aguantan solos (empiezan mal, van sueltos, les "
@@ -628,7 +651,41 @@ def ajustar_tramo(c: dict) -> dict:
     trabaja con un dato falso. Aquí mandan los segundos del tramo, recortados
     al mínimo y al máximo permitidos, y la ficha se pone al día.
 
+    Con VARIOS fragmentos manda la SUMA de sus duraciones más el aire entre
+    ellos, no la distancia entre el primer segundo y el último: dos
+    fragmentos separados por diez minutos de video no son un Short de diez
+    minutos.
+
     Devuelve el mismo candidato, ya corregido."""
+    from ytstudio.clip import BRECHA_DEFECTO
+
+    tramos = []
+    for t in (c.get("tramos") or []):
+        try:
+            d, h = float(t.get("desde")), float(t.get("hasta"))
+        except (TypeError, ValueError):
+            continue
+        if h > d:
+            tramos.append({"desde": round(d, 2), "hasta": round(h, 2)})
+    if len(tramos) > 1:
+        # Si la suma se pasa del máximo, se recorta por el FINAL del último
+        # fragmento: es el que menos duele, porque el gancho va delante.
+        aire = BRECHA_DEFECTO * (len(tramos) - 1)
+        total = sum(t["hasta"] - t["desde"] for t in tramos)
+        if total + aire > DURACION_MAX:
+            sobra = total + aire - DURACION_MAX
+            ultimo = tramos[-1]
+            ultimo["hasta"] = round(max(ultimo["desde"] + 2.0,
+                                        ultimo["hasta"] - sobra), 2)
+            total = sum(t["hasta"] - t["desde"] for t in tramos)
+        c["tramos"] = tramos
+        c["desde"] = min(t["desde"] for t in tramos)
+        c["hasta"] = max(t["hasta"] for t in tramos)
+        c["duracion"] = int(round(total + aire))
+        return c
+    if len(tramos) == 1:        # un solo fragmento: es el tramo de siempre
+        c["desde"], c["hasta"] = tramos[0]["desde"], tramos[0]["hasta"]
+    c["tramos"] = []
     try:
         desde = max(0.0, float(c.get("desde") or 0))
     except (TypeError, ValueError):

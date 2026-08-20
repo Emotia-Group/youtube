@@ -9,6 +9,97 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.68.0 — 2026-08-20
+**El framework de Shorts, al día en el programa.** El creador actualizó el
+Framework Universal de Shorts y sospechó que sus ajustes nuevos no estaban en
+ytstudio. Los revisamos uno a uno: tenía razón. Esto es lo que faltaba, y en
+un caso lo que el programa hacía era **justo lo contrario** de lo que ahora
+dice el framework.
+
+- 🖼 LA IMAGEN AHORA VA A SANGRE, Y ESO CAMBIA EL DEFECTO. Hasta hoy, al pasar
+  un video horizontal a vertical, el programa ponía el fotograma entero sobre
+  su propia imagen ampliada y desenfocada: no se perdía nada. El framework
+  actualizado lo desaconseja expresamente, y el motivo es de peso — el vídeo
+  vertical se ve a pantalla completa, así que **cualquier píxel que no sea
+  imagen se lee como «esto es el recorte de otra cosa»** justo en el segundo
+  en que el espectador decide si desliza. Ahora la imagen **ocupa los cuatro
+  bordes**. Sí, se pierde lo que queda fuera: ese es el precio correcto.
+
+  El fondo desenfocado no desaparece —está en Configuración, marcado como no
+  recomendado—, y los proyectos que ya lo tenían escrito siguen funcionando.
+
+- ✂ Y COMO SOLO CABE UN TERCIO DEL ANCHO, SE ELIGE POR DÓNDE SE RECORTA:
+  izquierda, centro o derecha. En **Configuración** para todos, y **Short a
+  Short** en la pestaña Shorts. No es un adorno: el recorte por el centro que
+  se hacía de oficio **decapita cualquier plano cuyo sujeto no esté centrado**,
+  y hasta ahora no había forma de decirle otra cosa.
+
+- 🎞 UN SHORT PUEDE MONTARSE CON VARIOS TROZOS DEL VIDEO LARGO. El momento
+  bueno casi nunca está entero y seguido: el gancho suele estar enterrado a
+  mitad y por delante hay una digresión. El director ya puede proponer dos,
+  tres o cuatro fragmentos, y el programa los encadena en ese orden. La ficha
+  del Short los enseña, y la duración pasa a ser la SUMA de los fragmentos —
+  no la distancia entre el primer segundo y el último, que con dos trozos
+  separados por diez minutos no significaba nada.
+
+- 🔇 NADA A HUESO. Un empalme corta tres cosas a la vez: la imagen, la voz y la
+  música que ya venía dentro del video largo. La imagen aguanta un corte seco;
+  la voz y la música, no. Ahora hay **fundido entre planos** (0,35 s),
+  **fundido y un cuarto de segundo de aire en la voz** entre fragmento y
+  fragmento, y un paso alto que limpia la locución y de paso rebaja el retumbe
+  de la cama vieja.
+
+- 🎵 CAMA MUSICAL CONTINUA, ELEGIDA MIDIENDO. Es la medida que de verdad tapa
+  los empalmes: una pista seguida, sin un solo corte, por debajo de la voz y
+  apartándose sola cuando se habla. Sale de la **música del propio video
+  largo** —quien salte del Short al largo debe encontrarse el mismo mundo
+  sonoro— o de `assets\music`, y **se elige por medición, no de oído**: la de
+  menor rango de sonoridad es la más plana, y una pista plana es la única que
+  se puede tender bajo cuarenta segundos sin que se note dónde empieza ni
+  dónde da la vuelta. Si la pieza pasa de 60 segundos, el programa avisa: ahí
+  una reclamación de copyright no desmoneta, **bloquea el video en todo el
+  mundo**.
+
+- 🌑 EL TEXTO SE LEE SOBRE LA IMAGEN. Al quitar las bandas, el texto deja de
+  caer sobre negro. Se le pone un **velo oscuro degradado** arriba y abajo —no
+  una caja opaca, que sería volver a meter la banda por la puerta de atrás— y
+  el **color del canal se aclara** en ese texto: un color calibrado para fondo
+  negro se queda sin contraste sobre vídeo.
+
+- 🖼 LA MINIATURA DEL SHORT, POR FIN COMO PIDE EL FRAMEWORK. Ya se generaba
+  vertical, pero el texto de dos de los tres diseños **se salía de la zona
+  segura** de la parrilla del canal — es decir, en el sitio donde la miniatura
+  de verdad decide el clic, media frase no estaba. Ahora el texto se mide y se
+  coloca dentro, arriba, abajo y por los lados; el archivo se guarda por
+  debajo de los 2 MB; y al lado se deja **la prueba que decide si sirve**: la
+  misma miniatura reducida a **150 px**, que es el tamaño al que se ve en la
+  parrilla. Si a 150 px no lees el texto, la miniatura no sirve por bonita que
+  sea a tamaño completo. Si el texto pasa de cuatro palabras, se avisa.
+
+- 🔍 LA REVISIÓN TÉCNICA MIDE DOS COSAS MÁS. **Bandas y zona muerta**: se
+  comprueba en tres puntos del vídeo si la imagen llega a los cuatro bordes, y
+  se dice cuánta superficie está muerta (se mide en tres sitios y se toma el
+  recorte más grande, para que un plano oscuro no haga saltar un aviso falso).
+  Y el **bitrate**: por debajo de 6 Mbps se avisa, porque YouTube recomprime
+  encima y la imagen se ve blanda en los planos con movimiento. El informe
+  recuerda además los dos puntos que ninguna máquina ve: bordes y empalmes.
+
+- 📋 EN LA LISTA «ANTES DE PUBLICAR» la miniatura pasa a ser obligatoria, con
+  su prueba a 150 px, y se recuerda por qué el `.srt` vive en su carpeta y no
+  junto al MP4: juntos y con el mismo nombre, VLC dibuja el subtítulo ENCIMA
+  del que ya va quemado y todo el texto sale duplicado — un video perfecto
+  parece defectuoso y se manda a rehacer un montaje que no tenía nada malo.
+
+- 🧪 Batería `tests/test_v0_68_0.py`: monta un Short de dos fragmentos con
+  ffmpeg de verdad y mide el archivo (vertical, duración, bandas, cama
+  musical, sonoridad y los subtítulos de cada fragmento en su sitio), fabrica
+  un vídeo con bandas para comprobar que se detectan solas, y verifica que el
+  texto de las tres miniaturas cae dentro de la zona segura.
+
+  La batería de la v0.66.0 pedía que el defecto fuera el fondo desenfocado:
+  **esa regla se cambió a propósito**, con su comentario al lado, porque el
+  framework la revocó. No se «arregló» la prueba para que pasara.
+
 ## v0.67.1 — 2026-08-20
 **El canal ya vuelve a traer sus estilos**, visto por el creador nada más
 estrenar la v0.67.0.

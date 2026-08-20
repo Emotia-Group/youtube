@@ -1071,7 +1071,8 @@ function panelOrigenShort(d) {
     el('h2', { style: 'font-size:20px' }, o.titulo || 'el video largo'),
     o.url ? el('a', { href: o.url, target: '_blank', class: 'mono', style: 'font-size:12px' }, o.url) : null,
     el('div', { style: 'margin-top:14px' },
-      fila('Momento del original', o.desde != null ? `${fmtSec(o.desde)} → ${fmtSec(o.hasta)}` : null),
+      fila((d.clip_tramos || []).length > 1 ? 'Fragmentos del original' : 'Momento del original',
+        tramosDelOriginal(d, o)),
       fila('La idea (una sola)', p.idea),
       fila('Texto en pantalla', p.texto_pantalla),
       fila('Llamada a la acción', p.cta),
@@ -1155,6 +1156,7 @@ function propuestaShorts(plan, fecha) {
         el('div', { style: 'flex:1' },
           el('div', { class: 'kicker' }, `${diaEtiqueta(c.dia)} · ${(plan.estructuras || {})[c.gancho_tipo] || c.gancho_tipo} · ${c.duracion}s`),
           selectorModo(c, plan),
+          selectorPunto(c, plan),
           el('div', { style: 'font-family:var(--heading);font-size:19px;margin-top:4px' }, c.nombre),
           el('div', { class: 'muted', style: 'font-size:13px;margin-top:6px;line-height:1.6' }, c.idea),
           el('div', { style: 'font-size:14px;line-height:1.7;margin-top:10px' },
@@ -1163,7 +1165,7 @@ function propuestaShorts(plan, fecha) {
             el('summary', { class: 'muted', style: 'font-size:13px;cursor:pointer' }, 'Ver el guion completo'),
             el('div', { style: 'font-size:14px;line-height:1.8;margin-top:10px;white-space:pre-wrap' }, c.guion),
             el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' },
-              `Sale del minuto ${fmtSec(c.desde || 0)} del video largo · ${c.titulo_youtube} · ${(c.hashtags || []).join(' ')}`))))));
+              `${(c.tramos || []).length > 1 ? `${c.tramos.length} fragmentos del video largo: ` : 'Sale del minuto '}${fragmentosTexto(c)} · ${c.titulo_youtube} · ${(c.hashtags || []).join(' ')}`))))));
   });
 
   const cal = el('div', { style: 'margin-top:24px;border-top:1px solid var(--divider);padding-top:16px' },
@@ -1195,7 +1197,37 @@ function propuestaShorts(plan, fecha) {
   return wrap;
 }
 
+function tramosDelOriginal(d, o) {
+  const t = d.clip_tramos || [];
+  if (t.length > 1) return t.map(x => `${fmtSec(x.desde)} → ${fmtSec(x.hasta)}`).join('   +   ');
+  return o.desde != null ? `${fmtSec(o.desde)} → ${fmtSec(o.hasta)}` : null;
+}
+
 function diaEtiqueta(d) { return d === 0 ? 'D0' : (d > 0 ? `D+${d}` : `D${d}`); }
+
+// Los FRAGMENTOS del video largo con los que se monta la pieza: uno solo, o
+// varios encadenados con fundidos y cama musical por debajo.
+function fragmentosTexto(c) {
+  const t = c.tramos || [];
+  if (t.length > 1) return t.map(x => `${fmtSec(x.desde)}→${fmtSec(x.hasta)}`).join('  +  ');
+  return c.desde != null ? `${fmtSec(c.desde)} → ${fmtSec(c.hasta)}` : '';
+}
+
+// POR DÓNDE se recorta ESTA pieza. Al pasar de 16:9 a 9:16 solo cabe un
+// tercio del ancho: recortar siempre por el centro decapita los planos cuyo
+// sujeto no está centrado.
+function selectorPunto(c, plan) {
+  if (c.modo !== 'recorte' || plan.puede_recortar === false) return null;
+  const puntos = plan.puntos || {};
+  if (!Object.keys(puntos).length) return null;
+  c.punto_recorte = c.punto_recorte || plan.punto_defecto || 'centro';
+  return el('div', { style: 'margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+    el('span', { class: 'muted', style: 'font-size:12.5px' }, 'Recortar la imagen'),
+    el('select', { class: 'input', style: 'width:auto;font-size:12px',
+      onchange: e => { c.punto_recorte = e.target.value; } },
+      Object.entries(puntos).map(([k, label]) =>
+        el('option', { value: k, selected: k === c.punto_recorte ? 'selected' : null }, label))));
+}
 
 // CÓMO se fabrica ESTA pieza. Se puede cambiar una a una: un momento que
 // grabado aguanta solo se recorta; uno que necesita reescribirse, se genera.
@@ -2167,6 +2199,23 @@ function viewAjustes() {
       check('Efectos de sonido en los insertos', cfg.audio?.element_sfx,
         v => set(['audio', 'element_sfx'], v),
         'El pequeño acento sonoro que acompaña a una foto de archivo, una cifra o un mapa cuando aparecen.')),
+    el('div', { class: 'kicker', style: 'margin:26px 0 12px' }, 'Shorts (video vertical)'),
+    el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px' },
+      selector('Cómo se pasa a vertical', ['shorts', 'reencuadre'],
+        [{ v: 'a_sangre', t: 'A sangre (recomendado)' },
+         { v: 'fondo_desenfocado', t: 'Fondo desenfocado (no recomendado)' }],
+        cfg.shorts?.reencuadre || 'a_sangre',
+        'A sangre = la imagen ocupa los cuatro bordes. Se pierde lo que queda fuera del recorte, y ese es el precio correcto: en vertical cualquier banda se lee como «esto es el recorte de otra cosa» justo cuando el espectador decide si desliza.'),
+      selector('Por dónde se recorta', ['shorts', 'punto_recorte'],
+        [{ v: 'izquierda', t: 'Por la izquierda' }, { v: 'centro', t: 'Por el centro' },
+         { v: 'derecha', t: 'Por la derecha' }],
+        cfg.shorts?.punto_recorte || 'centro',
+        'Al pasar de 16:9 a 9:16 solo cabe un tercio del ancho: el recorte por el centro decapita cualquier plano cuyo sujeto no esté centrado. Se puede cambiar Short a Short en la pestaña Shorts.'),
+      selector('Cama musical bajo los empalmes', ['shorts', 'cama_musical'],
+        [{ v: 'auto', t: 'Solo si hay varios fragmentos' }, { v: 'si', t: 'Siempre' },
+         { v: 'no', t: 'Nunca' }],
+        String(cfg.shorts?.cama_musical || 'auto'),
+        'Cuando el Short se monta con trozos del video largo, cada empalme corta también la música que venía dentro. Una pista continua por debajo —la del propio video largo— es lo que de verdad tapa ese salto. Por encima de 60 s, solo música propia: una reclamación bloquea el video en todo el mundo.')),
     el('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:18px' },
       el('button', { class: 'btn btn-primary', onclick: async () => {
         try { await api('/api/config', { method: 'PUT', body: JSON.stringify({ config: cfg }) }); S.cfg.config = cfg; msg.textContent = 'Guardado en config.local.yaml.'; }

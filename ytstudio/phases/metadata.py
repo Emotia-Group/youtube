@@ -146,7 +146,10 @@ def run(project, cfg) -> None:
             "capítulos.\n"
             f"- tags: {TAGS_MAX_SHORT} como mucho, y SOLO variantes "
             "ortográficas o de acentuación de los términos del tema (la "
-            "documentación oficial dice que su papel es mínimo).\n"
+            "documentación oficial dice que su papel es mínimo).\n"            "- Las miniaturas se ven a 150 px de ancho en la parrilla del "
+            "canal, no a tamaño completo: el 'text' NO puede pasar de cuatro "
+            "palabras, y cuanto más corto, mejor. A ese tamaño no entra nada "
+            "más.\n"
             + (f"- El destino del CTA es el video largo: {derived['url']} — "
                "menciónalo en la descripción.\n" if derived.get("url") else "")
             + (("- El plan editorial de este Short ya decidió un título y "

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.67.1 -->
+<!-- MANUAL_VERSION: 0.68.0 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -756,6 +756,8 @@ muestran una tarjeta de **Revisión técnica del vertical**:
 | Duración | Pasando de 3 minutos deja de ser Short; pasando de 60 segundos, una reclamación de música **bloquea el video en todo el mundo** (no lo desmoneta: lo bloquea) |
 | Sonoridad (LUFS) | Lo importante. Ver abajo |
 | Pico de sonido | Por encima del límite, se oye distorsión después de que YouTube recomprima |
+| **Bandas y zona muerta** | Mide si la imagen llega a los cuatro bordes. En vertical se ve a pantalla completa: una banda negra se lee como «esto es el recorte de otra cosa» justo cuando se decide si deslizar |
+| **Calidad de imagen (bitrate)** | Si el archivo viene flojo, YouTube recomprime encima y la imagen se ve blanda en los planos con movimiento |
 
 **Lo de la sonoridad conviene entenderlo, porque es el error más caro y el más
 barato de arreglar.** YouTube **baja** los videos que suenan demasiado alto,
@@ -779,6 +781,8 @@ lee el archivo, no gasta ni un centavo ni llama a ninguna IA.
   ve los Shorts sin sonido: si tu gancho solo se oye, no existe.
 - ¿El final **cierra**, o corta en seco?
 - ¿La franja de abajo quedó libre?
+- ¿La imagen llega a **los cuatro bordes**, o hay bandas y zona muerta?
+- ¿Los empalmes llevan **fundido**, o son cortes a hueso?
 
 **Míralo en un teléfono de verdad**, no en el ordenador: la interfaz de la app
 cambia entre iPhone y Android, y solo ahí ves qué tapa qué.
@@ -913,11 +917,20 @@ Lo que se comprueba solo: la revisión técnica del archivo, que el título
 tenga entre 40 y 70 caracteres, que no lleve el hashtag de Shorts (no hace
 falta: YouTube clasifica solo por proporción y duración), que la descripción
 tenga 2-3 hashtags y enlace al video largo, que haya como mucho 5 tags y que
-el archivo de subtítulos esté generado.
+el archivo de subtítulos esté generado, y que la **miniatura vertical** esté
+hecha y no pase de 2 MB.
 
 Lo que miras tú (los ☐): poner el **enlace a video relacionado** en Studio,
-que el gancho se entienda **con el sonido apagado**, declarar **contenido
-sintético** si aplica, y revisarlo **en un teléfono real**.
+mirar la **miniatura a 150 px** (el archivo `_prueba150px.png`: si a ese
+tamaño no lees el texto, no sirve), que el gancho se entienda **con el sonido
+apagado**, declarar **contenido sintético** si aplica, y revisarlo **en un
+teléfono real**.
+
+> 📄 Un punto más de la lista es un recordatorio, no una tarea: el programa
+> deja el `.srt` en `08_subtitles` y el video en `09_final`, separados **a
+> propósito**. Si algún día los pones juntos y con el mismo nombre, VLC carga
+> el `.srt` **encima** del que ya va quemado y todo el texto sale duplicado —
+> y parece que el video está roto cuando está perfecto.
 
 La lista se actualiza sola: si cambias el título elegido en Metadatos, se
 recalcula.
@@ -988,10 +1001,21 @@ toda la tanda antes de proponer, y **pieza a pieza** después, en cada ficha.
 **Qué se le añade al recorte**, y es lo que lo convierte en un Short de
 verdad y no en un trozo suelto:
 
-- Se reencuadra a vertical **sin perder imagen**: el fotograma entero va sobre
-  su propia imagen ampliada y desenfocada, de modo que la pantalla se llena.
-  (En **Ajustes** puedes elegir el recorte centrado, que llena el cuadro pero
-  se come los lados: úsalo solo si el sujeto va siempre centrado.)
+- Se reencuadra a vertical **a sangre**: la imagen ocupa los cuatro bordes,
+  sin bandas ni marcos. Sí, se pierde lo que queda fuera —de un 16:9 solo
+  cabe un tercio del ancho—, y ese es el precio correcto: el video vertical
+  se ve a pantalla completa, y cualquier trozo que no sea imagen se lee como
+  «esto es el recorte de otra cosa» justo en el segundo en que el espectador
+  decide si desliza. (El fondo desenfocado sigue estando en **⚙ Configuración
+  → Shorts (video vertical)**, pero ya no es lo recomendado.)
+- Como solo cabe un tercio del ancho, tú eliges **por dónde se recorta** —por
+  la izquierda, por el centro o por la derecha—: en **⚙ Configuración** para
+  todas, y **Short a Short** en la pestaña 📱 Shorts. Míralo antes de generar:
+  recortar siempre por el centro decapita cualquier plano cuyo sujeto no esté
+  centrado.
+- Encima de la imagen se pone un **velo oscuro degradado** arriba y abajo, para
+  que el texto se lea sin tapar el plano, y el **color de tu canal se aclara**
+  en ese texto (un color calibrado para fondo negro se pierde sobre imagen).
 - Se le ponen los **subtítulos del propio video**, con sus tiempos, por encima
   de la franja del enlace al video largo.
 - Se le pone el **texto de gancho arriba desde el primer fotograma**: la
@@ -1008,6 +1032,55 @@ todo el mundo.
 > ⚠ **El recorte necesita el enlace del video.** Si sacas los Shorts del
 > material del proyecto (sin pegar enlace), no hay video que descargar y todas
 > las piezas se generarán de cero. El programa te lo dice al proponer.
+
+### 8.5 Cuando el Short se monta con varios trozos
+
+El momento bueno casi nunca está entero y seguido: la frase que sirve de
+gancho suele estar enterrada a mitad, y por delante hay una digresión que
+sobra. Por eso un Short puede salir de **varios fragmentos** del video largo,
+encadenados en el orden que haga falta. En la ficha de la pieza los ves
+escritos: `64s → 82s  +  271s → 288s`.
+
+Un empalme corta **tres cosas a la vez**: la imagen, la voz y la música que ya
+venía dentro del video largo. La imagen aguanta un corte seco; la voz y la
+música, no. El programa pone las tres medidas que hacen falta:
+
+- **Fundido corto entre planos** (algo más de tres décimas). Un corte seco cada
+  tres segundos se lee como nervioso en vertical.
+- **Aire entre fragmentos** (un cuarto de segundo) y un fundido diminuto a la
+  entrada y a la salida de cada voz: quita el chasquido del empalme y devuelve
+  la respiración que se perdió al recortar.
+- **Cama musical continua** por debajo de la voz, sin un solo corte, y bajando
+  sola cuando hablas. Es la medida que de verdad tapa el salto. La pista sale
+  de la **música del propio video largo** —para que quien salte del Short al
+  largo se encuentre el mismo mundo sonoro—, o de `assets\music` si el largo
+  no es un proyecto del programa. Y se elige **midiendo**, no de oído: la más
+  plana de las que haya.
+
+En **⚙ Configuración → Shorts (video vertical)** decides cuándo se pone la
+cama: solo cuando hay varios fragmentos (lo que viene puesto), siempre, o
+nunca.
+
+> ⚠ **Por encima de 60 segundos, solo música tuya.** En un Short de más de un
+> minuto, una reclamación de copyright no desmoneta: **bloquea el video en
+> todo el mundo**. El programa te avisa si la pieza pasa del minuto con cama
+> musical puesta.
+
+### 8.6 La miniatura del Short, y la prueba que decide si sirve
+
+La miniatura no aparece en el feed que se desliza, y por eso todo el mundo la
+da por perdida. No lo está: es lo que decide el clic en **la pestaña Shorts de
+tu canal**, en la búsqueda, en la portada y en el feed de suscripciones. El
+programa la genera vertical (1080×1920), con el texto dentro de su zona segura
+y por debajo del límite de peso.
+
+Y al lado te deja **la prueba que de verdad importa**: el mismo archivo
+reducido a **150 px** de ancho, que es el tamaño al que se ve en la parrilla de
+tu canal. Se llama `miniatura_1_prueba150px.png` y está en la carpeta
+`09_final` del proyecto. **Ábrela y míralo ahí**: si a ese tamaño no lees el
+texto, la miniatura no sirve, por bonita que sea a tamaño completo. A 150 px
+solo entran una cara y tres o cuatro palabras — si te pasas, el programa te lo
+dice.
 
 ---
 
