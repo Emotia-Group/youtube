@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.66.1 -->
+<!-- MANUAL_VERSION: 0.67.0 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -8,10 +8,10 @@ técnicos. Si sabes usar el navegador y arrastrar un archivo, sabes usar este
 programa.
 
 > 🎨 **Estás leyendo el manual de la plantilla NUEVA** (la interfaz clara u
-> oscura, con las pestañas Corrida · Material · Guion · Escenas · Personajes ·
-> Metadatos). Si cambias a la plantilla clásica en **Ajustes**, este mismo
-> menú te mostrará el manual de la otra, con sus propias capturas. Ver el
-> capítulo 2.6.
+> oscura, con las pestañas Corrida · Material · Concepto · Guion · Escenas ·
+> Personajes · Metadatos · Shorts). Si cambias a la plantilla clásica en
+> **Ajustes**, este mismo menú te mostrará el manual de la otra, con sus
+> propias capturas. Ver el capítulo 2.6.
 
 **Cómo leerlo:**
 
@@ -196,8 +196,8 @@ cambiar de una a otra **no toca nada de tu trabajo**.
 
 | Plantilla | Cómo se ve | Sus pestañas |
 |---|---|---|
-| **Nueva** (la de este manual) | Editorial, con modo claro y oscuro | Corrida · Material · Guion · Escenas · Personajes · Metadatos |
-| **Clásica** | Oscura, la de las versiones anteriores | Guion · Storyboard · Editor · Video · Concepto · Archivos |
+| **Nueva** (la de este manual) | Editorial, con modo claro y oscuro | Corrida · Material · Concepto · Guion · Escenas · Personajes · Metadatos · Shorts |
+| **Clásica** | Oscura, la de las versiones anteriores | Guion · Storyboard · Editor · Video · Concepto · Archivos · Shorts |
 
 **Para cambiar:** ve a **Ajustes → Plantilla de la interfaz**. Cada plantilla
 se presenta en una **ficha con su miniatura**, su nombre y en qué se nota, para
@@ -222,14 +222,57 @@ proyectos, el arco musical y el resto están en las dos. Lo que cambia es
 | Diferencia | Nueva | Clásica |
 |---|---|---|
 | Modo claro y oscuro | Sí | No (siempre oscura) |
+| La lista de proyectos | En su propia pantalla | Siempre a la vista, en la barra lateral |
 | Material, personajes y escenas | En pantallas separadas | Todo en pestañas de un mismo panel |
-| Subir tu material **al crear** el proyecto | No: se sube después, en Material | Sí, en el propio formulario |
-| Ficha completa del concepto (ángulo, audiencia, estructura, paleta) | No (pero sí «Guardar estilo») | Sí, en la pestaña Concepto |
-| Filtrar proyectos por estado (en curso, completos, con errores) | No (solo buscador) | Sí |
+
+> ✅ **Desde la v0.67.0 no falta nada en ninguna.** Durante unas versiones, la
+> plantilla nueva se había dejado por el camino cuatro cosas del formulario de
+> proyecto nuevo (subir archivos, los enlaces de referencia, la presencia del
+> personaje y el canal), la ficha del concepto, las descargas de subtítulos y
+> miniatura, el desglose del gasto por proveedor y el filtro de proyectos por
+> estado. Están **todas** de vuelta.
 
 > 💡 **Elige la que te resulte más cómoda de leer.** Son dos vistas del mismo
 > programa y los proyectos son los mismos: puedes ir y volver tantas veces
 > como quieras, incluso a mitad de un video.
+
+---
+
+### 2.7 Moverte por el programa: la ruta de navegación
+
+Justo debajo del menú de arriba hay una línea fina que dice **dónde estás**.
+Se llama *ruta de navegación* (o «migas de pan», porque va dejando el rastro
+del camino que has hecho):
+
+```
+← Atrás    Proyectos  ›  Los fareros del siglo XIX  ›  Escenas
+```
+
+Se lee de izquierda a derecha, de lo general a lo concreto:
+
+- **Cada tramo azul es un botón.** Pulsa **Proyectos** y vuelves a la lista;
+  pulsa el nombre del video y vuelves a su corrida. Es la forma rápida de
+  **subir un nivel** sin buscar el botón correcto.
+- **El último tramo, en gris, es donde estás.** No se pulsa porque ya estás
+  ahí.
+- **← Atrás** deshace tu último salto, sea cual sea. Aparece en cuanto has
+  dado al menos un paso dentro del programa.
+
+**Y además funcionan los botones del navegador.** Cada pantalla tiene ahora su
+propia dirección, así que:
+
+| Lo que haces | Lo que pasa |
+|---|---|
+| Botón **←** del navegador (o `Alt`+`←`) | Vuelves a la pantalla anterior |
+| Botón **→** del navegador | Avanzas otra vez |
+| **F5** (recargar) | Te quedas **donde estabas**, no vuelves al principio |
+| Guardar la página en marcadores | El marcador abre esa pantalla concreta |
+
+> 💡 Si trabajas con dos videos a la vez, puedes abrir cada uno **en su propia
+> pestaña del navegador** (clic con el botón derecho → «Abrir en una pestaña
+> nueva» no funciona sobre los botones, pero sí puedes copiar la dirección de
+> la barra y pegarla en otra pestaña). Las dos pestañas hablan con el mismo
+> motor, así que ves lo mismo actualizado.
 
 ---
 
@@ -256,12 +299,43 @@ derecha):
 1. **¿Para dónde es este video?**: deja **YouTube — video largo (16:9)**.
 2. **Nombre del proyecto**: algo corto y sin acentos, por ejemplo
    `prueba-faros`.
-3. **Tema o material**: escribe tu idea. Una o dos frases bastan: «Un
-   documental sobre los fareros que salvaron miles de vidas en el siglo XIX:
-   soledad, tormentas y la luz que nunca se apagó».
-4. **Estilo visual de fábrica**: elige **Documental cinematográfico**.
-5. Pulsa **Solo crear** (para revisar antes de gastar) o **Crear y generar**
+3. **Tu idea o tu guion completo**: escribe tu idea. Una o dos frases bastan:
+   «Un documental sobre los fareros que salvaron miles de vidas en el siglo
+   XIX: soledad, tormentas y la luz que nunca se apagó». Si ya tienes el
+   guion escrito, pégalo entero y se respeta tal cual.
+4. **Tus archivos** (opcional): si tu material ya existe —un PDF con el
+   guion, tu narración grabada, tus fotos y videos, una imagen de referencia,
+   la foto del personaje que narrará en cámara o tu video de reacción—
+   súbelo aquí, cada cosa en su recuadro. **Si subes archivos no hace falta
+   escribir nada**: el proyecto se puede crear solo con ellos. Puedes subir
+   varios y quitar cualquiera con la **✕** que aparece a su lado.
+5. **Enlaces de referencia** (opcional): pega, uno por línea, los videos de
+   YouTube, Vimeo o Wistia cuyo estilo quieras replicar. El programa analiza
+   el video completo: guion, ritmo de los cortes, estructura y estilo visual.
+6. **Canal y estilo guardado** (opcional): si ya tienes canales creados
+   (capítulo 5.5), elige el canal y el estilo. Así el video nace con la
+   identidad de tu canal puesta y sin volver a pagar el análisis.
+7. **Estilo visual de fábrica**: elige **Documental cinematográfico**. (Se
+   ignora si elegiste un estilo guardado en el punto anterior.)
+8. Pulsa **Solo crear** (para revisar antes de gastar) o **Crear y generar**
    (para lanzarlo entero de una vez).
+
+> 🧑 **Si subes la foto del personaje narrador**, justo debajo aparece un
+> ajuste extra: **cuánto sale en pantalla** (~15 %, ~30 %, ~45 % o ~60 %) y
+> si quieres que salga **en burbuja** (un círculo sobre el B-roll, estilo
+> reacción de TikTok). Ojo, que este es el ajuste que más manda en la
+> factura: el lipsync se cobra **por segundo de personaje en pantalla**, y la
+> estimación previa ya lo refleja.
+
+> 💾 **No pierdas lo escrito.** Si a mitad de rellenar el formulario te das
+> cuenta de que falta configurar algo y te vas a **Ajustes** o a **Canales**,
+> vuelve tranquilo: lo que hubieras escrito sigue ahí, guardado solo en tu
+> navegador. Verás un aviso que lo dice y un botón **Empezar de cero** por si
+> prefieres el formulario en blanco. Lo único que hay que volver a elegir son
+> los **archivos** (un video de 300 MB no cabe en la memoria del navegador).
+> Al crear el proyecto, el borrador se descarta.
+
+![El aviso de borrador recuperado](docs/manual/nueva/16-borrador-recuperado.png)
 
 **Paso 3 — Mira lo que va a costar.** En la pestaña **Corrida**, la columna
 de la derecha muestra **Estimado antes de generar**: la cifra aproximada y
@@ -483,6 +557,12 @@ Cada tipo de archivo tiene su sitio, porque de eso depende cómo se usa. Pulsa
 ⚠ Al añadir o quitar material, **el análisis vuelve a empezar desde la
 primera fase**. Es lo correcto (cambia la base del video), pero significa que
 conviene subirlo todo antes de generar.
+
+> 💡 **Lo más cómodo es subirlo al crear el proyecto**, en el propio
+> formulario de **Nuevo proyecto** (capítulo 3, paso 2): así el análisis
+> arranca ya con todo tu material y no hay que rehacerlo. Esta pestaña sirve
+> para lo que se te olvidó, para lo que quieras cambiar después y para ver de
+> un vistazo qué tiene el proyecto.
 
 ### 5.2 El elenco: que un personaje tenga siempre la misma cara
 
@@ -1028,15 +1108,29 @@ dónde.
 ### 10.1 Proyectos
 
 La lista de todos tus videos, con su avance. Un clic en la fila entra al
-proyecto; el buscador de arriba filtra por nombre. Al final de cada fila hay
-dos botones: **⧉ duplicar** (copia el proyecto para probar una variante) y
-**🗑 borrar** (elimina el proyecto y sus archivos; no se puede deshacer).
+proyecto. Arriba a la derecha hay dos controles:
+
+- **Buscar…** filtra por nombre según escribes.
+- El desplegable de al lado filtra **por estado**: Todos, **En curso**,
+  **Completos** o **Con errores**. Con veinte proyectos, «cuál se quedó a
+  medias» deja de ser una pregunta que hay que responder mirando fila por
+  fila.
+
+Al final de cada fila hay tres botones: **✎ renombrar** (cambia el nombre
+visible sin entrar al proyecto), **⧉ duplicar** (copia el proyecto para
+probar una variante) y **🗑 borrar** (elimina el proyecto y sus archivos; no
+se puede deshacer).
 
 ### 10.2 Corrida
 
 El puesto de mando: las 11 fases a la izquierda, el video y la miniatura en
 el centro, y a la derecha **Atención**, el **estimado antes de generar** y el
-**gasto real**. Todos sus botones están en el capítulo 6.1.
+**gasto real** (desglosado **por proveedor**, para ver qué se está llevando
+el dinero, con el total abajo). Todos sus botones están en el capítulo 6.1.
+
+Cuando el video está montado, debajo aparece una línea de **Descargar** con
+los tres archivos que necesitas para publicar: **video_final.mp4**,
+**subtitulos.srt** y **miniatura.jpg**.
 
 ### 10.3 Guion
 
@@ -1081,16 +1175,31 @@ El elenco del video. Ver capítulo 5.2.
 
 Todo lo que aportas tú. Ver capítulo 5.1.
 
-### 10.7 Metadatos
+### 10.7 Concepto
+
+La decisión de fondo del video, escrita por la IA en la segunda fase: los
+**títulos propuestos**, el **ángulo**, la **audiencia**, el **tono**, la
+**dirección musical**, la **estructura** del video paso a paso y el **estilo
+visual** con su paleta de colores.
+
+Es la pantalla que conviene leer **antes de gastar en voz e imágenes**,
+porque de aquí sale todo lo demás: si el ángulo o la audiencia no son los que
+querías, corregirlo ahora es gratis. Para cambiarlo, edita el guion o el
+material y **rehaz desde «Concepto»** en la pestaña Corrida.
+
+Desde aquí también puedes **guardar este estilo en un canal** y reutilizarlo
+en videos futuros sin volver a pagar el análisis (capítulo 5.5).
+
+### 10.8 Metadatos
 
 Las 3 propuestas de título, descripción y miniatura. Ver capítulo 8.
 
-### 10.8 Canales y Biblioteca
+### 10.9 Canales y Biblioteca
 
 **Canales**: la identidad guardada de cada canal (capítulo 5.5).
 **Biblioteca**: el banco de elementos (capítulo 5.4).
 
-### 10.9 Ajustes
+### 10.10 Ajustes
 
 Se divide en cinco bloques. Guarda con **Guardar ajustes** (y **Guardar
 proveedores** para el bloque de modelos).
@@ -1126,7 +1235,7 @@ Cada opción muestra su precio, su punto fuerte y su punto débil.
 
 **e) Versión** — qué versión corre, y los avisos de actualización.
 
-### 10.10 Log de eventos
+### 10.11 Log de eventos
 
 El historial completo: novedades, avisos, errores y el tiempo de cada paso.
 

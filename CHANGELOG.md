@@ -9,6 +9,74 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.67.0 — 2026-08-20
+**Vuelve lo que la plantilla nueva se había dejado por el camino**, el
+programa dice dónde estás y ya no se pierde lo que estabas escribiendo.
+
+Al pasar a la plantilla nueva, la pantalla de crear proyecto se quedó a medias
+sin que nadie lo dijera. No era una simplificación: eran funciones que ya no
+estaban.
+
+- 📎 **SE PUEDEN VOLVER A SUBIR ARCHIVOS AL CREAR EL PROYECTO**, con sus seis
+  clases —guion, tu voz, tu B-roll, referencia de estilo, personaje narrador y
+  video de reacción—, sus avisos y su ✕ para quitar. Era lo más grave de todo:
+  sin archivos, un proyecto NO se podía empezar desde un PDF ni desde una
+  narración grabada; había que escribir algo a mano aunque el material ya
+  estuviera listo encima de la mesa.
+- 🔗 **Y LOS ENLACES DE REFERENCIA**: los videos de YouTube, Vimeo o Wistia
+  cuyo estilo quieres replicar. Se analiza el video completo —guion, ritmo de
+  los cortes, estructura y estilo visual—, y eso tampoco se podía pedir al
+  crear.
+- 🧑 **Y LA PRESENCIA DEL PERSONAJE EN PANTALLA** (y su burbuja de reacción).
+  Es el ajuste que más manda en la factura cuando hay lipsync, porque se cobra
+  por segundo de personaje en pantalla. Ahora aparece solo cuando subes su
+  foto, que es cuando cambia algo.
+- 📺 **Y EL CANAL**, no solo el estilo: eliges canal y la lista de estilos se
+  reduce a los suyos. Si el canal tiene uno solo, ya viene puesto.
+- ⚠ EL AVISO DE MODO VISTA PREVIA, otra vez a la vista. Sin clave de API el
+  video sale con relleno; enterarse después de esperar la generación entera es
+  lo peor que puede pasar.
+- 💡 **LA PANTALLA DE CONCEPTO, RECUPERADA.** El ángulo, la audiencia, el
+  tono, la música, la estructura y la paleta que la IA decidió para tu video.
+  Es lo que hay que leer ANTES de gastar en voz e imágenes, porque de ahí sale
+  todo lo demás.
+- ⬇ LOS ARCHIVOS PARA SUBIR, A UN CLIC: el video, **los subtítulos .srt** y la
+  miniatura. Los dos últimos había que ir a buscarlos a mano en la carpeta.
+- 📊 EL GASTO REAL, DESGLOSADO POR PROVEEDOR. El total suelto no dice qué
+  apretar; el desglose sí (casi siempre son las imágenes o el lipsync).
+- 🔎 En la lista de proyectos vuelven el **filtro por estado** (en curso,
+  completos, con errores) y **renombrar** sin entrar al proyecto.
+- 📝 Y desde el Guion ya se puede saltar a cualquier otra pestaña: era la
+  única pantalla sin la barra de pestañas, y para ir a Escenas había que
+  volver antes a la corrida.
+
+**🧭 UNA RUTA DE NAVEGACIÓN EN LAS DOS PLANTILLAS.** Arriba, bajo el menú,
+ahora hay una línea que dice dónde estás y deja subir de nivel de un clic:
+«Proyectos › Los fareros › Escenas». Además, cada pantalla tiene su propia
+dirección, así que **los botones Atrás y Adelante del navegador funcionan**,
+la pantalla se puede guardar en marcadores y **recargar con F5 ya no te
+devuelve al principio**: te deja donde estabas. Hay también un botón **←
+Atrás** para quien no use el del navegador.
+
+**💾 EL PROYECTO NUEVO YA NO SE BORRA SOLO.** Empezabas a escribir, te dabas
+cuenta de que faltaba configurar algo, salías a Ajustes o a Canales, volvías…
+y el formulario estaba en blanco. Ahora lo que escribes se guarda solo en el
+navegador según lo escribes, y al volver está donde lo dejaste, con un aviso y
+un botón de **Empezar de cero**. Los archivos que hubieras elegido sí hay que
+volver a elegirlos (un video de 300 MB no cabe en la memoria del navegador) y
+se te dice. Al crear el proyecto, el borrador se descarta.
+
+- 🛟 **Y UN FALLO DE FONDO QUE SALIÓ AL PROBAR TODO ESTO.** El estado del
+  proyecto (`project.json`) se escribía encima de sí mismo, así que quedaba
+  vacío durante un instante en cada guardado. La interfaz, que lo lee cada
+  segundo y medio mientras se genera, caía a veces justo en ese instante y
+  contestaba **«El servidor respondió con error»** en mitad de una corrida que
+  iba perfectamente. Ahora se escribe en un archivo aparte y se pone en su
+  sitio de un solo golpe: quien lea, lee siempre una versión completa. Se
+  probó con 400 guardados mientras otra parte del programa leía sin parar.
+- 🎬 Un detalle menor: la pestaña del navegador ya tiene su icono. Antes lo
+  pedía en cada carga y el programa contestaba «no encontrado».
+
 ## v0.66.1 — 2026-08-19
 **Dos arreglos del modo recorte**, vistos nada más estrenarlo.
 

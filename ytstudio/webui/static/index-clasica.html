@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ytstudio — creador de videos</title>
+<!-- Icono de la pestaña del navegador, dibujado aquí mismo: sin él el
+     navegador pedía /favicon.ico en cada carga y el programa contestaba
+     «no encontrado», ensuciando la consola. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.92em' font-size='92'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E">
 <style>
   :root{
     --bg:#0c0e13; --panel:#141821; --panel2:#1a1f2b; --line:#262d3d;
@@ -51,7 +55,17 @@
   #projtools input,#projtools select{padding:6px 9px;font-size:12.5px;margin-bottom:5px}
 
   /* main */
+  #panel{flex:1;display:flex;flex-direction:column;min-width:0}
   #main{flex:1;overflow-y:auto;padding:26px 34px}
+  /* BARRA DE RUTA (migas de pan). Dice dónde estás y deja subir un nivel de un
+     clic, como la barra de direcciones de un navegador. Saltando entre
+     pestañas de un proyecto no había forma de saber cómo volver atrás. */
+  #ruta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 34px;border-bottom:1px solid var(--line);background:var(--panel);font-size:13px}
+  #ruta .mig{background:none;border:0;padding:2px 0;color:var(--accent);font-size:13px}
+  #ruta .mig:hover{text-decoration:underline}
+  #ruta .sep{color:var(--muted)}
+  #ruta .aqui{color:var(--text)}
+  #ruta .atras{border:1px solid var(--line);border-radius:8px;padding:3px 10px;color:var(--text);margin-right:4px;background:var(--panel2)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
   .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -167,7 +181,10 @@
   <div id="verinfo"></div>
 </div>
 
-<div id="main"></div>
+<div id="panel">
+  <div id="ruta"></div>
+  <div id="main"></div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -258,13 +275,138 @@ async function deleteProjectFromList(slug){
   }catch(e){toast('⚠ '+e.message)}
 }
 
+/* ---------- RUTA DE NAVEGACIÓN (migas de pan) ----------
+   Cada pantalla tiene su dirección («#/proyecto/faros/Editor»), así que los
+   botones Atrás y Adelante del navegador funcionan, la pantalla se puede
+   guardar en marcadores y recargar con F5 ya no devuelve al principio. */
+const RUTA_TITULOS={home:'Proyectos',new:'Nuevo proyecto',settings:'⚙ Configuración',
+  library:'📺 Canales y estilos',manual:'📖 Manual de uso',eventos:'🧾 Log de eventos'};
+const RUTA_DE_VISTA={new:'#/nuevo',settings:'#/ajustes',library:'#/canales',
+  manual:'#/manual',eventos:'#/eventos',home:'#/proyectos'};
+/* A qué profundidad está el creador DENTRO del programa. Se guarda en cada
+   paso del historial: sin esto, «← Atrás» en la primera pantalla lo sacaría
+   del programa a la página anterior del navegador. */
+let PASOS=0;
+function rutaActual(){
+  if(view==='project'&&current)
+    return `#/proyecto/${encodeURIComponent(current)}/${encodeURIComponent(window._tab||'Guion')}`;
+  return RUTA_DE_VISTA[view]||'#/proyectos';
+}
+/* Pinta la barra y deja la dirección del navegador al día. Se llama al final
+   de cada pantalla, cuando `view` y `current` ya dicen dónde estamos. */
+function pintarRuta(desdeHistorial){
+  const h=rutaActual();
+  /* Al volver con el botón Atrás la dirección ya es la buena; solo se corrige
+     si la pantalla acabó en otro sitio (p.ej. «#/proyectos» abre el proyecto
+     más reciente), y entonces se CORRIGE el paso, no se añade uno nuevo. */
+  if(location.hash!==h){
+    if(desdeHistorial)history.replaceState({profundidad:PASOS},'',h);
+    else history.pushState({profundidad:++PASOS},'',h);
+  }
+  const caja=$('#ruta');
+  if(!caja)return;
+  const tramos=[];
+  if(view==='project'){
+    tramos.push({t:'Proyectos',ir:'irAProyectos()'});
+    const nom=(window._proj&&(window._proj.display_name||current))||current||'proyecto';
+    const tab=window._tab||'Guion';
+    tramos.push({t:nom,ir:tab==='Guion'?null:`switchTab('Guion')`});
+    if(tab!=='Guion')tramos.push({t:tab,ir:null});
+  }else if(view==='new'){
+    tramos.push({t:'Proyectos',ir:'irAProyectos()'});
+    tramos.push({t:'Nuevo proyecto',ir:null});
+  }else{
+    tramos.push({t:RUTA_TITULOS[view]||'Proyectos',ir:null});
+  }
+  caja.innerHTML=(PASOS>0?`<button class="mig atras" title="Volver a la pantalla anterior" onclick="history.back()">← Atrás</button>`:'')
+    +tramos.map((x,i)=>(i?'<span class="sep">›</span>':'')
+      +(x.ir?`<button class="mig" onclick="${x.ir}">${esc(x.t)}</button>`
+            :`<span class="aqui">${esc(x.t)}</span>`)).join('');
+}
+/* «Proyectos» en la ruta abre el proyecto más reciente, que es la portada de
+   esta plantilla: la lista completa vive siempre en la barra lateral. */
+async function irAProyectos(){
+  const lista=window._allProjects||await api('/api/projects').catch(()=>[]);
+  if(lista.length)openProject(lista[0].slug);else showNew();
+}
+function irARuta(hash){
+  const t=String(hash||'').replace(/^#\/?/,'').split('/').filter(Boolean);
+  if(!t.length||t[0]==='proyectos')return irAProyectos();
+  if(t[0]==='proyecto'&&t[1]){window._tab=decodeURIComponent(t[2]||'Guion');return openProject(decodeURIComponent(t[1]),true)}
+  return ({nuevo:showNew,ajustes:showSettings,canales:showLibrary,manual:showManual,eventos:showEvents}[t[0]]||irAProyectos)(true);
+}
+window.addEventListener('popstate',ev=>{
+  PASOS=(ev.state&&ev.state.profundidad)||0;
+  _desdeHistorial=true;
+  irARuta(location.hash);
+});
+/* Bandera de un solo uso: mientras se atiende un Atrás del navegador, la
+   pantalla no debe volver a empujar su propia dirección al historial. */
+let _desdeHistorial=false;
+function tomarHistorial(){const v=_desdeHistorial;_desdeHistorial=false;return v}
+
 /* ---------- nuevo proyecto ---------- */
+
+/* BORRADOR DEL PROYECTO NUEVO. Lo escrito en el formulario se guarda en el
+   navegador según se escribe. Antes, salir a ⚙ Configuración a poner una clave
+   —o a mirar un canal— y volver dejaba el formulario en blanco: había que
+   reescribirlo todo. Los archivos elegidos NO se guardan (un video de 300 MB
+   no cabe en el navegador), y se avisa de ello al recuperar. */
+const BORRADOR_KEY='ytstudio.borrador.nuevo';
+const BORRADOR_CAMPOS=[['np-slug','slug'],['np-text','texto'],['np-links','enlaces'],
+  ['np-format','formato'],['np-template','plantilla'],['np-charpres','presencia'],
+  ['np-channel','canal'],['np-style','estilo']];
+function leerBorrador(){
+  try{return JSON.parse(localStorage.getItem(BORRADOR_KEY)||'null')||null}catch(e){return null}
+}
+function guardarBorrador(){
+  if(view!=='new')return;
+  const d={};
+  for(const [id,k] of BORRADOR_CAMPOS)d[k]=$('#'+id)?.value||'';
+  d.burbuja=!!$('#np-charpip')?.checked;
+  d.preset=document.querySelector('.preset.sel')?.dataset.k||'';
+  try{localStorage.setItem(BORRADOR_KEY,JSON.stringify(d))}catch(e){}
+}
+function borrarBorrador(){try{localStorage.removeItem(BORRADOR_KEY)}catch(e){}}
+/* Un formulario recién abierto y sin tocar también se guarda; anunciar
+   «borrador recuperado» ahí sería ruido. */
+function borradorConAlgo(d){
+  return !!d&&!!((d.slug||'').trim()||(d.texto||'').trim()||(d.enlaces||'').trim()
+    ||d.estilo||d.canal||(d.formato&&d.formato!=='long'));
+}
+function descartarBorrador(){borrarBorrador();showNew()}
+/* Se guarda cuando la mano para de teclear, no en cada tecla. */
+let _borrTimer=null;
+function apuntarBorrador(){clearTimeout(_borrTimer);_borrTimer=setTimeout(guardarBorrador,400)}
+function restaurarBorrador(){
+  const d=leerBorrador();
+  if(!d)return;
+  for(const [id,k] of BORRADOR_CAMPOS){
+    const e=$('#'+id);
+    if(!e||!d[k])continue;
+    /* Un desplegable solo acepta un valor que siga existiendo: un canal
+       borrado entretanto dejaría el <select> en blanco y confundiría. */
+    if(e.tagName==='SELECT'&&![...e.options].some(o=>o.value===d[k]))continue;
+    e.value=d[k];
+  }
+  if($('#np-charpip'))$('#np-charpip').checked=!!d.burbuja;
+  if(d.preset){
+    const pr=document.querySelector(`.preset[data-k="${CSS.escape(d.preset)}"]`);
+    if(pr){document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));pr.classList.add('sel')}
+  }
+  pickFormat($('#np-format')?.value||'long');
+  fillStyleOptions();
+  if(d.estilo&&$('#np-style'))$('#np-style').value=d.estilo;
+  if(borradorConAlgo(d)){
+    $('#np-aviso-borrador')?.classList.remove('hidden');
+  }
+}
 async function showNew(){
   view='new';current=null;stopPoll();refreshList();
   window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
   const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
     <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
-         onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel')">
+         onclick="document.querySelectorAll('.preset').forEach(e=>e.classList.remove('sel'));this.classList.add('sel');apuntarBorrador()">
       <b>${esc(p.label)}</b><span class="muted">${esc(p.description)}</span>
     </div>`).join('');
   const mock=!CAT.keys.ANTHROPIC_API_KEY;
@@ -277,10 +419,13 @@ async function showNew(){
     <div class="step"><b>3 · Se monta</b>todo se une con animación, subtítulos y música: obtienes el video, la miniatura y los metadatos.</div>
   </div>
   ${mock?`<div class="banner">⚠ <b>Modo vista previa activo</b> — sin clave de API, el resultado usa contenido de marcador (para ver cómo funciona). Configura tu clave en ⚙ Configuración para calidad real.</div>`:''}
+  <div id="np-aviso-borrador" class="banner hidden">💾 <b>Recuperado lo que habías empezado a escribir.</b>
+    Los archivos que hubieras elegido hay que volver a elegirlos.
+    <button class="btn sec small" style="margin-left:8px" onclick="descartarBorrador()">Empezar de cero</button></div>
   <div class="card">
     <label class="f"><span>1 · Nombre del proyecto</span>
-      <input id="np-slug" placeholder="ej. la-historia-de-los-faros"></label>
-    <label class="f"><span>1 · ¿Para dónde es este video?</span></label>
+      <input id="np-slug" placeholder="ej. la-historia-de-los-faros" oninput="apuntarBorrador()"></label>
+    <label class="f"><span>2 · ¿Para dónde es este video?</span></label>
     <div class="fmtgrid">
       ${Object.entries(CAT.formats||{}).map(([k,f])=>{
         const parts=f.label.split(' — ');
@@ -297,13 +442,13 @@ async function showNew(){
     <p class="muted" style="font-size:12px;margin:2px 0 8px">Los formatos cortos (Short/Reel/TikTok/Ads) generan con guion de gancho, escenas rápidas, texto grande de apertura, rupturas de patrón y subtítulos quemados — listos para subir.</p>
     <div id="np-tpl-wrap" style="display:none">
       <label class="f"><span>🎬 Plantilla del corto (estructura + visuales + sonido en un clic)</span>
-        <select id="np-template" style="width:auto">
+        <select id="np-template" style="width:auto" onchange="apuntarBorrador()">
           ${Object.entries(CAT.short_templates||{}).map(([k,t])=>`<option value="${k}" title="${esc(t.hint||'')}">${esc(t.label)}</option>`).join('')}
         </select></label>
       <p class="muted" id="np-tpl-hint" style="font-size:12px;margin:2px 0 8px"></p>
     </div>
     <label class="f"><span>🧑 Presencia del personaje en pantalla (solo si subes su imagen en «Personaje narrador»)</span>
-      <select id="np-charpres" style="width:auto">
+      <select id="np-charpres" style="width:auto" onchange="apuntarBorrador()">
         <option value="15">~15% — apariciones puntuales</option>
         <option value="30" selected>~30% — gancho, momentos clave y cierre (recomendado)</option>
         <option value="45">~45% — muy presente</option>
@@ -311,29 +456,31 @@ async function showNew(){
       </select></label>
     <p class="muted" style="font-size:12px;margin:2px 0 8px">⚠ El lipsync se cobra por segundo de personaje en pantalla: más presencia = más costo (la estimación previa lo refleja). El director decide en QUÉ momentos aparece con criterio narrativo; luego puedes forzarlo escena a escena en el Editor.</p>
     <label class="f" style="flex-direction:row;align-items:center;gap:8px">
-      <input type="checkbox" id="np-charpip" style="width:auto">
+      <input type="checkbox" id="np-charpip" style="width:auto" onchange="apuntarBorrador()">
       <span>🫧 Personaje en BURBUJA: en vez de ocupar la pantalla, el personaje aparece en una burbuja circular sobre el B-roll (estilo reacción de TikTok)</span></label>
-    <label class="f"><span>2 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
-      <textarea id="np-text" rows="6" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
-    <h3>3 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
+    <label class="f"><span>3 · Escribe tu idea o pega tu guion completo (opcional si subes archivos)</span>
+      <textarea id="np-text" rows="6" oninput="apuntarBorrador()" placeholder="Ejemplo de idea: «Un documental sobre los fareros que salvaron miles de vidas en el siglo XIX».&#10;&#10;O pega aquí tu guion completo y se respetará tal cual."></textarea></label>
+    <h3>4 · Archivos (opcional) — puedes subir varios y quitarlos con ✕</h3>
     ${uploadCatsHtml()}
-    <label class="f"><span>4 · Enlaces de referencia (opcional) — videos de YouTube, Vimeo, Wistia… cuyo estilo quieres replicar (uno por línea). Se analiza el video completo: guion, ritmo de cortes, estructura y estilo visual</span>
-      <textarea id="np-links" rows="2" placeholder="https://www.youtube.com/watch?v=…&#10;https://vimeo.com/…"></textarea></label>
-    <h3>5 · Canal y estilo guardado (opcional) — reutiliza un estilo de tu biblioteca sin re-analizar nada</h3>
+    <label class="f"><span>5 · Enlaces de referencia (opcional) — videos de YouTube, Vimeo, Wistia… cuyo estilo quieres replicar (uno por línea). Se analiza el video completo: guion, ritmo de cortes, estructura y estilo visual</span>
+      <textarea id="np-links" rows="2" oninput="apuntarBorrador()" placeholder="https://www.youtube.com/watch?v=…&#10;https://vimeo.com/…"></textarea></label>
+    <h3>6 · Canal y estilo guardado (opcional) — reutiliza un estilo de tu biblioteca sin re-analizar nada</h3>
     <div class="row">
-      <select id="np-channel" style="width:auto" onchange="fillStyleOptions()">
+      <select id="np-channel" style="width:auto" onchange="fillStyleOptions();apuntarBorrador()">
         <option value="">Sin canal</option>
         ${(window._lib.channels||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}
       </select>
-      <select id="np-style" style="width:auto"></select>
+      <select id="np-style" style="width:auto" onchange="apuntarBorrador()"></select>
       <span class="muted" style="font-size:12px">Gestiónalos en «📺 Canales y estilos»</span>
     </div>
-    <h3>6 · Estilo del video (se ignora si elegiste un estilo guardado)</h3>
+    <h3>7 · Estilo del video (se ignora si elegiste un estilo guardado)</h3>
     <div class="presets">${presets}</div>
     <br><button class="btn" onclick="createProject()">Crear proyecto →</button>
   </div>`;
   window._pending=[];
   fillStyleOptions();
+  restaurarBorrador();
+  pintarRuta(tomarHistorial());
 }
 function fillStyleOptions(){
   const sel=$('#np-style');if(!sel)return;
@@ -399,6 +546,9 @@ async function createProject(){
        format:$('#np-format')?.value||'long',short_template:$('#np-template')?.value||'libre',
        character_presence:parseInt($('#np-charpres')?.value||'30'),character_pip:!!$('#np-charpip')?.checked,
        channel_id:$('#np-channel')?.value||null,style_id:$('#np-style')?.value||null})});
+    /* Creado: el borrador ya no hace falta y dejarlo reaparecería en el
+       siguiente proyecto con los datos del anterior. */
+    clearTimeout(_borrTimer);borrarBorrador();
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
   }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}
@@ -406,8 +556,11 @@ async function createProject(){
 
 /* ---------- proyecto ---------- */
 async function openProject(slug){
+  const historial=tomarHistorial();
   view='project';current=slug;refreshList();
-  await renderProject();startPoll();
+  await renderProject();
+  pintarRuta(historial);
+  startPoll();
 }
 function phaseLabel(name){return (CAT.phases.find(p=>p.name===name)||{}).label||name}
 function phaseChipsHtml(p,curPhase){
@@ -466,7 +619,7 @@ async function renderProject(activeTab){
   renderTab(tab,p);
   loadEstimate(current);
 }
-function switchTab(t){window._tab=t;renderProject(t)}
+function switchTab(t){window._tab=t;renderProject(t).then(()=>pintarRuta(tomarHistorial()))}
 function pickFormat(k){
   const sel=$('#np-format');if(sel)sel.value=k;
   document.querySelectorAll('.fmtcard').forEach(c=>c.classList.toggle('active',c.dataset.fmt===k));
@@ -1138,6 +1291,7 @@ function startPoll(){
         if(d.final_video)window._tab='Video';  // mostrar el resultado directamente
       }
       await renderProject();refreshList();
+      pintarRuta(true);   // la pestaña pudo cambiar sola: la ruta la sigue
       toast(log.error?'⚠ '+log.error:'✅ ¡Video generado!');
     }
     wasRunning=log.running;
@@ -1280,7 +1434,7 @@ async function setPlantilla(id){
   }catch(e){toast('⚠ '+e.message)}
 }
 function showSettings(){
-  view='settings';current=null;stopPoll();refreshList();
+  view='settings';current=null;stopPoll();refreshList();pintarRuta(tomarHistorial());
   const cats=Object.keys(CAT.catalog);
   const presets=Object.entries(CAT.style_presets).map(([k,p])=>`
     <div class="preset ${k===(CFG.style?.preset||'ninguno')?'sel':''}" data-k="${k}"
@@ -1395,7 +1549,7 @@ async function saveSettings(){
 
 /* ---------- canales y estilos ---------- */
 async function showLibrary(){
-  view='library';current=null;stopPoll();refreshList();
+  view='library';current=null;stopPoll();refreshList();pintarRuta(tomarHistorial());
   const lib=window._lib=await api('/api/library').catch(()=>({channels:[],styles:[]}));
   const groups=[...lib.channels,{id:'',name:'Estilos sin canal',description:''}];
   $('#main').innerHTML=`
@@ -1667,7 +1821,7 @@ function mdToHtml(md){
 }
 function slugify(s){return 'm-'+s.toLowerCase().replace(/[^a-z0-9áéíóúñ]+/g,'-').replace(/^-|-$/g,'')}
 async function showManual(){
-  view='manual';current=null;stopPoll();refreshList();
+  view='manual';current=null;stopPoll();refreshList();pintarRuta(tomarHistorial());
   if(!MANUAL){try{MANUAL=await api('/api/manual')}catch(e){toast('⚠ '+e.message);return}}
   const stale=MANUAL.manual_version&&MANUAL.program_version&&MANUAL.manual_version!==MANUAL.program_version;
   const toc=MANUAL.content.split('\n').filter(l=>/^##\s/.test(l))
@@ -1701,6 +1855,7 @@ function filterManual(q){
 }
 let EVFILTER='all';
 async function showEvents(){
+  view='eventos';current=null;stopPoll();refreshList();pintarRuta(tomarHistorial());
   const main=document.getElementById('main');
   let data;
   try{data=await api('/api/events?limit=500')}
@@ -1748,7 +1903,11 @@ async function showEvents(){
   CAT=data;CFG=data.config;
   renderVersion();
   await refreshList();
-  const projects=await api('/api/projects');
+  /* La primera pantalla es la raíz del historial: profundidad 0, sin «Atrás». */
+  history.replaceState({profundidad:0},'',location.hash||'#/proyectos');
+  _desdeHistorial=true;
+  if(location.hash&&location.hash!=='#/proyectos')return irARuta(location.hash);
+  const projects=window._allProjects||[];
   if(projects.length)openProject(projects[0].slug);else showNew();
 })();
 </script>
