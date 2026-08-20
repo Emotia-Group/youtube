@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.66.1 -->
+<!-- MANUAL_VERSION: 0.67.1 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -194,8 +194,8 @@ cambiar de una a otra **no toca nada de tu trabajo**.
 
 | Plantilla | Cómo se ve | Sus pestañas |
 |---|---|---|
-| **Clásica** (la de este manual) | Oscura, con menú lateral | Guion · Storyboard · Editor · Video · Concepto · Archivos |
-| **Nueva** | Editorial, con modo claro y oscuro | Corrida · Material · Guion · Escenas · Personajes · Metadatos |
+| **Clásica** (la de este manual) | Oscura, con menú lateral | Guion · Storyboard · Editor · Video · Concepto · Archivos · Shorts |
+| **Nueva** | Editorial, con modo claro y oscuro | Corrida · Material · Concepto · Guion · Escenas · Personajes · Metadatos · Shorts |
 
 **Para cambiar:** ve a **⚙ Configuración → 🎨 Plantilla de la interfaz**. Cada
 plantilla se presenta en una **ficha con su miniatura**, su nombre y en qué se
@@ -221,14 +221,58 @@ proyectos, el arco musical y el resto están en las dos. Lo que cambia es
 | Diferencia | Clásica | Nueva |
 |---|---|---|
 | Modo claro y oscuro | No (siempre oscura) | Sí |
+| La lista de proyectos | Siempre a la vista, en la barra lateral | En su propia pantalla |
 | Material, personajes y escenas | Todo en pestañas de un mismo panel | En pantallas separadas |
-| Subir tu material **al crear** el proyecto | Sí, en el propio formulario | No: se sube después, en Material |
-| Ficha completa del concepto (ángulo, audiencia, estructura, paleta) | Sí, en la pestaña Concepto | No (pero sí «Guardar estilo») |
-| Filtrar proyectos por estado (en curso, completos, con errores) | Sí | No (solo buscador) |
+
+> ✅ **Desde la v0.67.0 no falta nada en ninguna.** Durante unas versiones, la
+> plantilla nueva se había dejado por el camino cuatro cosas del formulario de
+> proyecto nuevo (subir archivos, los enlaces de referencia, la presencia del
+> personaje y el canal), la ficha del concepto, las descargas de subtítulos y
+> miniatura, el desglose del gasto por proveedor y el filtro de proyectos por
+> estado. Están **todas** de vuelta.
 
 > 💡 **Elige la que te resulte más cómoda de leer.** Son dos vistas del mismo
 > programa y los proyectos son los mismos: puedes ir y volver tantas veces
 > como quieras, incluso a mitad de un video.
+
+---
+
+### 2.7 Moverte por el programa: la ruta de navegación
+
+Encima del panel de trabajo, a la derecha del menú lateral, hay una línea
+fina que dice **dónde estás**.
+Se llama *ruta de navegación* (o «migas de pan», porque va dejando el rastro
+del camino que has hecho):
+
+```
+← Atrás    Proyectos  ›  Los fareros del siglo XIX  ›  🎞 Storyboard
+```
+
+Se lee de izquierda a derecha, de lo general a lo concreto:
+
+- **Cada tramo azul es un botón.** Pulsa **Proyectos** y vuelves a la lista;
+  pulsa el nombre del video y vuelves a su pestaña 📝 Guion. Es la forma rápida de
+  **subir un nivel** sin buscar el botón correcto.
+- **El último tramo, en gris, es donde estás.** No se pulsa porque ya estás
+  ahí.
+- **← Atrás** deshace tu último salto, sea cual sea. Aparece en cuanto has
+  dado al menos un paso dentro del programa.
+
+**Y además funcionan los botones del navegador.** Cada pantalla tiene ahora su
+propia dirección, así que:
+
+| Lo que haces | Lo que pasa |
+|---|---|
+| Botón **←** del navegador (o `Alt`+`←`) | Vuelves a la pantalla anterior |
+| Botón **→** del navegador | Avanzas otra vez |
+| **F5** (recargar) | Te quedas **donde estabas**, no vuelves al principio |
+| Guardar la página en marcadores | El marcador abre esa pantalla concreta |
+
+> 💡 Si trabajas con dos videos a la vez, puedes abrir cada uno **en su propia
+> pestaña del navegador** (clic con el botón derecho → «Abrir en una pestaña
+> nueva» no funciona sobre los botones, pero sí puedes copiar la dirección de
+> la barra y pegarla en otra pestaña). Las dos pestañas hablan con el mismo
+> motor, así que ves lo mismo actualizado.
 
 ---
 
@@ -255,6 +299,16 @@ recorrido. Reserva 20 minutos.
    XIX: soledad, tormentas y la luz que nunca se apagó».
 4. **Estilo del video**: elige **Documental cinematográfico**.
 5. Pulsa **Crear proyecto →**.
+
+> 💾 **No pierdas lo escrito.** Si a mitad de rellenar el formulario te das
+> cuenta de que falta configurar algo y te vas a **⚙ Configuración** o a **📺
+> Canales y estilos**, vuelve tranquilo: lo que hubieras escrito sigue ahí,
+> guardado solo en tu navegador. Verás un aviso que lo dice y un botón
+> **Empezar de cero** por si prefieres el formulario en blanco. Lo único que
+> hay que volver a elegir son los **archivos** (un video de 300 MB no cabe en
+> la memoria del navegador). Al crear el proyecto, el borrador se descarta.
+
+![El aviso de borrador recuperado](docs/manual/clasica/15-borrador-recuperado.png)
 
 **Paso 3 — Mira lo que va a costar.** Ya dentro del proyecto verás la línea
 **💰 Estimado antes de generar**. Haz clic para desplegar el detalle por
@@ -426,7 +480,7 @@ alguien se queda o pasa de largo.
 ### 4.7 Receta G — Copiar el estilo de un video que te gusta
 
 1. Al crear el proyecto, pega la dirección del video (YouTube, Vimeo…) en
-   **4 · Enlaces de referencia**.
+   **5 · Enlaces de referencia**.
 2. El programa lo descarga, escucha su narración y mira sus imágenes para
    aprender el **ritmo de los cortes, la estructura y el estilo visual**.
 3. Un solo enlace bueno vale más que tres regulares.
@@ -558,7 +612,7 @@ los rótulos**:
 Hay **cuatro combinaciones de un clic** para empezar: 🎞 Documental clásico,
 ⚡ Impacto viral, 🖥 Tech / datos y ◻ Minimalista.
 
-**Usarlo:** al crear el proyecto, en «5 · Canal y estilo guardado», elige el
+**Usarlo:** al crear el proyecto, en «6 · Canal y estilo guardado», elige el
 canal y el estilo. Ese proyecto nace con la identidad ya puesta.
 
 ---

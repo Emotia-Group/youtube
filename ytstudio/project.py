@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import threading
 import time
 import unicodedata
 from pathlib import Path
@@ -56,16 +58,31 @@ def slugify(text: str) -> str:
 def read_json_tolerant(path) -> dict:
     """Lee un JSON aunque venga en una codificación antigua. Los archivos de
     proyecto creados por versiones previas (antes de forzar UTF-8) quedaron en
-    cp1252 en Windows; se leen con fallback y se devuelven como dict."""
+    cp1252 en Windows; se leen con fallback y se devuelven como dict.
+
+    Además REINTENTA si el archivo llega a medias: mientras se genera un video,
+    el motor guarda el estado cada pocos segundos y la interfaz lo lee cada
+    segundo y medio. Si la lectura caía justo en mitad de la escritura, el
+    programa contestaba «El servidor respondió con error» sin que nada
+    estuviera roto de verdad. Ahora se espera un instante y se vuelve a leer.
+    """
     from pathlib import Path as _P
-    raw = _P(path).read_bytes()
-    for enc in ("utf-8", "cp1252", "latin-1"):
-        try:
-            return json.loads(raw.decode(enc))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            continue
-    # Último recurso: reemplazar bytes inválidos para no perder el proyecto
-    return json.loads(raw.decode("utf-8", errors="replace"))
+    ruta = _P(path)
+    ultimo: Exception | None = None
+    for intento in range(4):
+        raw = ruta.read_bytes()
+        for enc in ("utf-8", "cp1252", "latin-1"):
+            try:
+                return json.loads(raw.decode(enc))
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                ultimo = e
+                continue
+        try:  # último recurso: reemplazar bytes inválidos, no perder el proyecto
+            return json.loads(raw.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as e:
+            ultimo = e
+        time.sleep(0.05 * (intento + 1))
+    raise ultimo
 
 
 class Project:
@@ -101,10 +118,29 @@ class Project:
 
     # --- estado ---
     def save(self) -> None:
+        """Guarda el estado ENTERO de una vez.
+
+        Escribir directamente sobre project.json lo dejaba vacío durante un
+        instante en cada guardado. La interfaz, que pregunta por el proyecto
+        cada segundo y medio mientras se genera, caía a veces justo en ese
+        instante y mostraba un error de servidor a mitad de una corrida que iba
+        bien. Ahora se escribe en un archivo aparte y se pone en su sitio de un
+        solo golpe (os.replace es atómico también en Windows): quien lea, lee
+        siempre la versión anterior completa o la nueva completa, nunca media.
+        """
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(
-            json.dumps(self.state, ensure_ascii=False, indent=2)
-        , encoding="utf-8")
+        # El nombre del temporal lleva quién lo escribe: si el motor y la
+        # interfaz guardan a la vez, cada uno usa el suyo y no se pisan.
+        tmp = self.state_path.with_name(
+            f"{self.state_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
+            os.replace(tmp, self.state_path)
+        finally:
+            if tmp.exists():
+                try: tmp.unlink()
+                except OSError: pass
 
     def phase_status(self, phase: str) -> str:
         return self.state["phases"].get(phase, {}).get("status", "pending")
