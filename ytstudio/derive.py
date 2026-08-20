@@ -251,6 +251,15 @@ def _limpiar_error_ytdlp(e) -> str:
     if "video unavailable" in bajo or "not available" in bajo:
         return ("Ese video no está disponible (puede estar borrado, ser "
                 "privado o tener restricción por país). Comprueba el enlace.")
+    if "unsupported url" in bajo or "is not a valid url" in bajo:
+        return ("Esa dirección no es un video que el programa sepa leer. "
+                "Copia el enlace desde la barra del navegador con el video "
+                "abierto (empieza por «https://www.youtube.com/watch?v=» o "
+                "por «https://youtu.be/»).")
+    if ("unable to connect" in bajo or "connection" in bajo
+            or "timed out" in bajo or "proxy" in bajo):
+        return ("No se pudo conectar con YouTube para leer ese video. "
+                "Comprueba tu conexión a internet y vuelve a intentarlo.")
     if "unable to download" in bajo and "subtitle" in bajo:
         return ("No se pudieron descargar los subtítulos de ese video. "
                 f"Detalle técnico: {msg[:200]}")
@@ -608,6 +617,43 @@ def propose(source: dict, cfg: dict, n: int = 5) -> list:
                      modo=modo, puede_recortar=puede_recortar)
 
 
+def ajustar_tramo(c: dict) -> dict:
+    """Hace que el tramo y la duración de un RECORTE digan lo mismo.
+
+    En una pieza nueva, «desde/hasta» solo señalan de qué parte del video
+    largo salió la idea, y la duración es la que se estima para el guion:
+    pueden no coincidir sin que pase nada. En un RECORTE no: la pieza ES ese
+    tramo, así que si el tramo dura 53 s y la ficha dice 38 s, todo lo que
+    venga después (la duración objetivo, la escena, el aviso de los 60 s)
+    trabaja con un dato falso. Aquí mandan los segundos del tramo, recortados
+    al mínimo y al máximo permitidos, y la ficha se pone al día.
+
+    Devuelve el mismo candidato, ya corregido."""
+    try:
+        desde = max(0.0, float(c.get("desde") or 0))
+    except (TypeError, ValueError):
+        desde = 0.0
+    try:
+        hasta = float(c.get("hasta") or 0)
+    except (TypeError, ValueError):
+        hasta = 0.0
+    try:
+        dur_ficha = int(c.get("duracion") or 0)
+    except (TypeError, ValueError):
+        dur_ficha = 0
+
+    span = hasta - desde
+    # Si el modelo no dio tramo (o lo dio al revés), se cae a la duración de
+    # la ficha antes que inventar un tramo vacío.
+    segundos = span if span > 0 else float(dur_ficha or DURACION_MAX)
+    segundos = max(DURACION_MIN, min(DURACION_MAX, segundos))
+
+    c["desde"] = round(desde, 2)
+    c["hasta"] = round(desde + segundos, 2)
+    c["duracion"] = int(round(segundos))
+    return c
+
+
 def normalize(candidatos: list, source: dict, n: int, *,
               modo: str = MODO_POR_DEFECTO,
               puede_recortar: bool = True) -> list:
@@ -644,6 +690,10 @@ def normalize(candidatos: list, source: dict, n: int, *,
         c["dia"] = CAMPAIGN_BY_ID[f]["dia"]
         c["hashtags"] = [h if h.startswith("#") else f"#{h}"
                          for h in (c.get("hashtags") or [])][:3]
+        # Un recorte dura exactamente lo que dura su tramo: sin esto, la
+        # ficha y el video terminaban diciendo cosas distintas.
+        if c["modo"] == "recorte":
+            ajustar_tramo(c)
         c["origen_url"] = source.get("url", "")
         c["origen_titulo"] = source.get("titulo", "")
         c["origen_slug"] = source.get("slug", "")
@@ -762,6 +812,15 @@ def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
     from ytstudio.phases.ingest import add_asset
     from ytstudio.project import Project, slugify
 
+    # El modo se decide LO PRIMERO: en un recorte, cuadrar el tramo cambia la
+    # duración, y la ficha del Short se escribe unas líneas más abajo — tiene
+    # que nacer ya con el dato bueno.
+    modo = c.get("modo") if c.get("modo") in MODOS else MODO_POR_DEFECTO
+    if modo == "recorte":
+        # El candidato puede llegar de un plan guardado o de la API sin
+        # haber pasado por normalize: se vuelve a cuadrar el tramo aquí.
+        ajustar_tramo(c)
+
     base = slugify(slug or c.get("nombre") or "short")
     final, i = base, 2
     while Project.exists(final):
@@ -775,6 +834,7 @@ def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
         brief_markdown(c), encoding="utf-8")
 
     project.set("format", "short")
+    project.set("shorts_modo", modo)
     plantilla = c.get("plantilla") or "libre"
     project.set("short_template",
                 plantilla if plantilla in SHORT_TEMPLATES else "libre")
@@ -809,8 +869,6 @@ def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
     overrides.setdefault("video", {})["target_minutes"] = round(
         segundos / 60, 2)
 
-    modo = c.get("modo") if c.get("modo") in MODOS else MODO_POR_DEFECTO
-    project.set("shorts_modo", modo)
     if modo == "recorte":
         # RECORTE: el video sale del original, así que no hay concepto que
         # inventar, ni guion que escribir, ni voz ni imágenes que pagar. Se
@@ -822,8 +880,7 @@ def create_short_project(c: dict, cfg: dict, *, slug: str | None = None,
         clip.scaffold(project, c, origen)
         # Un recorte hereda la duración del tramo, no una duración objetivo
         overrides.setdefault("video", {})["target_minutes"] = round(
-            max(5.0, float(c.get("hasta") or 0) - float(c.get("desde") or 0))
-            / 60, 2)
+            c["duracion"] / 60, 2)
 
     (project.dir / "config.yaml").write_text(
         yaml.safe_dump(overrides, allow_unicode=True), encoding="utf-8")

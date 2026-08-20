@@ -102,8 +102,19 @@ def download_segment(url: str, desde: float, hasta: float, work: Path,
         # irse varios segundos.
         "force_keyframes_at_cuts": True,
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.extract_info(url, download=True)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.extract_info(url, download=True)
+    except Exception as e:  # noqa: BLE001 — se traduce y se vuelve a lanzar
+        # Los errores de yt-dlp («ERROR: Unsupported URL: …») no le dicen
+        # nada al creador. Se traducen y se le dice la salida: el modo
+        # «pieza nueva» no necesita descargar nada.
+        from ytstudio.derive import _limpiar_error_ytdlp
+        raise RuntimeError(
+            f"No se pudo traer el tramo del video original. "
+            f"{_limpiar_error_ytdlp(e)} "
+            f"Si el video no se puede descargar, cambia este Short al modo "
+            f"«pieza nueva» y el programa lo creará desde cero.") from e
 
     videos = [p for p in work.glob("origen.*")
               if p.suffix.lower() in (".mp4", ".mkv", ".webm", ".mov")]

@@ -23,6 +23,9 @@ replicate>=0.32           # imágenes (FLUX), video generativo (Kling/Wan/Veo),
 # en ⚙ Configuración → Claves de API.
 yt-dlp>=2024.10           # análisis profundo de videos de referencia por enlace
                           # (guion/transcripción, ritmo de cortes, estilo visual)
+                          # y RECORTE de Shorts del video original: sin este
+                          # paquete no se puede recortar y todo Short derivado
+                          # se genera como pieza nueva.
 
 # Publicación en YouTube (opcional)
 google-api-python-client>=2.100

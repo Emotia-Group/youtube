@@ -53,8 +53,18 @@ p.set("concept", {"angle": "Investigación", "tone": "Sobrio",
 CFG_MOCK = {"language": "es", "providers": {"llm": {"name": "mock"}}}
 source = derive.source_from_project("largo")
 candidatos = derive.propose(source, CFG_MOCK, n=3)
+# ESTA batería prueba el modo «pieza nueva»: generar el Short desde cero con
+# guion, voz e imágenes de mentira. Desde la v0.66.0 el modo por defecto es
+# «recorte», que necesita descargar el video original de YouTube — y aquí no
+# hay internet ni un video de verdad detrás del enlace de mentira. El modo se
+# fija a mano para que la prueba siga probando lo que dice probar; el recorte
+# tiene su propia batería (test_v0_66_0), con un video local.
+candidatos[0]["modo"] = "nuevo"
 slug = derive.create_short_project(candidatos[0], CFG_MOCK)
 print(f"Short derivado: {slug} · objetivo {candidatos[0]['duracion']}s")
+check("A0 el Short se genera como pieza nueva (no como recorte)",
+      Project(slug).get("shorts_modo") == "nuevo",
+      str(Project(slug).get("shorts_modo")))
 
 BASE = {
     "language": "es", "style": {"preset": "documental_cinematografico"},
