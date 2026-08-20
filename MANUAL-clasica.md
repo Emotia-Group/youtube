@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.67.0 -->
+<!-- MANUAL_VERSION: 0.67.1 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos

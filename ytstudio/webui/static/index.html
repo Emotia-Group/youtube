@@ -702,9 +702,12 @@ function viewNuevo() {
   selCanal.value = st.channel_id;
   function pintarEstilos() {
     const suyos = misEstilos.filter(s => !st.channel_id || s.channel_id === st.channel_id);
+    // OJO: replaceChildren es del NAVEGADOR y, al revés que el ayudante el(),
+    // NO aplana listas: si se le pasa el array de estilos tal cual, lo
+    // convierte en texto y el desplegable se queda sin opciones. Va con «...».
     selEstilo.replaceChildren(
       el('option', { value: '' }, 'Sin estilo guardado (se crea uno nuevo)'),
-      suyos.map(s => el('option', { value: s.id }, s.name || s.id)));
+      ...suyos.map(s => el('option', { value: s.id }, s.name || s.id)));
     // Si el canal tiene un solo estilo, ya está elegido: nadie crea un canal
     // con un estilo para luego no usarlo.
     if (st.channel_id && suyos.length === 1) st.style_id = suyos[0].id;

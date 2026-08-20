@@ -9,6 +9,28 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.67.1 — 2026-08-20
+**El canal ya vuelve a traer sus estilos**, visto por el creador nada más
+estrenar la v0.67.0.
+
+- 📺 AL ELEGIR UN CANAL, LA LISTA DE ESTILOS SE QUEDABA VACÍA. En el formulario
+  de proyecto nuevo de la plantilla nueva, escoger «Historia Oculta» dejaba el
+  desplegable de al lado con una sola línea —«Sin estilo guardado»— y ninguna
+  más. Es decir: la mitad de lo que se acababa de recuperar no servía de nada,
+  porque no había forma de elegir el estilo que se quería reutilizar.
+
+  La causa, para que quede escrita: la lista de estilos se vuelve a pintar con
+  una función del navegador (`replaceChildren`) que, al revés que el ayudante
+  que usa el resto de la interfaz, **no acepta listas**: si se le entrega el
+  montón de estilos de una vez, lo convierte en texto y se queda sin opciones.
+  Había que entregárselos de uno en uno.
+
+- 🕵 Y PARA QUE NO SE REPITA, la batería de pruebas ya no busca un texto
+  concreto: **lee el código de las tres interfaces** (nueva, clásica y Torre de
+  Control) y avisa si en algún sitio se le entrega una lista entera a una de
+  esas funciones del navegador. La prueba se comprueba a sí misma contra el
+  fallo original, para que no sea un adorno que da luz verde pase lo que pase.
+
 ## v0.67.0 — 2026-08-20
 **Vuelve lo que la plantilla nueva se había dejado por el camino**, el
 programa dice dónde estás y ya no se pierde lo que estabas escribiendo.

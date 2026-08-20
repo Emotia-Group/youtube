@@ -234,12 +234,19 @@ print("\nT6 documentación")
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 check("T6a el CHANGELOG cuenta lo que trae la v0.67.0", "## v0.67.0" in CHANGELOG)
 
+# La versión activa es la del primer encabezado del CHANGELOG: los manuales
+# tienen que ir a la par, no a un número fijo escrito aquí.
+activa = re.search(r"^## v([0-9]+\.[0-9]+\.[0-9]+)", CHANGELOG, re.M)
+check("T6a2 el CHANGELOG declara una versión activa", bool(activa))
+
 for nombre, ruta in (("nuevo", "MANUAL.md"), ("clásico", "MANUAL-clasica.md")):
     texto = (ROOT / ruta).read_text(encoding="utf-8")
     m = re.search(r"MANUAL_VERSION:\s*([0-9]+\.[0-9]+\.[0-9]+)", texto)
     check(f"T6b el manual {nombre} declara la versión que documenta", bool(m))
-    check(f"T6c el manual {nombre} está al día", bool(m) and m.group(1) == "0.67.0",
-          m.group(1) if m else "sin marca")
+    check(f"T6c el manual {nombre} está al día con el CHANGELOG",
+          bool(m) and bool(activa) and m.group(1) == activa.group(1),
+          f"manual {m.group(1) if m else '?'} · programa "
+          f"{activa.group(1) if activa else '?'}")
     check(f"T6d el manual {nombre} explica la ruta de navegación",
           "ruta de navegación" in texto.lower() or "migas" in texto.lower())
     check(f"T6e el manual {nombre} explica el borrador",

@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.67.0 -->
+<!-- MANUAL_VERSION: 0.67.1 -->
 <!-- PLANTILLA: nueva -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -313,8 +313,11 @@ derecha):
    YouTube, Vimeo o Wistia cuyo estilo quieras replicar. El programa analiza
    el video completo: guion, ritmo de los cortes, estructura y estilo visual.
 6. **Canal y estilo guardado** (opcional): si ya tienes canales creados
-   (capítulo 5.5), elige el canal y el estilo. Así el video nace con la
-   identidad de tu canal puesta y sin volver a pagar el análisis.
+   (capítulo 5.5), elige primero el **canal**; el desplegable de al lado se
+   reduce entonces a **los estilos de ese canal**, para que no tengas que
+   buscar entre todos. Si el canal tiene un solo estilo, ya viene elegido. Con
+   **Sin canal** los ves todos. Así el video nace con la identidad de tu canal
+   puesta y sin volver a pagar el análisis.
 7. **Estilo visual de fábrica**: elige **Documental cinematográfico**. (Se
    ignora si elegiste un estilo guardado en el punto anterior.)
 8. Pulsa **Solo crear** (para revisar antes de gastar) o **Crear y generar**
