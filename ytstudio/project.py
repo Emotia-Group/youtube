@@ -56,7 +56,17 @@ def slugify(text: str) -> str:
 
 
 def read_json_tolerant(path) -> dict:
-    """Lee un JSON aunque venga en una codificación antigua. Los archivos de
+    """Lee un JSON aunque venga en una codificación antigua, y devuelve el
+    contenido. Ver _leer_json para el detalle."""
+    return _leer_json(path)[0]
+
+
+def _leer_json(path) -> tuple[dict, bool]:
+    """Lee un JSON y devuelve (contenido, estaba_ya_en_utf8).
+
+    Lo segundo sirve para NO reescribir un archivo que no hay que migrar.
+
+    Lee aunque venga en una codificación antigua. Los archivos de
     proyecto creados por versiones previas (antes de forzar UTF-8) quedaron en
     cp1252 en Windows; se leen con fallback y se devuelven como dict.
 
@@ -70,15 +80,23 @@ def read_json_tolerant(path) -> dict:
     ruta = _P(path)
     ultimo: Exception | None = None
     for intento in range(4):
-        raw = ruta.read_bytes()
+        try:
+            raw = ruta.read_bytes()
+        except PermissionError as e:
+            # WINDOWS: mientras el archivo se está sustituyendo, abrirlo puede
+            # dar «acceso denegado» durante una fracción de segundo. No es un
+            # problema de permisos de verdad: se espera y se reintenta.
+            ultimo = e
+            time.sleep(0.05 * (intento + 1))
+            continue
         for enc in ("utf-8", "cp1252", "latin-1"):
             try:
-                return json.loads(raw.decode(enc))
+                return json.loads(raw.decode(enc)), enc == "utf-8"
             except (UnicodeDecodeError, json.JSONDecodeError) as e:
                 ultimo = e
                 continue
         try:  # último recurso: reemplazar bytes inválidos, no perder el proyecto
-            return json.loads(raw.decode("utf-8", errors="replace"))
+            return json.loads(raw.decode("utf-8", errors="replace")), False
         except json.JSONDecodeError as e:
             ultimo = e
         time.sleep(0.05 * (intento + 1))
@@ -93,8 +111,18 @@ class Project:
         self.state: dict = {"slug": slug, "phases": {}, "data": {},
                             "created_at": time.time(), "display_name": slug}
         if self.state_path.exists():
-            self.state = read_json_tolerant(self.state_path)
+            # Antes, ABRIR un proyecto lo reescribía siempre «por si acaso»
+            # había que migrarlo a UTF-8. Como la interfaz pregunta por el
+            # proyecto cada segundo y medio mientras se genera, y cada
+            # pregunta abre el proyecto, el archivo se estaba reescribiendo
+            # decenas de veces por minuto sin que hubiera cambiado nada. Eso
+            # multiplicaba los choques con Windows (que no deja sustituir un
+            # archivo abierto) y gastaba disco para nada. Ahora solo se
+            # reescribe si de verdad hay algo que arreglar.
+            self.state, era_utf8 = _leer_json(self.state_path)
+            migrar = not era_utf8
             if not self.state.get("created_at"):
+                migrar = True
                 # Proyectos de versiones anteriores no tienen fecha de creación
                 # guardada: se usa la fecha de la carpeta como aproximación
                 # razonable (en Windows st_ctime SÍ es la fecha de creación).
@@ -104,11 +132,13 @@ class Project:
                     self.state["created_at"] = 0
             if not self.state.get("display_name"):
                 self.state["display_name"] = slug
+                migrar = True
             # Re-guardar en UTF-8 para migrar los proyectos antiguos de una vez
-            try:
-                self.save()
-            except Exception:
-                pass
+            if migrar:
+                try:
+                    self.save()
+                except Exception:
+                    pass
 
     # --- rutas ---
     def path(self, key: str, *parts: str) -> Path:
@@ -117,6 +147,41 @@ class Project:
         return p.joinpath(*parts) if parts else p
 
     # --- estado ---
+    def _poner_en_su_sitio(self, tmp) -> None:
+        """Mueve el archivo temporal encima del definitivo.
+
+        EN WINDOWS ESTO PUEDE FALLAR aunque todo esté bien. Windows no deja
+        sustituir un archivo que otro tenga abierto en ese preciso instante, y
+        contesta «Acceso denegado» (WinError 5). Como la interfaz lee
+        project.json cada segundo y medio mientras se genera el video, tarde o
+        temprano una lectura y un guardado coinciden. En Linux y Mac esto no
+        pasa, así que el problema solo se ve en el equipo del creador.
+
+        Cada lectura dura microsegundos, así que basta con esperar un poco y
+        volver a intentarlo: al segundo intento ya está libre.
+
+        Y si después de un segundo largo siguiera bloqueado (un antivirus
+        revisando la carpeta, por ejemplo), se escribe directamente encima. Es
+        peor —quien lea justo entonces puede pillar el archivo a medias—, pero
+        quien lee ya sabe reintentar, mientras que fallar aquí abortaría la
+        fase a mitad de una generación y tiraría a la basura minutos de trabajo
+        y el dinero gastado. Entre las dos, esta es la mala menor.
+        """
+        # Se empieza esperando 5 milésimas: la lectura que estorba dura
+        # microsegundos, así que casi siempre basta el primer reintento. Si
+        # aun así sigue ocupado, se va esperando cada vez más, hasta ~0,7 s
+        # en total. Esperar más solo alargaría la generación sin arreglar
+        # nada: un bloqueo que dura tanto no se va a soltar solo.
+        for intento in range(8):
+            try:
+                os.replace(tmp, self.state_path)
+                return
+            except PermissionError:
+                time.sleep(min(0.005 * (2 ** intento), 0.2))
+        self.state_path.write_text(
+            json.dumps(self.state, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+
     def save(self) -> None:
         """Guarda el estado ENTERO de una vez.
 
@@ -125,8 +190,9 @@ class Project:
         cada segundo y medio mientras se genera, caía a veces justo en ese
         instante y mostraba un error de servidor a mitad de una corrida que iba
         bien. Ahora se escribe en un archivo aparte y se pone en su sitio de un
-        solo golpe (os.replace es atómico también en Windows): quien lea, lee
-        siempre la versión anterior completa o la nueva completa, nunca media.
+        solo golpe: quien lea, lee siempre la versión anterior completa o la
+        nueva completa, nunca media. El detalle de Windows —que no deja
+        sustituir un archivo abierto— lo resuelve _poner_en_su_sitio.
         """
         self.dir.mkdir(parents=True, exist_ok=True)
         # El nombre del temporal lleva quién lo escribe: si el motor y la
@@ -136,7 +202,7 @@ class Project:
         try:
             tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=2),
                            encoding="utf-8")
-            os.replace(tmp, self.state_path)
+            self._poner_en_su_sitio(tmp)
         finally:
             if tmp.exists():
                 try: tmp.unlink()
