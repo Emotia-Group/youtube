@@ -315,7 +315,56 @@ def _build_ambience(project, cfg, llm, total: float) -> None:
            + " (por debajo de la música y la voz).")
 
 
+def _apply_jingle(project, cfg) -> None:
+    """El JINGLE de la serie abre el episodio: suena al frente durante los
+    primeros segundos (la música de fondo baja mientras tanto) y se funde al
+    terminar. La duración del video NO cambia — el jingle se MEZCLA sobre la
+    pista musical ya elegida, no se inserta. Es una capa de apoyo: cualquier
+    fallo deja la música original intacta, avisando."""
+    from ytstudio.progress import notify
+    name = project.get("serie_jingle")
+    music_name = project.get("music_file")
+    if not name or not music_name or music_name == "musica_con_jingle.mp3":
+        return
+    jingle = project.path("music") / name
+    music_f = project.path("music") / music_name
+    if not jingle.exists() or not music_f.exists():
+        return
+    out = project.path("music") / "musica_con_jingle.mp3"
+    from ytstudio.utils.media import probe_duration, run_ffmpeg
+    try:
+        if not out.exists():   # reanudable
+            # Tope de 15 s: un jingle es una firma sonora, no una canción.
+            jd = min(probe_duration(jingle), 15.0)
+            total = probe_duration(music_f)
+            fade = 1.2
+            graph = (
+                f"[0:a]atrim=0:{jd:.2f},"
+                f"afade=t=out:st={max(0.0, jd - fade):.2f}:d={fade:.2f},"
+                "aresample=44100,apad[j];"
+                f"[1:a]aresample=44100,"
+                f"volume=enable='lt(t,{jd:.2f})':volume=0.3[m];"
+                "[j][m]amix=inputs=2:duration=longest:dropout_transition=0:"
+                f"normalize=0,atrim=0:{total:.2f}[out]")
+            run_ffmpeg(["-i", str(jingle), "-i", str(music_f),
+                        "-filter_complex", graph, "-map", "[out]",
+                        "-c:a", "libmp3lame", "-q:a", "4", str(out)],
+                       "jingle de la serie", timeout=300)
+        project.set("music_file", out.name)
+        notify("🎺 Jingle de la serie al frente de la apertura (la música de "
+               "fondo baja mientras suena y vuelve al terminar).")
+    except Exception as e:
+        project.add_warning(
+            f"No se pudo mezclar el jingle de la serie ({e}): el episodio "
+            "sale con su música normal.")
+
+
 def run(project, cfg) -> None:
+    _run(project, cfg)
+    _apply_jingle(project, cfg)
+
+
+def _run(project, cfg) -> None:
     music = get_music(cfg)
     concept = project.get("concept")
     total = project.get("total_duration")
@@ -336,6 +385,11 @@ def run(project, cfg) -> None:
     if isinstance(music, LibraryMusic):
         llm = get_llm(cfg)
         tracks = music.list_tracks()
+        # CANCIONES PROPIAS DE LA SERIE: entran a la selección del supervisor
+        # musical como cualquier pista de la biblioteca (etiquetadas como de
+        # la serie, para que sepa que son las de la casa).
+        from ytstudio.series import series_tracks
+        tracks = tracks + series_tracks(project)
         topic = (project.get("brief") or {}).get("topic", "")
         lang = cfg.get("language", "es")
         if tracks and not getattr(llm, "is_mock", False):

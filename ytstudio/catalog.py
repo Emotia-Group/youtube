@@ -401,6 +401,19 @@ FORMATS: dict = {
         "label": "🎬 YouTube — video largo (16:9)",
         "overrides": {},  # usa la configuración global tal cual
     },
+    "serie": {
+        # Episodio de SERIE ANIMADA (largo, 16:9). Se crea desde el 🎬 Estudio
+        # de series: el episodio nace con el elenco, las locaciones, las voces
+        # y el jingle de su serie ya puestos (ver ytstudio/series.py). El
+        # intro es más largo de lo normal: es el hueco donde suena el jingle
+        # antes de la primera línea de diálogo.
+        "label": "🎠 Serie animada — episodio (16:9)",
+        "target_minutes": 8,
+        "overrides": {
+            "video": {"target_minutes": 8},
+            "audio": {"intro_seconds": 3.0},
+        },
+    },
     "short": {
         "label": "📱 YouTube Short — vertical ≤60 s",
         "target_minutes": 0.9,

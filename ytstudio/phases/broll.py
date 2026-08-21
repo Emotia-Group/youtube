@@ -985,7 +985,7 @@ def _aspect_mismatch(img_path: Path, cfg: dict) -> float:
 
 
 def _reframe_character_still(img: Path, prompt: str, broll_dir: Path,
-                             cfg: dict) -> Path | None:
+                             cfg: dict, stem: str = "personaje") -> Path | None:
     """La foto del personaje con un aspecto muy distinto al del video no cabe
     en el encuadre: el director la REGENERA con el modelo de identidad (la
     foto como referencia) ya en el formato del video, para que el personaje
@@ -998,7 +998,7 @@ def _reframe_character_still(img: Path, prompt: str, broll_dir: Path,
             return None  # el recorte de cobertura encuadra bien tal cual
     except Exception:
         return None
-    dest = broll_dir / "personaje_wide.jpg"
+    dest = broll_dir / f"{stem}_wide.jpg"
     if dest.exists():  # reanudable
         return dest
     from ytstudio.providers.images import get_ref_images
@@ -1041,17 +1041,19 @@ def _reframe_character_still(img: Path, prompt: str, broll_dir: Path,
 
 
 def _character_plate(img: Path, prompt: str, broll_dir: Path,
-                     cfg: dict) -> Path:
+                     cfg: dict, stem: str = "personaje") -> Path:
     """La foto del personaje LISTA para el formato del video: se copia al
     proyecto y, si su aspecto no encaja (una foto 9:16 en un video 16:9), se
     reencuadra con el modelo de identidad. Esta es la imagen que alimenta el
     lipsync Y la que se ve si el lipsync falla — así el encuadre es el mismo
-    en las dos rutas."""
+    en las dos rutas. `stem` separa la lámina de CADA personaje del elenco
+    (episodios de serie: varios personajes hablan, cada uno con la suya)."""
     import shutil as _sh
-    dest = broll_dir / f"personaje{img.suffix.lower() or '.jpg'}"
+    dest = broll_dir / f"{stem}{img.suffix.lower() or '.jpg'}"
     if not dest.exists():
         _sh.copyfile(img, dest)
-    return _reframe_character_still(dest, prompt, broll_dir, cfg) or dest
+    return _reframe_character_still(dest, prompt, broll_dir, cfg,
+                                    stem=stem) or dest
 
 
 def _lipsync_signature(plate: Path, audio: Path, scene: dict) -> str:
@@ -1112,30 +1114,69 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
     char_scenes = [s for s in scenes if s.get("shot") == "personaje"]
     if not char_scenes:
         return set()
+
+    # QUIÉN SALE EN CADA ESCENA: en un episodio de serie, el personaje que
+    # HABLA esa escena (speaker); en el resto de proyectos, el narrador de
+    # siempre. Cada personaje tiene SU PROPIA lámina reencuadrada y su caché
+    # — las identidades no se mezclan jamás entre escenas.
+    from ytstudio.characters import character_images as _char_imgs
+    from ytstudio.characters import ensure_reference as _ensure_ref
+    from ytstudio.characters import roster as _roster
+    from ytstudio.series import norm_name as _norm_name
     img = _character_image(project, cfg)
-    if img is None:
-        for s in char_scenes:
-            s["shot"] = "broll"
-        project.add_warning(
-            "Hay escenas marcadas como PERSONAJE pero no subiste su imagen "
-            "(categoría 🧑 Personaje en Archivos): se generan como B-roll.")
-        return set()
+    by_name = {_norm_name(c.get("name", "")): c for c in _roster(project)}
+    _plates: dict[str, Path] = {}
 
     # LA FOTO SE ADAPTA AL FORMATO **ANTES** DE HABLAR: el lipsync devuelve un
     # clip con el aspecto de la foto que se le entrega. Con una foto 9:16 en un
     # video 16:9, TODAS las escenas de personaje salían recortadas al mentón
     # (el reencuadre existía, pero solo se aplicaba a las que fallaban). Ahora
     # se reencuadra primero y el clip nace ya en el formato del video.
-    prompt0 = next((s.get("broll_prompt") for s in char_scenes
-                    if s.get("broll_prompt")),
-                   "portrait of the narrator speaking to the camera")
-    plate = _character_plate(img, prompt0, broll_dir, cfg)
+    def _plate_for(s: dict) -> Path | None:
+        sp = (s.get("speaker") or "").strip()
+        ch = by_name.get(_norm_name(sp)) \
+            if sp and sp.lower() != "narrador" else None
+        base, stem = img, "personaje"
+        if ch is not None:
+            imgs = _char_imgs(project, ch)
+            cand = imgs[0] if imgs else None
+            if cand is None:
+                try:
+                    cand = _ensure_ref(project, cfg, ch)
+                except Exception:
+                    cand = None
+            if cand is not None:
+                base, stem = cand, f"personaje_{ch['id']}"
+        if base is None:
+            return None
+        if stem not in _plates:
+            prompt = (s.get("broll_prompt")
+                      or "portrait of the narrator speaking to the camera")
+            _plates[stem] = _character_plate(base, prompt, broll_dir, cfg,
+                                             stem=stem)
+        return _plates[stem]
+
+    sin_imagen = [s for s in char_scenes if _plate_for(s) is None]
+    if sin_imagen:
+        for s in sin_imagen:
+            s["shot"] = "broll"
+        project.add_warning(
+            "Hay escenas marcadas como PERSONAJE pero su personaje no tiene "
+            "imagen (categoría 🧑 Personaje en Archivos, o la ficha del "
+            "personaje en su serie): se generan como B-roll.")
+        char_scenes = [s for s in char_scenes if s not in sin_imagen]
+    if not char_scenes:
+        return set()
 
     def _still_fallback(targets: list[dict]) -> None:
         # Si no se pudo reencuadrar, el montaje compone la foto ENTERA sobre
         # fondo desenfocado — la cara nunca se corta.
         for s in targets:
-            s["broll_image"] = plate.name
+            p = _plate_for(s)
+            if p is None:
+                s["shot"] = "broll"
+                continue
+            s["broll_image"] = p.name
             s["broll_type"] = "image"
             s.pop("broll_video", None)
             s["broll_source"] = "lipsync"
@@ -1205,7 +1246,7 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
         try:
             a = _lipsync_audio(s)
             audios[s["id"]] = a
-            sigs[s["id"]] = _lipsync_signature(plate, a, s)
+            sigs[s["id"]] = _lipsync_signature(_plate_for(s), a, s)
         except Exception:
             pass   # sin audio: _gen levantará el error con su mensaje claro
 
@@ -1236,6 +1277,7 @@ def _generate_character_scenes(project, scenes: list[dict], broll_dir,
         if _cached(s):   # reanudable
             return
         audio = audios.get(s["id"]) or _lipsync_audio(s)
+        plate = _plate_for(s)
         ls.generate(plate, audio, clip, seconds=float(s.get("duration") or 5))
         sig = sigs.get(s["id"]) or _lipsync_signature(plate, audio, s)
         (broll_dir / f"lipsync_{s['id']:03d}.sig").write_text(
@@ -1490,12 +1532,25 @@ def run(project, cfg) -> None:
             for n in cast_needed:
                 char_refs[n] = references_for(project, cfg, [n])
 
+    # LOCACIONES con identidad fija (episodios de serie): referencias por
+    # locación, resueltas una sola vez — el mismo lugar en todas sus escenas.
+    from ytstudio import locations as locations_mod
+    loc_needed = sorted({scene.get("location") for scene in ai_scenes
+                         if scene.get("location")})
+    loc_refs: dict[str, list] = {}
+    if loc_needed and ref_images is not None:
+        for n in loc_needed:
+            loc_refs[n] = locations_mod.references_for(project, cfg, [n])
+
     def _scene_refs(scene: dict) -> list:
         out = []
         for n in (scene.get("characters") or []):
             for p in char_refs.get(n, []):
                 if p not in out:
                     out.append(p)
+        for p in loc_refs.get(scene.get("location") or "", []):
+            if p not in out:
+                out.append(p)
         return out[:6]
 
     from ytstudio.progress import get_sink

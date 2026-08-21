@@ -164,6 +164,7 @@
   <div id="logo"><span class="clap">🎬</span><div><b>ytstudio</b><small>videos largos con IA</small></div></div>
   <button class="navbtn" onclick="showNew()">＋ Nuevo proyecto</button>
   <button class="navbtn" onclick="showLibrary()">📺 Canales y estilos</button>
+  <button class="navbtn" onclick="showSeries()">🎠 Series animadas</button>
   <button class="navbtn" onclick="showManual()">📖 Manual de uso</button>
   <button class="navbtn" onclick="showEvents()">🧾 Log de eventos</button>
   <button class="navbtn" onclick="showSettings()">⚙ Configuración</button>
@@ -280,9 +281,10 @@ async function deleteProjectFromList(slug){
    botones Atrás y Adelante del navegador funcionan, la pantalla se puede
    guardar en marcadores y recargar con F5 ya no devuelve al principio. */
 const RUTA_TITULOS={home:'Proyectos',new:'Nuevo proyecto',settings:'⚙ Configuración',
-  library:'📺 Canales y estilos',manual:'📖 Manual de uso',eventos:'🧾 Log de eventos'};
+  library:'📺 Canales y estilos',manual:'📖 Manual de uso',eventos:'🧾 Log de eventos',
+  series:'🎠 Series animadas'};
 const RUTA_DE_VISTA={new:'#/nuevo',settings:'#/ajustes',library:'#/canales',
-  manual:'#/manual',eventos:'#/eventos',home:'#/proyectos'};
+  manual:'#/manual',eventos:'#/eventos',home:'#/proyectos',series:'#/series'};
 /* A qué profundidad está el creador DENTRO del programa. Se guarda en cada
    paso del historial: sin esto, «← Atrás» en la primera pantalla lo sacaría
    del programa a la página anterior del navegador. */
@@ -290,6 +292,7 @@ let PASOS=0;
 function rutaActual(){
   if(view==='project'&&current)
     return `#/proyecto/${encodeURIComponent(current)}/${encodeURIComponent(window._tab||'Guion')}`;
+  if(view==='serie'&&window._serieId)return `#/serie/${encodeURIComponent(window._serieId)}`;
   return RUTA_DE_VISTA[view]||'#/proyectos';
 }
 /* Pinta la barra y deja la dirección del navegador al día. Se llama al final
@@ -315,6 +318,9 @@ function pintarRuta(desdeHistorial){
   }else if(view==='new'){
     tramos.push({t:'Proyectos',ir:'irAProyectos()'});
     tramos.push({t:'Nuevo proyecto',ir:null});
+  }else if(view==='serie'){
+    tramos.push({t:'🎠 Series animadas',ir:'showSeries()'});
+    tramos.push({t:(window._serie&&window._serie.name)||'serie',ir:null});
   }else{
     tramos.push({t:RUTA_TITULOS[view]||'Proyectos',ir:null});
   }
@@ -333,7 +339,8 @@ function irARuta(hash){
   const t=String(hash||'').replace(/^#\/?/,'').split('/').filter(Boolean);
   if(!t.length||t[0]==='proyectos')return irAProyectos();
   if(t[0]==='proyecto'&&t[1]){window._tab=decodeURIComponent(t[2]||'Guion');return openProject(decodeURIComponent(t[1]),true)}
-  return ({nuevo:showNew,ajustes:showSettings,canales:showLibrary,manual:showManual,eventos:showEvents}[t[0]]||irAProyectos)(true);
+  if(t[0]==='serie'&&t[1])return showSerie(decodeURIComponent(t[1]));
+  return ({nuevo:showNew,ajustes:showSettings,canales:showLibrary,manual:showManual,eventos:showEvents,series:showSeries}[t[0]]||irAProyectos)(true);
 }
 window.addEventListener('popstate',ev=>{
   PASOS=(ev.state&&ev.state.profundidad)||0;
@@ -552,6 +559,310 @@ async function createProject(){
     toast(`Proyecto creado con ${r.assets.length} archivo(s)`);
     openProject(r.slug);
   }catch(e){toast('⚠ '+e.message);if(btn){btn.disabled=false;btn.textContent='Crear proyecto →'}}
+}
+
+/* ---------- ESTUDIO DE SERIES ANIMADAS ----------
+   La biblia de cada serie: personajes (rasgos, vestimenta, voz, fotos),
+   locaciones, escenas recurrentes, jingle, canciones y voces (subidas o
+   CLONADAS). Los episodios se crean desde aquí y nacen con todo eso puesto. */
+
+function srPick(accept,cb){
+  const i=document.createElement('input');
+  i.type='file';i.multiple=true;i.accept=accept||'';i.style.display='none';
+  i.onchange=async()=>{
+    const fs=[];
+    for(const f of i.files)fs.push({name:f.name,data_base64:await readB64(f)});
+    i.remove();if(fs.length)cb(fs);
+  };
+  document.body.append(i);i.click();
+}
+async function srApi(path,opts){
+  try{const r=await api(path,opts);await showSerie(window._serieId);return r}
+  catch(e){toast('⚠ '+e.message)}
+}
+function srVozValor(v){
+  if(!v||!v.voice_id)return'';
+  return String(v.voice_id).startsWith('vz_')?`vz|${v.voice_id}`:`cat|${v.provider||''}|${v.voice_id}`;
+}
+function srVozSelectHtml(current,onchange){
+  const d=window._serie||{};
+  const cur=srVozValor(current);
+  const clon=(d.voices||[]).filter(v=>v.kind==='clonada');
+  let extra='';
+  const enCatalogo=(CAT.catalog?.tts?.options||[]).some(p=>(p.voices||[]).some(v=>`cat|${p.name}|${v.id}`===cur))
+    ||clon.some(v=>`vz|${v.id}`===cur);
+  if(cur&&!enCatalogo)extra=`<option value="${esc(cur)}" selected>voz propia: ${esc(current.voice_id)}</option>`;
+  return `<select style="width:auto;max-width:270px" onchange="${onchange}">
+    <option value="">— sin voz propia (usa la del narrador)</option>
+    ${clon.length?`<optgroup label="Voces clonadas de la serie">${clon.map(v=>`<option value="vz|${esc(v.id)}" ${cur===`vz|${v.id}`?'selected':''}>🎤 ${esc(v.name)}</option>`).join('')}</optgroup>`:''}
+    ${(CAT.catalog?.tts?.options||[]).filter(p=>(p.voices||[]).length).map(p=>`<optgroup label="${esc(p.label||p.name)}">
+      ${p.voices.map(v=>`<option value="cat|${esc(p.name)}|${esc(v.id)}" ${cur===`cat|${p.name}|${v.id}`?'selected':''}>${esc(v.label||v.id)}</option>`).join('')}</optgroup>`).join('')}
+    ${extra}</select>`;
+}
+function srVozDesdeValor(val){
+  if(!val)return null;
+  const t=val.split('|');
+  return t[0]==='vz'?{voice_id:t[1]}:{provider:t[1]||null,voice_id:t[2]};
+}
+function srSetCharVoice(cid,val){
+  srApi(`/api/series/${window._serieId}/characters/${cid}`,{method:'PUT',body:JSON.stringify({voice:srVozDesdeValor(val)})});
+}
+function srSetNarrVoice(val){
+  srApi(`/api/series/${window._serieId}`,{method:'PUT',body:JSON.stringify({narrator_voice:srVozDesdeValor(val)})});
+}
+async function showSeries(){
+  view='series';current=null;stopPoll();refreshList();
+  const series=(await api('/api/series').catch(()=>({series:[]}))).series||[];
+  window._series=series;
+  $('#main').innerHTML=`
+  <h1>🎠 Series animadas</h1>
+  <p class="muted" style="max-width:640px">Cada serie guarda su biblia: personajes con la misma cara, ropa y voz en todos los episodios; locaciones con el mismo aspecto; el jingle y las canciones de la casa. Los episodios se crean desde el estudio de la serie y nacen con todo eso puesto.</p>
+  ${series.length?`<div class="cards">${series.map(s=>`
+    <div class="card" style="max-width:420px">
+      <div class="row" style="justify-content:space-between"><b style="font-size:16px">${esc(s.name)}</b>
+        <span class="badge">${s.audience==='adultos'?'adultos':'niños'}</span></div>
+      <div class="muted" style="font-size:13px;margin-top:4px">${esc(s.description||'sin descripción')}</div>
+      <div class="muted" style="font-size:12px;margin-top:8px">${(s.characters||[]).length} personaje(s) · ${(s.locations||[]).length} locación(es) · ${(s.episodes||[]).length} episodio(s)${s.jingle?' · jingle ✓':''}</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn small" onclick="showSerie('${esc(s.id)}')">Abrir estudio</button>
+        <button class="btn sec small" onclick="srBorrarSerie('${esc(s.id)}','${esc(s.name)}')">Borrar</button>
+      </div>
+    </div>`).join('')}</div>`:''}
+  <div class="card" style="max-width:560px">
+    <h3>Crear serie</h3>
+    <label class="f"><span>Nombre</span><input id="sr-nombre" placeholder="ej. Los Amigos del Bosque"></label>
+    <label class="f"><span>De qué va (mundo, tono, edad del público)</span><textarea id="sr-desc" rows="2"></textarea></label>
+    <label class="f"><span>Audiencia</span><select id="sr-aud" style="width:auto">
+      <option value="ninos">Para niños</option><option value="adultos">Para adultos</option></select></label>
+    <button class="btn" onclick="srCrearSerie()">Crear la serie →</button>
+  </div>`;
+  pintarRuta(tomarHistorial());
+}
+async function srCrearSerie(){
+  try{
+    const r=await api('/api/series',{method:'POST',body:JSON.stringify(
+      {name:$('#sr-nombre').value,description:$('#sr-desc').value,audience:$('#sr-aud').value})});
+    showSerie(r.id);
+  }catch(e){toast('⚠ '+e.message)}
+}
+async function srBorrarSerie(id,nombre){
+  if(!confirm(`¿Borrar la serie «${nombre}» con todo su material (personajes, locaciones, voces, música)? Sus episodios ya creados NO se borran.`))return;
+  try{await api(`/api/series/${id}`,{method:'DELETE'});showSeries()}catch(e){toast('⚠ '+e.message)}
+}
+async function showSerie(id){
+  view='serie';current=null;window._serieId=id;stopPoll();refreshList();
+  let d;
+  try{d=await api(`/api/series/${id}`)}catch(e){toast('⚠ '+e.message);return showSeries()}
+  window._serie=d;
+  const img=(rel,size)=>rel?`<img src="/series-files/${esc(id)}/${esc(rel)}" style="width:${size}px;height:${size}px;object-fit:cover;border-radius:6px;border:1px solid var(--line)">`
+    :`<div style="width:${size}px;height:${size}px;border-radius:6px;border:1px dashed var(--line)"></div>`;
+  $('#main').innerHTML=`
+  <div class="row" style="justify-content:space-between">
+    <h1>🎠 ${esc(d.name)} <span class="badge">${d.audience==='adultos'?'adultos':'niños'}</span></h1>
+    <button class="btn sec small" onclick="srRenombrar()">✎ Renombrar</button>
+  </div>
+  ${d.description?`<p class="muted" style="max-width:640px">${esc(d.description)}</p>`:''}
+
+  <div class="card">
+    <h3>🧑 Personajes — identidad fija en TODOS los episodios</h3>
+    <p class="muted" style="font-size:12px">Sube fotos (o videos: se sacan fotogramas) para fijar su aspecto; sin fotos, su retrato se genera UNA vez y se reutiliza. «Clonarme» crea un personaje-avatar con TU cara a partir de tus fotos y videos.</p>
+    ${(d.characters||[]).map(c=>`
+      <div class="row" style="border-top:1px solid var(--line);padding:10px 0;align-items:flex-start;gap:12px">
+        ${img((c.images||[])[0],54)}
+        <div style="flex:1;min-width:220px">
+          <b>${esc(c.name)}</b> ${c.narrator?'<span class="badge">narrador</span>':''}
+          <div class="muted" style="font-size:12px">${esc([c.description,c.clothing?`Vestimenta: ${c.clothing}`:'',c.personality].filter(Boolean).join(' · ')||'sin descripción')} · ${(c.images||[]).length} imagen(es)</div>
+          <div class="row" style="margin-top:6px;font-size:12px">Voz: ${srVozSelectHtml(c.voice,`srSetCharVoice('${esc(c.id)}',this.value)`)}</div>
+        </div>
+        <div class="row">
+          ${c.narrator?'':`<button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/characters/${esc(c.id)}',{method:'PUT',body:JSON.stringify({narrator:true})})">Hacer narrador</button>`}
+          <button class="btn sec small" onclick="srPick('image/*,video/*',fs=>srApi('/api/series/${esc(id)}/characters/${esc(c.id)}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Fotos/videos</button>
+          <button class="btn sec small" onclick="if(confirm('¿Borrar a ${esc(c.name)}?'))srApi('/api/series/${esc(id)}/characters/${esc(c.id)}',{method:'DELETE'})">🗑</button>
+        </div>
+      </div>`).join('')}
+    <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
+      <label class="f"><span>Nombre</span><input id="sr-pj-nombre" placeholder="ej. Lola"></label>
+      <label class="f"><span>Rasgos físicos</span><input id="sr-pj-rasgos" placeholder="ej. zorrita roja de ojos grandes"></label>
+      <label class="f"><span>Vestimenta</span><input id="sr-pj-ropa" placeholder="ej. bufanda azul y botas amarillas"></label>
+      <label class="f"><span>Personalidad</span><input id="sr-pj-caracter" placeholder="ej. curiosa y valiente"></label>
+      <div class="row">
+        <button class="btn small" onclick="srCrearPersonaje()">Guardar personaje</button>
+        <button class="btn small" title="Crea un personaje-avatar con tu cara a partir de tus fotos y videos" onclick="srClonarme()">🪞 Clonarme</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📍 Locaciones — el mismo lugar, siempre igual</h3>
+    <p class="muted" style="font-size:12px">Sus imágenes de referencia alimentan el modelo de identidad en todas las escenas que ocurren en ellas. Sin imágenes, la referencia se genera una vez y queda fijada.</p>
+    ${(d.locations||[]).map(l=>`
+      <div class="row" style="border-top:1px solid var(--line);padding:10px 0;align-items:flex-start;gap:12px">
+        ${img((l.images||[])[0],54)}
+        <div style="flex:1;min-width:220px"><b>${esc(l.name)}</b>
+          <div class="muted" style="font-size:12px">${esc([l.description,l.ambience?`Ambiente: ${l.ambience}`:''].filter(Boolean).join(' · ')||'sin descripción')} · ${(l.images||[]).length} imagen(es)</div></div>
+        <div class="row">
+          <button class="btn sec small" onclick="srPick('image/*',fs=>srApi('/api/series/${esc(id)}/locations/${esc(l.id)}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Imágenes</button>
+          <button class="btn sec small" onclick="if(confirm('¿Borrar la locación «${esc(l.name)}»?'))srApi('/api/series/${esc(id)}/locations/${esc(l.id)}',{method:'DELETE'})">🗑</button>
+        </div>
+      </div>`).join('')}
+    <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
+      <label class="f"><span>Nombre</span><input id="sr-lc-nombre" placeholder="ej. La cueva de los cristales"></label>
+      <label class="f"><span>Cómo es</span><input id="sr-lc-desc" placeholder="ej. cueva cálida iluminada por cristales azules"></label>
+      <label class="f"><span>Ambiente sonoro</span><input id="sr-lc-amb" placeholder="ej. goteo de agua, eco suave"></label>
+      <button class="btn small" onclick="srCrearLocacion()">Guardar locación</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🎬 Escenas recurrentes</h3>
+    <p class="muted" style="font-size:12px">Las escenas que se repiten episodio a episodio (el desayuno, la llegada a la escuela…): el director las monta siempre igual — misma locación, mismos personajes, misma puesta.</p>
+    ${(d.scenes||[]).map(sc=>`
+      <div class="row" style="border-top:1px solid var(--line);padding:8px 0">
+        <b style="min-width:160px">${esc(sc.name)}</b>
+        <span class="muted" style="font-size:12px;flex:1">${esc([sc.location,(sc.characters||[]).join(', '),sc.description].filter(Boolean).join(' · '))}</span>
+        <button class="btn sec small" onclick="if(confirm('¿Borrar la escena «${esc(sc.name)}»?'))srApi('/api/series/${esc(id)}/scenes/${esc(sc.id)}',{method:'DELETE'})">🗑</button>
+      </div>`).join('')}
+    <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
+      <label class="f"><span>Nombre</span><input id="sr-es-nombre" placeholder="ej. El desayuno en la cueva"></label>
+      <label class="f"><span>Locación</span><select id="sr-es-loc" style="width:auto"><option value="">— locación —</option>
+        ${(d.locations||[]).map(l=>`<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('')}</select></label>
+      <div class="row" id="sr-es-chars" style="flex-wrap:wrap">
+        ${(d.characters||[]).map(c=>`<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto" value="${esc(c.name)}">${esc(c.name)}</label>`).join('')}
+      </div>
+      <label class="f"><span>Qué pasa siempre en esta escena</span><input id="sr-es-desc"></label>
+      <button class="btn small" onclick="srCrearEscena()">Guardar escena</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🎵 Música: jingle y canciones</h3>
+    <p class="muted" style="font-size:12px">El jingle abre TODOS los episodios (suena al frente mientras la música de fondo baja). Las canciones propias entran a la selección del supervisor musical junto con tu biblioteca.</p>
+    <div class="row" style="flex-wrap:wrap">
+      <b>Jingle:</b>
+      ${d.jingle?`<audio controls src="/series-files/${esc(id)}/${esc(d.jingle)}" style="height:30px"></audio>`:'<span class="muted" style="font-size:12px">sin jingle todavía</span>'}
+      <button class="btn sec small" onclick="srPick('audio/*',fs=>srApi('/api/series/${esc(id)}/music',{method:'POST',body:JSON.stringify({kind:'jingle',file:fs[0]})}))">${d.jingle?'Cambiar':'Subir jingle'}</button>
+      ${d.jingle?`<button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/music/${encodeURIComponent(d.jingle)}',{method:'DELETE'})">Quitar</button>`:''}
+    </div>
+    ${(d.songs||[]).map(sng=>`<div class="row" style="margin-top:6px;flex-wrap:wrap">
+      <span class="muted" style="font-size:12px">${esc(sng.split('/').pop())}</span>
+      <audio controls src="/series-files/${esc(id)}/${esc(sng)}" style="height:30px"></audio>
+      <button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/music/${encodeURIComponent(sng)}',{method:'DELETE'})">🗑</button></div>`).join('')}
+    <div style="margin-top:8px"><button class="btn sec small" onclick="srPick('audio/*',fs=>srSubirCanciones(fs))">Subir canción propia</button></div>
+  </div>
+
+  <div class="card">
+    <h3>🎤 Voces: cargar, clonar y narrador</h3>
+    <p class="muted" style="font-size:12px">Sube voces (audio o video con voz) y CLONA la tuya o la de cada personaje con ElevenLabs: la voz clonada queda lista para que ese personaje hable con ella en todos los episodios. La voz del narrador cuenta la historia entre diálogos.</p>
+    ${(d.voices||[]).map(v=>`<div class="row" style="border-top:1px solid var(--line);padding:8px 0;flex-wrap:wrap">
+      <b style="min-width:140px">${esc(v.name)}</b>
+      <span class="badge">${v.kind==='clonada'?'clonada ✓ lista para hablar':'muestra (aún sin clonar)'}</span>
+      ${(v.files||[])[0]?`<audio controls src="/series-files/${esc(id)}/${esc(v.files[0])}" style="height:30px"></audio>`:''}
+      <button class="btn sec small" onclick="if(confirm('¿Borrar la voz «${esc(v.name)}»?'))srApi('/api/series/${esc(id)}/voices/${esc(v.id)}',{method:'DELETE'})">🗑</button></div>`).join('')}
+    <div class="row" style="margin-top:8px">
+      <button class="btn sec small" onclick="srSubirVoz(false)">Cargar voz</button>
+      <button class="btn small" title="Clona tu voz con ElevenLabs a partir de 1-5 audios tuyos (1-3 minutos en total funcionan muy bien)" onclick="srSubirVoz(true)">🎙 Clonar mi voz</button>
+    </div>
+    <div class="row" style="margin-top:10px;font-size:13px">Voz del narrador: ${srVozSelectHtml(d.narrator_voice,'srSetNarrVoice(this.value)')}</div>
+  </div>
+
+  <div class="card">
+    <h3>🎥 El director de la serie</h3>
+    <p class="muted" style="font-size:12px">Pega el guion del próximo episodio y el director te dice qué material se REUTILIZA (personajes y locaciones con referencia), qué se generará una única vez, y qué falta por resolver — antes de gastar nada.</p>
+    <textarea id="sr-dir-guion" rows="4" placeholder="Pega el guion (o el borrador) del próximo episodio…"></textarea>
+    <div style="margin-top:8px"><button class="btn sec small" onclick="srAnalizar()">Analizar el guion</button></div>
+    <div id="sr-dir-out" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h3>📺 Episodios</h3>
+    <p class="muted" style="font-size:12px">Cada episodio es un proyecto normal del programa que NACE con la biblia de la serie puesta: elenco, locaciones, voces por personaje, voz del narrador y jingle.</p>
+    ${(d.episodes||[]).map(e=>`<div class="row" style="border-top:1px solid var(--line);padding:8px 0;${e.missing?'':'cursor:pointer'}" ${e.missing?'':`onclick="openProject('${esc(e.slug)}')"`}>
+      <b style="min-width:36px">${esc(String(e.number||'—'))}</b>
+      <span style="flex:1">${esc(e.title||e.slug)}</span>
+      <span class="badge">${e.missing?'proyecto borrado':e.running?'generando':e.has_error?'con error':(e.done===e.total?'listo':'borrador')}</span>
+      ${e.missing?'':`<span class="muted" style="font-size:12px">${e.done}/${e.total}</span>`}</div>`).join('')}
+    <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
+      <div class="row">
+        <label class="f" style="max-width:90px"><span>Nº</span><input id="sr-ep-num" type="number" min="1" value="${(d.episodes||[]).length+1}"></label>
+        <label class="f" style="flex:1"><span>Título del episodio</span><input id="sr-ep-titulo" placeholder="ej. El tesoro del río"></label>
+      </div>
+      <label class="f"><span>Nombre del proyecto</span><input id="sr-ep-slug" placeholder="ej. bosque-ep-01"></label>
+      <label class="f"><span>Guion o idea del episodio</span><textarea id="sr-ep-guion" rows="5" placeholder="Pega aquí el guion del episodio (o la idea), o adjunta el archivo…"></textarea></label>
+      <div class="row">
+        <button class="btn sec small" onclick="srPick('.txt,.md,.pdf,.docx,.doc,audio/*',fs=>{window._srEpFiles=fs;$('#sr-ep-pend').textContent=fs.length+' archivo(s) listos'})">Adjuntar guion o voces</button>
+        <span id="sr-ep-pend" class="muted" style="font-size:12px"></span>
+      </div>
+      <button class="btn" onclick="srCrearEpisodio()">Crear el episodio →</button>
+    </div>
+  </div>`;
+  pintarRuta(tomarHistorial());
+}
+function srRenombrar(){
+  const name=prompt('Nombre nuevo de la serie',window._serie?.name||'');
+  if(name)srApi(`/api/series/${window._serieId}`,{method:'PUT',body:JSON.stringify({name})});
+}
+function srCrearPersonaje(){
+  const body={name:$('#sr-pj-nombre').value,description:$('#sr-pj-rasgos').value,
+    clothing:$('#sr-pj-ropa').value,personality:$('#sr-pj-caracter').value,files:[]};
+  srApi(`/api/series/${window._serieId}/characters`,{method:'POST',body:JSON.stringify(body)});
+}
+function srClonarme(){
+  const nombre=prompt('¿Cómo se llamará tu avatar en la serie?','Yo');
+  if(!nombre)return;
+  srPick('image/*,video/*',async fs=>{
+    const r=await srApi(`/api/series/${window._serieId}/clone-avatar`,{method:'POST',body:JSON.stringify({name:nombre,files:fs})});
+    if(r&&r.hint)toast(r.hint,5000);
+  });
+}
+function srCrearLocacion(){
+  srApi(`/api/series/${window._serieId}/locations`,{method:'POST',body:JSON.stringify(
+    {name:$('#sr-lc-nombre').value,description:$('#sr-lc-desc').value,ambience:$('#sr-lc-amb').value,files:[]})});
+}
+function srCrearEscena(){
+  const quienes=[...document.querySelectorAll('#sr-es-chars input:checked')].map(c=>c.value);
+  srApi(`/api/series/${window._serieId}/scenes`,{method:'POST',body:JSON.stringify(
+    {name:$('#sr-es-nombre').value,location:$('#sr-es-loc').value,characters:quienes,description:$('#sr-es-desc').value})});
+}
+async function srSubirCanciones(fs){
+  try{
+    for(const f of fs)await api(`/api/series/${window._serieId}/music`,{method:'POST',body:JSON.stringify({kind:'cancion',file:f})});
+    showSerie(window._serieId);
+  }catch(e){toast('⚠ '+e.message)}
+}
+function srSubirVoz(clone){
+  const nombre=prompt(clone?'Nombre de la voz clonada (ej. Mi voz)':'Nombre de la voz (ej. Voz de Lola)');
+  if(!nombre)return;
+  srPick('audio/*,video/*',async fs=>{
+    if(clone)toast('Clonando la voz…',4000);
+    const r=await srApi(`/api/series/${window._serieId}/voices`,{method:'POST',body:JSON.stringify({name:nombre,files:fs,clone})});
+    if(r&&r.hint)toast(r.hint,6000);
+  });
+}
+async function srAnalizar(){
+  const out=$('#sr-dir-out');out.innerHTML='<span class="muted">Analizando…</span>';
+  try{
+    const r=await api(`/api/series/${window._serieId}/analyze`,{method:'POST',body:JSON.stringify({script:$('#sr-dir-guion').value})});
+    out.innerHTML=`<p style="font-size:13px;line-height:1.7;max-width:640px">${esc(r.summary||'')}</p>
+      <div class="row" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
+        <div><b style="font-size:12px">Personajes</b>${(r.characters||[]).map(c=>`<div style="font-size:12px;margin-top:4px">${c.appears?'✓':'·'} ${esc(c.name)} — ${esc(c.plan)} · voz ${esc(c.voice)}</div>`).join('')}</div>
+        <div><b style="font-size:12px">Locaciones</b>${(r.locations||[]).map(l=>`<div style="font-size:12px;margin-top:4px">${l.appears?'✓':'·'} ${esc(l.name)} — ${esc(l.plan)}</div>`).join('')}</div>
+      </div>
+      ${(r.actions||[]).length?`<div style="margin-top:10px"><b style="font-size:12px">Lo que conviene resolver antes de generar</b>
+        ${r.actions.map(a=>`<div class="muted" style="font-size:12px;margin-top:4px">⚠ ${esc(a)}</div>`).join('')}</div>`
+        :'<div class="muted" style="font-size:12px;margin-top:8px">Todo listo: nada pendiente.</div>'}`;
+  }catch(e){out.innerHTML=`<span class="muted">${esc(e.message)}</span>`}
+}
+async function srCrearEpisodio(){
+  try{
+    const files=(window._srEpFiles||[]).map(f=>({...f,category:'auto'}));
+    const r=await api('/api/projects',{method:'POST',body:JSON.stringify({
+      slug:$('#sr-ep-slug').value,text:$('#sr-ep-guion').value,files,
+      serie_id:window._serieId,episode_number:Number($('#sr-ep-num').value)||null,
+      episode_title:$('#sr-ep-titulo').value})});
+    window._srEpFiles=[];
+    toast('Episodio creado con la biblia de la serie puesta');
+    openProject(r.slug);
+  }catch(e){toast('⚠ '+e.message)}
 }
 
 /* ---------- proyecto ---------- */

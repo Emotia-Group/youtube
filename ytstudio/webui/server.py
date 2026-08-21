@@ -305,6 +305,169 @@ def api_save_style_from_project(slug: str, body: dict) -> dict:
     except ValueError as e:
         raise ApiError(400, str(e))
 
+# --- Estudio de series animadas ---------------------------------------------
+# CRUD de la biblia de cada serie (personajes, locaciones, escenas
+# recurrentes, música, voces) + clonación de avatar/voz + el informe del
+# director. La lógica vive en ytstudio/series.py; aquí solo se traduce
+# ValueError → 400 con el mensaje tal cual (están escritos para el creador).
+
+def _series(fn, *args, **kwargs):
+    from ytstudio import series  # noqa: F401 (import para el llamador)
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as e:
+        raise ApiError(400, str(e))
+
+
+def api_series_list() -> dict:
+    from ytstudio import series
+    return {"series": series.list_series()}
+
+
+def api_series_create(body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.create_serie, body)
+
+
+def api_series_detail(serie_id: str) -> dict:
+    from ytstudio import series
+    serie = series.load_serie(serie_id)
+    if serie is None:
+        raise ApiError(404, "Serie no encontrada.")
+    # Estado real de sus episodios (el resumen de cada proyecto que exista)
+    episodes = []
+    for e in serie.get("episodes", []):
+        try:
+            if Project.exists(e.get("slug", "")):
+                episodes.append({**e, **_project_summary(e["slug"])})
+            else:
+                episodes.append({**e, "missing": True})
+        except Exception:
+            episodes.append({**e, "missing": True})
+    return {**serie, "episodes": episodes}
+
+
+def api_series_update(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.update_serie, serie_id, body)
+
+
+def api_series_delete(serie_id: str) -> dict:
+    from ytstudio import series
+    series.delete_serie(serie_id)
+    return {"deleted": True}
+
+
+def api_series_character_create(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.add_character, serie_id, body,
+                   body.get("files") or [])
+
+
+def api_series_character_update(serie_id: str, cid: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.update_character, serie_id, cid, body)
+
+
+def api_series_character_files(serie_id: str, cid: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.add_character_files, serie_id, cid,
+                   body.get("files") or [])
+
+
+def api_series_character_delete(serie_id: str, cid: str) -> dict:
+    from ytstudio import series
+    _series(series.delete_character, serie_id, cid)
+    return {"deleted": True}
+
+
+def api_series_clone_avatar(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    ch = _series(series.clone_avatar, serie_id, body.get("name") or "",
+                 body.get("files") or [], body.get("description") or "")
+    return {"character": ch,
+            "hint": "Avatar creado a partir de tu material: revisa sus fotos "
+                    "de referencia y asígnale tu voz (o clónala en 🎤 Voces)."}
+
+
+def api_series_location_create(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.add_location, serie_id, body,
+                   body.get("files") or [])
+
+
+def api_series_location_update(serie_id: str, lid: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.update_location, serie_id, lid, body)
+
+
+def api_series_location_files(serie_id: str, lid: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.add_location_files, serie_id, lid,
+                   body.get("files") or [])
+
+
+def api_series_location_delete(serie_id: str, lid: str) -> dict:
+    from ytstudio import series
+    _series(series.delete_location, serie_id, lid)
+    return {"deleted": True}
+
+
+def api_series_scene_create(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.add_scene, serie_id, body)
+
+
+def api_series_scene_update(serie_id: str, sid: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.update_scene, serie_id, sid, body)
+
+
+def api_series_scene_delete(serie_id: str, sid: str) -> dict:
+    from ytstudio import series
+    _series(series.delete_scene, serie_id, sid)
+    return {"deleted": True}
+
+
+def api_series_music(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    return _series(series.set_music, serie_id, body.get("kind") or "",
+                   body.get("file") or {})
+
+
+def api_series_music_delete(serie_id: str, rel: str) -> dict:
+    from ytstudio import series
+    return _series(series.delete_music, serie_id,
+                   urllib.parse.unquote(rel))
+
+
+def api_series_voice_create(serie_id: str, body: dict) -> dict:
+    from ytstudio import series
+    voice, hint = _series(series.add_voice, serie_id, body.get("name") or "",
+                          body.get("files") or [],
+                          clone=bool(body.get("clone")))
+    return {"voice": voice, "hint": hint}
+
+
+def api_series_voice_delete(serie_id: str, vid: str) -> dict:
+    from ytstudio import series
+    _series(series.delete_voice, serie_id, vid)
+    return {"deleted": True}
+
+
+def api_series_analyze(serie_id: str, body: dict) -> dict:
+    """El DIRECTOR DE LA SERIE analiza un guion contra el material cargado:
+    qué se reutiliza, qué se generará una única vez y qué falta por decidir."""
+    from ytstudio import series
+    serie = series.load_serie(serie_id)
+    if serie is None:
+        raise ApiError(404, "Serie no encontrada.")
+    script = (body.get("script") or "").strip()
+    if not script:
+        raise ApiError(400, "Pega el guion del episodio para analizarlo.")
+    return series.director_report(serie, script)
+
+
 # Estado de las ejecuciones en curso: slug -> {running, lines, error}
 RUNS: dict[str, dict] = {}
 RUNS_LOCK = threading.Lock()
@@ -341,6 +504,10 @@ def _project_summary(slug: str) -> dict:
         "format": project.get("format") or "long",
         "short_template": project.get("short_template"),
         "video_aspect": _project_aspect(project),
+        # Episodio de serie animada: a qué serie pertenece y qué número es
+        "serie_id": project.get("serie_id"),
+        "serie_name": project.get("serie_name"),
+        "episode_number": project.get("episode_number"),
     }
 
 
@@ -456,13 +623,23 @@ def api_create_project(body: dict) -> dict:
         project.set("character", {"presence": pres / 100,
                                   "pip": bool(body.get("character_pip"))})
 
+    # EPISODIO DE SERIE ANIMADA: si viene serie_id, el proyecto nace como
+    # episodio de esa serie (formato 'serie') y recibirá su biblia completa
+    # al final (elenco, locaciones, voces, jingle).
+    serie = None
+    if body.get("serie_id"):
+        from ytstudio import series as series_mod
+        serie = series_mod.load_serie(str(body["serie_id"]))
+        if serie is None:
+            raise ApiError(404, "La serie de este episodio no existe.")
+
     # Overrides POR PROYECTO (preset de estilo + formato) en su config.yaml —
     # load_config(project.dir) los mezcla sobre la config global al generar.
     overrides: dict = {}
     preset = body.get("style_preset")
     if preset and preset in STYLE_PRESETS:
         overrides["style"] = {"preset": preset}
-    fmt = body.get("format") or "long"
+    fmt = "serie" if serie else (body.get("format") or "long")
     if fmt in FORMATS and FORMATS[fmt].get("overrides"):
         for k, v in FORMATS[fmt]["overrides"].items():
             sub = overrides.setdefault(k, {})
@@ -470,12 +647,21 @@ def api_create_project(body: dict) -> dict:
     project.set("format", fmt)
     # Plantilla de formato (solo cortos): Top 3, historia con giro, etc.
     tpl = body.get("short_template") or "libre"
-    if fmt != "long" and tpl in SHORT_TEMPLATES:
+    if fmt not in ("long", "serie") and tpl in SHORT_TEMPLATES:
         project.set("short_template", tpl)
     if overrides:
         (project.dir / "config.yaml").write_text(
             yaml.safe_dump(overrides, allow_unicode=True), encoding="utf-8")
-    return {"slug": slug, "assets": project.get("assets") or []}
+    if serie:
+        from ytstudio import series as series_mod
+        try:
+            number = int(body.get("episode_number") or 0) or None
+        except (TypeError, ValueError):
+            number = None
+        series_mod.materialize_episode(project, serie, number,
+                                       str(body.get("episode_title") or ""))
+    return {"slug": slug, "assets": project.get("assets") or [],
+            "serie_id": project.get("serie_id")}
 
 
 def api_add_assets(slug: str, body: dict) -> dict:
@@ -591,6 +777,13 @@ def api_project_detail(slug: str) -> dict:
     detail["loudness"] = project.get("loudness")
     # DE DÓNDE SALIÓ (si es un Short derivado) y ADÓNDE APUNTA: sin esto se
     # pierde el enlace al video largo, que es todo el objetivo de la pieza.
+    # Episodio de SERIE ANIMADA: su biblia materializada (locaciones, voces
+    # por personaje, jingle) para que la interfaz la muestre en el proyecto.
+    detail["episode_title"] = project.get("episode_title")
+    detail["locations"] = project.get("locations") or []
+    detail["voice_cast"] = project.get("voice_cast") or {}
+    detail["serie_jingle"] = project.get("serie_jingle")
+    detail["serie_songs"] = project.get("serie_songs") or []
     detail["derived_from"] = project.get("derived_from")
     # Los fragmentos con los que se monta el recorte (uno solo, o varios).
     detail["clip_tramos"] = (project.get("clip_source") or {}).get("tramos") or []
@@ -1221,7 +1414,11 @@ def api_get_config() -> dict:
         "catalog": CATALOG,
         "style_presets": STYLE_PRESETS,
         "languages": LANGUAGES,
-        "formats": {k: {"label": v["label"], "short": k != "long"}
+        # 'short' decide en la interfaz qué formatos llevan plantilla de corto
+        # y marco vertical: la serie animada es larga, como 'long'.
+        "formats": {k: {"label": v["label"],
+                        "short": k not in ("long", "serie"),
+                        "serie": k == "serie"}
                     for k, v in FORMATS.items()},
         "short_templates": {k: {"label": v["label"], "hint": v["hint"]}
                             for k, v in SHORT_TEMPLATES.items()},
@@ -1475,6 +1672,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._serve_file(target)
 
+    def _series_file(self, serie_id: str, rel: str) -> None:
+        """Sirve un archivo de una serie (fotos de personajes/locaciones,
+        jingle…) para las vistas previas del Estudio de series."""
+        from ytstudio.series import serie_dir
+        base = serie_dir(serie_id).resolve()
+        target = (base / rel).resolve()
+        if not str(target).startswith(str(base)):
+            self._json({"error": "Ruta inválida"}, 403)
+            return
+        self._serve_file(target)
+
     def _element_file(self, category: str, name: str) -> None:
         """Sirve un archivo del BANCO DE ELEMENTOS para la vista previa."""
         from ytstudio.utils.elements import BANK_DIR
@@ -1547,6 +1755,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_manual())
             elif path == "/api/library":
                 self._json(api_library())
+            elif path == "/api/series":
+                self._json(api_series_list())
+            elif m := re.fullmatch(r"/api/series/([\w-]+)", path):
+                self._json(api_series_detail(m.group(1)))
+            elif m := re.fullmatch(r"/series-files/([\w-]+)/(.+)", path):
+                self._series_file(m.group(1), m.group(2))
             elif path == "/api/elements":
                 self._json(api_elements_list())
             elif m := re.fullmatch(r"/docs/manual/([\w-]+)/([\w.-]+)", path):
@@ -1598,6 +1812,35 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_character_create(m.group(1), self._body()), 201)
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)/files", path):
                 self._json(api_character_add_files(m.group(1), m.group(2), self._body()))
+            elif path == "/api/series":
+                self._json(api_series_create(self._body()), 201)
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/characters", path):
+                self._json(api_series_character_create(m.group(1),
+                                                       self._body()), 201)
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/characters/([\w-]+)/files", path):
+                self._json(api_series_character_files(m.group(1), m.group(2),
+                                                      self._body()))
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/clone-avatar", path):
+                self._json(api_series_clone_avatar(m.group(1),
+                                                   self._body()), 201)
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/locations", path):
+                self._json(api_series_location_create(m.group(1),
+                                                      self._body()), 201)
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/locations/([\w-]+)/files", path):
+                self._json(api_series_location_files(m.group(1), m.group(2),
+                                                     self._body()))
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/scenes", path):
+                self._json(api_series_scene_create(m.group(1),
+                                                   self._body()), 201)
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/music", path):
+                self._json(api_series_music(m.group(1), self._body()), 201)
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/voices", path):
+                self._json(api_series_voice_create(m.group(1),
+                                                   self._body()), 201)
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/analyze", path):
+                self._json(api_series_analyze(m.group(1), self._body()))
             elif path == "/api/channels":
                 self._json(api_channel_create(self._body()), 201)
             elif m := re.fullmatch(r"/api/channels/([\w-]+)", path):
@@ -1641,6 +1884,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_edit_scenes(m.group(1), self._body()))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)/characters/([\w-]+)", path):
                 self._json(api_character_update(m.group(1), m.group(2), self._body()))
+            elif m := re.fullmatch(r"/api/series/([\w-]+)", path):
+                self._json(api_series_update(m.group(1), self._body()))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/characters/([\w-]+)", path):
+                self._json(api_series_character_update(m.group(1), m.group(2),
+                                                       self._body()))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/locations/([\w-]+)", path):
+                self._json(api_series_location_update(m.group(1), m.group(2),
+                                                      self._body()))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/scenes/([\w-]+)", path):
+                self._json(api_series_scene_update(m.group(1), m.group(2),
+                                                   self._body()))
             else:
                 self._no_encontrado()
         except ApiError as e:
@@ -1668,6 +1925,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_channel_delete(m.group(1)))
             elif m := re.fullmatch(r"/api/styles/([\w-]+)", path):
                 self._json(api_style_delete(m.group(1)))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/characters/([\w-]+)", path):
+                self._json(api_series_character_delete(m.group(1), m.group(2)))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/locations/([\w-]+)", path):
+                self._json(api_series_location_delete(m.group(1), m.group(2)))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/scenes/([\w-]+)", path):
+                self._json(api_series_scene_delete(m.group(1), m.group(2)))
+            elif m := re.fullmatch(r"/api/series/([\w-]+)/music/(.+)", path):
+                self._json(api_series_music_delete(m.group(1), m.group(2)))
+            elif m := re.fullmatch(
+                    r"/api/series/([\w-]+)/voices/([\w-]+)", path):
+                self._json(api_series_voice_delete(m.group(1), m.group(2)))
+            elif m := re.fullmatch(r"/api/series/([\w-]+)", path):
+                self._json(api_series_delete(m.group(1)))
             elif m := re.fullmatch(r"/api/projects/([\w-]+)", path):
                 self._json(api_delete_project(m.group(1)))
             else:

@@ -13,6 +13,18 @@ from ytstudio.utils.media import (boost_quiet_spans, cut_segment,
 _PACE_FACTOR = {"ligado": 0.0, "normal": 1.0, "amplio": 1.7}
 
 
+def strip_speaker_labels(text: str, names) -> str:
+    """Quita las etiquetas de diálogo («Lola: ») del texto que se va a LEER
+    en voz alta: dicen quién habla, no forman parte de la línea. Solo se
+    quitan nombres conocidos (elenco + Narrador), al inicio de línea."""
+    import re as _re
+    labels = sorted({n for n in names if n}, key=len, reverse=True)
+    if not labels or not text:
+        return text or ""
+    pat = "|".join(_re.escape(n) for n in labels)
+    return _re.sub(rf"(?im)^\s*(?:{pat})\s*:\s*", "", text).strip() or text
+
+
 def scene_start_in_video(scenes: list[dict], scene: dict) -> float:
     """Instante EXACTO en que empieza la escena dentro del video montado: la
     suma de las duraciones anteriores (todas cuantizadas a cuadros enteros, la
@@ -478,6 +490,58 @@ def run(project, cfg) -> None:
     narration_file = (project.path("input", narration["file"])
                       if use_user_voice else None)
 
+    # VOCES POR PERSONAJE (episodios de serie animada): cada escena la habla
+    # LA VOZ de su personaje (clonada o del catálogo), según el mapa
+    # voice_cast que la serie dejó en el proyecto — sin confundir identidades
+    # entre escenas. Sin mapa (o sin hablante), todo sigue igual que siempre.
+    import copy as _copy
+    voice_cast = project.get("voice_cast") or {}
+    _speaker_tts: dict[str, object] = {}
+    _warned: set[str] = set()
+
+    def _tts_for_scene(scene: dict):
+        if not voice_cast or tts is None:
+            return tts
+        from ytstudio.series import norm_name
+        v = voice_cast.get(norm_name(scene.get("speaker") or ""))
+        if not v or not v.get("voice_id"):
+            return tts
+        key = v["voice_id"]
+        if key not in _speaker_tts:
+            cfg2 = _copy.deepcopy(cfg)
+            t2 = cfg2.setdefault("providers", {}).setdefault("tts", {})
+            t2["voice"] = v["voice_id"]
+            if v.get("provider"):
+                t2["name"] = v["provider"]
+            cand = get_tts(cfg2)
+            # Si el proveedor de ESA voz no tiene clave, get_tts degrada a
+            # mock (silencio): mejor la voz base avisando que una escena muda.
+            if type(cand).__name__ == "MockTTS" \
+                    and type(tts).__name__ != "MockTTS":
+                if v.get("name") not in _warned:
+                    _warned.add(v.get("name"))
+                    project.add_warning(
+                        f"La voz de «{v.get('name')}» necesita el proveedor "
+                        f"{v.get('provider') or '?'} y falta su clave: esas "
+                        "escenas usan la voz del narrador. Añade la clave en "
+                        "⚙ Configuración y rehaz desde «Voz».")
+                cand = tts
+            _speaker_tts[key] = cand
+        return _speaker_tts[key]
+
+    # Etiquetas de diálogo («Lola: ») que se hayan colado en la narración de
+    # una escena: dicen QUIÉN habla, no se leen en voz alta.
+    _cast_labels = {c.get("name", "").strip()
+                    for c in (project.get("characters") or [])}
+    _cast_labels |= {v.get("name", "") for v in voice_cast.values()}
+    _cast_labels = {n for n in _cast_labels if n} | {"Narrador"}
+
+    def _speech_text(scene: dict) -> str:
+        text = scene.get("narration") or ""
+        if not voice_cast and not project.get("serie_id"):
+            return text
+        return strip_speaker_labels(text, _cast_labels)
+
     if use_user_voice:
         audio_total = probe_duration(narration_file)
         fps = float(cfg.get("video", {}).get("fps", 24))
@@ -532,8 +596,9 @@ def run(project, cfg) -> None:
         else:
             if out.exists():  # reanudable
                 return
-            # Voz sintética (TTS) desde el texto de la escena
-            tts.synthesize(scene["narration"], out)
+            # Voz sintética (TTS) desde el texto de la escena — con la voz
+            # del personaje que habla, si el proyecto es un episodio de serie
+            _tts_for_scene(scene).synthesize(_speech_text(scene), out)
 
     workers = max(1, int(cfg.get("performance", {}).get("parallel_tts", 4)))
     notify(f"🎙 Generando la voz de las escenas ({workers} en paralelo)…")

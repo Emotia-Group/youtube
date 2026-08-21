@@ -63,6 +63,12 @@ def run(project, cfg) -> None:
                         + ("\n(El creador trajo su guion: respeta su "
                            "contenido y aplícale SOLO la estructura de la "
                            "plantilla.)" if is_script else "") + "\n")
+    # EPISODIO DE SERIE ANIMADA: la biblia de la serie (elenco, locaciones,
+    # escenas recurrentes) y el formato de diálogo etiquetado mandan.
+    from ytstudio.series import series_script_block
+    serie_block = series_script_block(project)
+    if serie_block:
+        hooks_block += "\n" + serie_block + "\n"
     if vertical:
         system = (
             f"Eres guionista senior de videos VERTICALES CORTOS (Shorts/Reels/"

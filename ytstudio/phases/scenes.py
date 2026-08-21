@@ -478,18 +478,33 @@ def _direction_in_batches(llm, system: str, scenes: list[dict],
     return bible, by_id
 
 
-def _schema_with_cast(base_schema: dict, cast_names: list[str]) -> dict:
+def _schema_with_cast(base_schema: dict, cast_names: list[str],
+                      location_names: list[str] | None = None,
+                      series_mode: bool = False) -> dict:
     """Copia del schema de escenas con el campo 'characters' (enum del
     ELENCO): el director etiqueta qué personajes aparecen en cada escena.
-    Solo se añade cuando hay elenco — sin él, el schema queda intacto."""
+    Solo se añade cuando hay elenco — sin él, el schema queda intacto.
+
+    En un EPISODIO DE SERIE se añaden además 'speaker' (qué personaje habla
+    la narración de la escena — su voz y su lipsync) y 'location' (en qué
+    locación de la serie ocurre — sus imágenes de referencia)."""
     import copy
-    if not cast_names:
+    if not cast_names and not location_names:
         return base_schema
     schema = copy.deepcopy(base_schema)
     item = schema["properties"]["scenes"]["items"]
-    item["properties"]["characters"] = {
-        "type": "array", "items": {"type": "string", "enum": cast_names}}
-    item["required"] = [*item["required"], "characters"]
+    if cast_names:
+        item["properties"]["characters"] = {
+            "type": "array", "items": {"type": "string", "enum": cast_names}}
+        item["required"] = [*item["required"], "characters"]
+    if series_mode and cast_names:
+        item["properties"]["speaker"] = {
+            "type": "string", "enum": [*cast_names, "Narrador"]}
+        item["required"] = [*item["required"], "speaker"]
+    if location_names:
+        item["properties"]["location"] = {
+            "type": "string", "enum": [*location_names, "ninguna"]}
+        item["required"] = [*item["required"], "location"]
     return schema
 
 
@@ -512,9 +527,13 @@ def _cast_rules(project) -> tuple[list[str], str]:
     return names, rules
 
 
-def _normalize_cast(scenes: list[dict], cast_names: list[str]) -> None:
-    """Sanea las etiquetas: solo nombres del elenco, sin duplicados."""
+def _normalize_cast(scenes: list[dict], cast_names: list[str],
+                    location_names: list[str] | None = None) -> None:
+    """Sanea las etiquetas: solo nombres del elenco, sin duplicados. En un
+    episodio de serie sanea también el hablante y la locación de cada
+    escena (y garantiza que quien habla también SALE en la escena)."""
     valid = {n.strip().lower(): n for n in cast_names}
+    valid_loc = {n.strip().lower(): n for n in (location_names or [])}
     for s in scenes:
         seen, out = set(), []
         for n in (s.get("characters") or []):
@@ -523,6 +542,17 @@ def _normalize_cast(scenes: list[dict], cast_names: list[str]) -> None:
                 out.append(valid[k])
                 seen.add(k)
         s["characters"] = out
+        if "speaker" in s:
+            k = (s.get("speaker") or "").strip().lower()
+            if k in valid:
+                s["speaker"] = valid[k]
+                if valid[k] not in s["characters"]:
+                    s["characters"].append(valid[k])
+            else:
+                s["speaker"] = "Narrador"
+        if "location" in s:
+            k = (s.get("location") or "").strip().lower()
+            s["location"] = valid_loc.get(k) or None
 
 
 def scene_seconds(cfg: dict, project=None) -> float:
@@ -1150,14 +1180,24 @@ def run(project, cfg) -> None:
     cast_names, cast_rules = _cast_rules(project)
     if cast_rules:
         prompt += cast_rules
-    result = llm.complete_json(system, prompt,
-                               schema=_schema_with_cast(SCENES_SCHEMA,
-                                                        cast_names),
-                               max_tokens=64000, purpose="scenes")
+    # EPISODIO DE SERIE: la biblia de la serie manda (hablante y locación por
+    # escena, identidad fija de personajes y locaciones).
+    from ytstudio.series import series_scene_block
+    serie_block = series_scene_block(project)
+    loc_names = [l.get("name") for l in (project.get("locations") or [])
+                 if l.get("name")]
+    if serie_block:
+        prompt += "\n" + serie_block + "\n"
+    result = llm.complete_json(
+        system, prompt,
+        schema=_schema_with_cast(SCENES_SCHEMA, cast_names,
+                                 location_names=loc_names,
+                                 series_mode=bool(serie_block)),
+        max_tokens=64000, purpose="scenes")
     scenes = result["scenes"]
     for i, s in enumerate(scenes, start=1):
         s["id"] = i  # ids consecutivos garantizados
-    _normalize_cast(scenes, cast_names)
+    _normalize_cast(scenes, cast_names, location_names=loc_names)
     _assign_video_scenes(scenes, cfg)  # nº de escenas de video determinista
     _art_direction_pass(llm, project, scenes, concept, lang,
                         short_form=short_form,
@@ -1183,6 +1223,16 @@ def _assign_shots(project, scenes: list[dict], cfg: dict) -> None:
     Determinista y sin costo: usa las señales existentes, no llama al LLM.
     El usuario puede forzar escena a escena desde el Editor (shot_overrides)."""
     from ytstudio.characters import narrator
+    # EPISODIO DE SERIE ANIMADA: los personajes SON el video. Toda escena con
+    # un hablante del elenco se genera como PERSONAJE (su cara + su lipsync);
+    # las del Narrador ilustran con B-roll. El % de presencia no aplica aquí:
+    # lo decide el guion, escena a escena.
+    if project.get("serie_id") and any(s.get("speaker") for s in scenes):
+        for s in scenes:
+            sp = (s.get("speaker") or "").strip()
+            s["shot"] = ("personaje" if sp and sp.lower() != "narrador"
+                         else "broll")
+        return
     ch = project.get("character") or {}
     has_img = narrator(project) is not None
     # narrador añadido después (sin % configurado) → 30% por defecto

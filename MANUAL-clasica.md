@@ -1,6 +1,6 @@
 # Manual de uso de ytstudio
 
-<!-- MANUAL_VERSION: 0.68.0 -->
+<!-- MANUAL_VERSION: 0.69.0 -->
 <!-- PLANTILLA: clasica -->
 
 Este manual está escrito para **cualquier persona**, sin conocimientos
@@ -350,6 +350,7 @@ texto y el estilo del guion.
 | Formato | Forma de la pantalla | Duración a la que apunta | Subtítulos |
 |---|---|---|---|
 | 🎬 **YouTube — video largo** | Horizontal 16:9 | La que pongas en Configuración (10 min por defecto) | Pista activable |
+| 🎠 **Serie animada — episodio** | Horizontal 16:9 | ~8 minutos | Pista activable |
 | 📱 **YouTube Short** | Vertical 9:16 | ~55 segundos | Quemados (siempre visibles) |
 | 📱 **Instagram Reel** | Vertical 9:16 | ~85 segundos | Quemados |
 | 📱 **TikTok** | Vertical 9:16 | ~60 segundos | Quemados |
@@ -486,6 +487,40 @@ alguien se queda o pasa de largo.
 3. Un solo enlace bueno vale más que tres regulares.
 4. Cuando el resultado te guste, **guarda ese estilo** (capítulo 5.5) y
    reutilízalo gratis para siempre.
+
+### 4.8 Receta H — Serie animada (episodios largos para niños o adultos)
+
+Una serie vive o muere por la **coherencia**: que cada personaje tenga la
+misma cara, la misma ropa y la misma voz en el episodio 1 y en el 40. Por eso
+las series NO se crean desde «＋ Nuevo proyecto», sino desde su propia
+pantalla: **🎠 Series animadas**, en la barra lateral.
+
+1. Entra en **🎠 Series animadas → Crear serie**. Ponle nombre, cuenta de qué
+   va y elige la audiencia (niños o adultos: cambia el tono del guionista).
+2. **Crea los personajes**: nombre, rasgos físicos, **vestimenta**,
+   personalidad, y sus fotos o videos de referencia (de los videos se sacan
+   fotogramas). Asigna a cada uno **su voz** (del catálogo o clonada). Sin
+   fotos, su retrato se genera una única vez y queda fijado para siempre.
+3. **Crea las locaciones** con sus imágenes: la cocina de la abuela será LA
+   MISMA cocina en todos los episodios.
+4. Opcional: **escenas recurrentes** (el desayuno, la llegada a la escuela…),
+   el **jingle** de la serie (abre todos los episodios), tus **canciones** y
+   la **voz del narrador**.
+5. ¿Quieres salir tú? **🪞 Clonarme** crea un personaje-avatar con tu cara a
+   partir de tus fotos y videos, y **🎙 Clonar mi voz** clona tu voz con
+   ElevenLabs a partir de 1-5 audios tuyos (1-3 minutos en total bastan).
+6. Antes de gastar, pega el guion en **El director de la serie**: te dice qué
+   se reutiliza, qué se generará una única vez y qué falta (una voz sin
+   asignar, el jingle pendiente…).
+7. **Crear episodio**: pega el guion (o adjúntalo) y listo. El episodio nace
+   como un proyecto normal con toda la biblia puesta: el guion se escribe
+   como diálogo («Lola: ¡Vamos!»), cada personaje habla **con su voz**, su
+   cara se anima con **lipsync propio** en las escenas donde habla, y el
+   jingle abre el video.
+
+> 💡 El lipsync se cobra por segundo de personaje en pantalla, y en una serie
+> los personajes hablan casi todo el tiempo: la estimación previa y un tope
+> de presupuesto holgado (capítulo 11) son tus amigos aquí.
 
 ---
 
@@ -1241,6 +1276,28 @@ El historial completo: novedades, avisos, errores y el tiempo de cada paso.
 Se filtra por Todo / Avisos / Errores.
 
 ![El log de eventos](docs/manual/clasica/14-log-de-eventos.png)
+
+### 10.10 🎠 Series animadas (el estudio de series)
+
+En la barra lateral, **🎠 Series animadas**. La lista muestra cada serie con
+su audiencia y sus números; **Abrir estudio** entra a su ficha completa,
+donde vive la «biblia» de la serie:
+
+- **🧑 Personajes** — crear, editar, subir fotos/videos, elegir la voz de cada
+  uno y marcar el narrador. **🪞 Clonarme** crea tu avatar con tu cara.
+- **📍 Locaciones** — cada lugar con su descripción, su ambiente sonoro y sus
+  imágenes de referencia.
+- **🎬 Escenas recurrentes** — las que se repiten episodio a episodio.
+- **🎵 Música** — el jingle de la serie (uno, se reemplaza) y tus canciones.
+- **🎤 Voces** — cargar voces, **🎙 Clonar mi voz** (ElevenLabs) y elegir la
+  voz del narrador.
+- **🎥 El director de la serie** — pega un guion y te dice qué se reutiliza,
+  qué se generará una única vez y qué falta por resolver.
+- **📺 Episodios** — la lista con su estado (un clic abre el proyecto) y el
+  formulario para crear el siguiente: nace con toda la biblia puesta.
+
+Todo el material de las series vive en `data\series\`, fuera de Git: es
+tuyo y las actualizaciones del programa no lo tocan.
 
 ---
 

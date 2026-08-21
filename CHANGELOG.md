@@ -9,6 +9,71 @@ Versionado semántico (SemVer): **Mayor.Menor.Revisión**.
 La versión activa se muestra arriba a la izquierda en la interfaz (junto a la
 fecha de actualización) — clic para ver este historial completo.
 
+## v0.69.0 — 2026-08-21
+**El Estudio de series animadas: personajes, locaciones y voces que NO cambian
+entre episodios.** El creador quiere producir una serie animada larga para
+YouTube (para niños hoy, para adultos mañana), y una serie vive o muere por la
+coherencia: que Lola tenga la misma cara, la misma bufanda y la misma voz en
+el episodio 1 y en el 40. Esta versión añade una pantalla nueva —**🎠 Series**,
+en las dos plantillas— donde se guarda la «biblia» de cada serie, y los
+episodios nacen con ella puesta.
+
+- 🎠 CREAR SERIE. Cada serie guarda lo que debe mantenerse idéntico capítulo a
+  capítulo: sus personajes, sus locaciones, sus escenas recurrentes, su
+  jingle, sus canciones y sus voces. Vive en `data\series\` (fuera de Git,
+  como tus proyectos): es material tuyo y un `git pull` jamás lo toca.
+
+- 🧑 CREAR PERSONAJES CON IDENTIDAD FIJA. Cada personaje lleva nombre, rasgos
+  físicos, **vestimenta** (la ropa es parte de la identidad), personalidad,
+  fotos o videos de referencia (de los videos se extraen fotogramas) y **su
+  propia voz**. Sus escenas se generan siempre con sus referencias — misma
+  cara y misma ropa en todos los episodios. Sin fotos, su retrato se genera
+  UNA vez y queda fijado.
+
+- 📍 CREAR LOCACIONES. La misma mecánica de identidad, aplicada a los lugares:
+  la cocina de la abuela es LA MISMA cocina en todas las escenas que pasan por
+  ella, alimentando el modelo de identidad con sus imágenes de referencia. El
+  director etiqueta en qué locación ocurre cada escena y nunca reinventa su
+  aspecto.
+
+- 🎬 CREAR ESCENAS RECURRENTES. El desayuno, la llegada a la escuela… se
+  definen una vez (locación + personajes + qué pasa) y el director las monta
+  siempre igual cuando el guion pasa por ellas.
+
+- 🗣 CADA PERSONAJE HABLA CON SU VOZ, SIN CONFUNDIRSE. El guion de un episodio
+  se escribe como diálogo («Lola: ¡Vamos!»), el director asigna quién habla en
+  cada escena, y la voz en off se sintetiza **con la voz de ese personaje** —
+  clonada o del catálogo. El lipsync también es por personaje: cada escena
+  anima la cara de QUIEN habla, con su lámina propia y su caché propia, así
+  que las identidades no se mezclan jamás.
+
+- 🪞 CLONARME. Un botón crea un personaje-avatar con TU cara a partir de tus
+  fotos y videos: entra al elenco como uno más, con la misma consistencia.
+
+- 🎙 CLONAR MI VOZ. Sube 1-5 audios (o videos con tu voz) y el programa la
+  clona con ElevenLabs: la voz queda registrada en la serie y se puede asignar
+  a cualquier personaje o al narrador. Sin clave de ElevenLabs, la voz queda
+  guardada como muestra y se avisa con claridad.
+
+- 🎺 JINGLE Y CANCIONES DE LA SERIE. El jingle abre TODOS los episodios: suena
+  al frente los primeros segundos mientras la música de fondo baja, y se funde
+  al terminar (la duración del video no cambia). Las canciones propias entran
+  a la selección del supervisor musical junto con tu biblioteca; los efectos
+  de sonido siguen funcionando como siempre.
+
+- 🎥 EL DIRECTOR DE LA SERIE. Pega el guion del próximo episodio y el director
+  analiza el material cargado: qué personajes y locaciones aparecen, **qué se
+  reutiliza tal cual** (lo que ya tiene referencia), qué se generará una única
+  vez, y qué falta por resolver (voces sin asignar, jingle pendiente…) — antes
+  de gastar nada.
+
+- 📺 CREAR EPISODIO. Un episodio es un proyecto normal (formato nuevo «🎠 Serie
+  animada») que nace con la biblia puesta: elenco con sus fotos, locaciones,
+  mapa de voces, voz del narrador y jingle. Desde ahí, las 11 fases de siempre.
+
+- 📖 Manuales de las dos plantillas al día, con la receta nueva y la pantalla
+  explicada paso a paso.
+
 ## v0.68.0 — 2026-08-20
 **El framework de Shorts, al día en el programa.** El creador actualizó el
 Framework Universal de Shorts y sospechó que sus ajustes nuevos no estaban en

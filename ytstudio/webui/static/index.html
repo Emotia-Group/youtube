@@ -133,6 +133,7 @@ main{padding:0}
   <span style="width:1px;height:20px;background:var(--divider)"></span>
   <nav class="main" id="nav">
     <button data-go="proyectos" aria-current="true">Proyectos</button>
+    <button data-go="series">Series</button>
     <button data-go="canales">Canales</button>
     <button data-go="biblioteca">Biblioteca</button>
     <button data-go="ajustes">Ajustes</button>
@@ -231,17 +232,18 @@ $('#btn-eventos').addEventListener('click', showEvents);
 /* Las pantallas que viven DENTRO de un proyecto: todas cuelgan del proyecto
    abierto y por eso su ruta lleva su nombre. */
 const PANTALLAS_PROYECTO = ['corrida', 'material', 'concepto', 'guion', 'escenas', 'personajes', 'metadatos', 'shorts'];
-const PANTALLAS_RAIZ = ['proyectos', 'nuevo', 'canales', 'biblioteca', 'ajustes'];
+const PANTALLAS_RAIZ = ['proyectos', 'nuevo', 'canales', 'biblioteca', 'ajustes', 'series', 'serie'];
 const TITULO_PANTALLA = { proyectos: 'Proyectos', nuevo: 'Nuevo proyecto', canales: 'Canales',
   biblioteca: 'Biblioteca', ajustes: 'Ajustes', corrida: 'Corrida', material: 'Material',
   concepto: 'Concepto', guion: 'Guion', escenas: 'Escenas', personajes: 'Personajes',
-  metadatos: 'Metadatos', shorts: 'Shorts' };
+  metadatos: 'Metadatos', shorts: 'Shorts', series: 'Series', serie: 'Serie' };
 
 /* DIRECCIÓN DE CADA PANTALLA. Al llevarla en la barra del navegador, los
    botones Atrás y Adelante del propio navegador funcionan, y la pantalla se
    puede guardar en marcadores o recargar sin acabar en la lista de proyectos. */
 function rutaDe(screen, slug) {
   const s = slug !== undefined ? slug : S.slug;
+  if (screen === 'serie') return `#/serie/${S.serieId || ''}`;
   return PANTALLAS_PROYECTO.includes(screen) ? `#/proyecto/${s || ''}/${screen}` : `#/${screen}`;
 }
 function desdeRuta(hash) {
@@ -250,7 +252,8 @@ function desdeRuta(hash) {
   if (t[0] === 'proyecto') {
     return { screen: PANTALLAS_PROYECTO.includes(t[2]) ? t[2] : 'corrida', slug: decodeURIComponent(t[1] || '') };
   }
-  return { screen: PANTALLAS_RAIZ.includes(t[0]) ? t[0] : 'proyectos' };
+  if (t[0] === 'serie' && t[1]) return { screen: 'serie', serieId: decodeURIComponent(t[1]) };
+  return { screen: PANTALLAS_RAIZ.includes(t[0]) && t[0] !== 'serie' ? t[0] : 'proyectos' };
 }
 // A qué profundidad está el creador DENTRO del programa. Se guarda en cada
 // paso del historial del navegador, así que retroceder la recupera exacta: sin
@@ -259,6 +262,7 @@ let PASOS = 0;
 window.addEventListener('popstate', ev => {
   PASOS = (ev.state && ev.state.profundidad) || 0;
   const r = desdeRuta(location.hash);
+  if (r.serieId !== undefined) S.serieId = r.serieId;
   go(r.screen, r.slug, true);
 });
 
@@ -267,7 +271,7 @@ function go(screen, slug, desdeHistorial) {
   if (slug !== undefined && slug !== S.slug) { S.slug = slug; S.est = null; S.detail = null; }
   clearInterval(S.timer); S.timer = null;
   for (const b of $('#nav').children) {
-    const own = { proyectos: ['proyectos', 'nuevo', ...PANTALLAS_PROYECTO], canales: ['canales'], biblioteca: ['biblioteca'], ajustes: ['ajustes'] }[b.dataset.go];
+    const own = { proyectos: ['proyectos', 'nuevo', ...PANTALLAS_PROYECTO], series: ['series', 'serie'], canales: ['canales'], biblioteca: ['biblioteca'], ajustes: ['ajustes'] }[b.dataset.go];
     b.setAttribute('aria-current', String(own.includes(screen)));
   }
   // Al volver con el botón Atrás la dirección ya es la buena; solo se corrige
@@ -285,7 +289,12 @@ function go(screen, slug, desdeHistorial) {
   if (screen === 'corrida') { pollRun(); S.timer = setInterval(pollRun, 2500); }
   if (screen === 'canales') loadLibrary();
   if (screen === 'guion') loadScript();
+  if (screen === 'series') loadSeries();
+  if (screen === 'serie') loadSerie();
 }
+
+// Abrir el ESTUDIO de una serie concreta (su ficha completa).
+function goSerie(id) { S.serieId = id; S.serie = null; go('serie'); }
 
 /* MIGAS DE PAN. «Proyectos › Alejandro Magno › Escenas»: cada tramo anterior
    es un botón que sube un nivel. El último tramo es dónde estás y no se pulsa. */
@@ -302,6 +311,9 @@ function pintarRuta() {
   } else if (S.screen === 'nuevo') {
     tramos.push({ texto: 'Proyectos', ir: () => go('proyectos') });
     tramos.push({ texto: 'Nuevo proyecto', ir: null });
+  } else if (S.screen === 'serie') {
+    tramos.push({ texto: 'Series', ir: () => go('series') });
+    tramos.push({ texto: S.serie?.name || 'serie', ir: null });
   } else {
     tramos.push({ texto: TITULO_PANTALLA[S.screen] || 'Proyectos', ir: null });
   }
@@ -348,12 +360,19 @@ async function boot() {
     S.projects = await api('/api/projects');
   });
   const r = desdeRuta(location.hash);
+  if (r.serieId !== undefined) S.serieId = r.serieId;
   // La primera pantalla es la raíz del historial: profundidad 0, sin «Atrás».
   history.replaceState({ profundidad: 0 }, '', rutaDe(r.screen, r.slug));
   go(r.screen, r.slug, true);
 }
 async function loadProjects() { await safe(async () => { S.projects = await api('/api/projects'); }); render(); }
 async function loadLibrary() { await safe(async () => { S.lib = await api('/api/library'); }); render(); }
+async function loadSeries() { await safe(async () => { S.series = (await api('/api/series')).series; }); render(); }
+async function loadSerie() {
+  if (!S.serieId) { go('series'); return; }
+  await safe(async () => { S.serie = await api(`/api/series/${S.serieId}`); });
+  render();
+}
 async function loadScript() {
   S.script = null; S.scriptError = null;
   await safe(async () => {
@@ -381,7 +400,7 @@ function render() {
   pintarRuta();
   const v = $('#view'); v.textContent = '';
   if (S.fail && !S.cfg) { v.append(viewFallo()); return; }
-  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, material: viewMaterial, concepto: viewConcepto, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, shorts: viewShorts, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes })[S.screen] || viewProyectos;
+  const fn = ({ proyectos: viewProyectos, nuevo: viewNuevo, corrida: viewCorrida, material: viewMaterial, concepto: viewConcepto, guion: viewGuion, escenas: viewEscenas, personajes: viewPersonajes, metadatos: viewMetadatos, shorts: viewShorts, canales: viewCanales, biblioteca: viewBiblioteca, ajustes: viewAjustes, series: viewSeries, serie: viewSerie })[S.screen] || viewProyectos;
   try { v.append(fn()); }
   catch (e) { v.append(viewFallo(e.message)); }
 }
@@ -618,8 +637,10 @@ function viewNuevo() {
     apunta();
   }
   function toggleTplSel() {
-    // Las plantillas narrativas solo aplican a los formatos cortos.
-    bloqueTpl.classList.toggle('hide', st.format === 'long' || !plantillas.length);
+    // Las plantillas narrativas solo aplican a los formatos cortos (ni el
+    // video largo ni el episodio de serie animada las usan).
+    const esCorto = !!(S.cfg?.formats?.[st.format]?.short);
+    bloqueTpl.classList.toggle('hide', !esCorto || !plantillas.length);
   }
 
   const selTpl = el('select', { id: 'np-template', class: 'input', style: 'width:auto',
@@ -736,7 +757,7 @@ function viewNuevo() {
                      format: st.format, style_preset: st.preset };
       if (st.style_id) body.style_id = st.style_id;
       if (st.channel_id) body.channel_id = st.channel_id;
-      if (st.format !== 'long') body.short_template = st.short_template;
+      if (S.cfg?.formats?.[st.format]?.short) body.short_template = st.short_template;
       if (enCola.some(p => p.category === 'personaje')) {
         body.character_presence = parseInt(st.presencia, 10) || 30;
         body.character_pip = !!st.pip;
@@ -2249,6 +2270,333 @@ function viewAjustes() {
       S.cfg?.server_version && S.cfg.server_version !== S.cfg?.version?.version
         ? el('div', { style: 'color:var(--a700);margin-top:6px' }, `El proceso corre ${S.cfg.server_version}: reinicia para cargar la versión nueva.`) : null,
       S.cfg?.version?.modified ? el('div', { style: 'margin-top:6px' }, `${S.cfg.version.modified_count} archivo(s) modificados sin guardar en git`) : null));
+}
+
+/* ---------- ESTUDIO DE SERIES ANIMADAS ----------
+   Una serie guarda lo que debe mantenerse IDÉNTICO episodio a episodio:
+   personajes (rasgos, vestimenta, voz, fotos), locaciones, escenas
+   recurrentes, jingle, canciones y voces (subidas o clonadas). Cada episodio
+   nace de aquí con toda esa biblia ya puesta. */
+
+function viewSeries() {
+  const series = S.series || [];
+  const nombre = el('input', { class: 'input', placeholder: 'Nombre de la serie (ej. Los Amigos del Bosque)' });
+  const desc = el('textarea', { class: 'input', rows: '2', placeholder: 'De qué va la serie: mundo, tono, edad del público…' });
+  const audiencia = el('select', { class: 'input', style: 'width:auto' },
+    el('option', { value: 'ninos' }, 'Para niños'),
+    el('option', { value: 'adultos' }, 'Para adultos'));
+  const cards = series.map(s => el('div', { class: 'card', style: 'padding:16px' },
+    el('div', { style: 'display:flex;justify-content:space-between;gap:10px;align-items:baseline' },
+      el('span', { style: 'font-family:var(--heading);font-size:20px' }, s.name),
+      el('span', { class: 'tag tag-quiet' }, s.audience === 'adultos' ? 'adultos' : 'niños')),
+    el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:6px' }, s.description || 'sin descripción'),
+    el('div', { class: 'mono muted', style: 'margin-top:10px' },
+      `${(s.characters || []).length} personaje(s) · ${(s.locations || []).length} locación(es) · ${(s.episodes || []).length} episodio(s)` +
+      (s.jingle ? ' · jingle ✓' : '')),
+    el('div', { style: 'display:flex;gap:6px;margin-top:12px' },
+      el('button', { class: 'btn btn-sm btn-primary', onclick: () => goSerie(s.id) }, 'Abrir estudio'),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: async () => {
+        if (!confirm(`¿Borrar la serie «${s.name}» con todo su material (personajes, locaciones, voces, música)? Sus episodios ya creados NO se borran.`)) return;
+        try { await api(`/api/series/${s.id}`, { method: 'DELETE' }); await loadSeries(); } catch (e) { alert(e.message); }
+      } }, 'Borrar'))));
+  return el('div', { class: 'wrap', style: 'max-width:1080px' },
+    el('div', { class: 'kicker' }, `${series.length} serie(s)`),
+    el('h1', { style: 'font-size:34px;margin-top:10px' }, 'Series animadas'),
+    el('p', { class: 'muted', style: 'max-width:640px;line-height:1.75;margin-top:10px' },
+      'Cada serie guarda su biblia: personajes con la misma cara, ropa y voz en todos los episodios; locaciones con el mismo aspecto; el jingle y las canciones de la casa. Los episodios se crean desde el estudio de la serie y nacen con todo eso puesto.'),
+    series.length ? el('div', { class: 'grid4', style: 'margin-top:22px' }, cards) : null,
+    el('div', { style: 'border-top:1px solid var(--divider);margin-top:26px;padding-top:20px;max-width:560px' },
+      el('div', { class: 'kicker' }, 'Crear serie'),
+      el('div', { style: 'display:flex;flex-direction:column;gap:12px;margin-top:12px' }, nombre, desc,
+        el('label', { class: 'f' }, 'Audiencia'), audiencia,
+        el('button', { class: 'btn btn-primary', style: 'align-self:flex-start', onclick: async () => {
+          try {
+            const r = await api('/api/series', { method: 'POST', body: JSON.stringify({ name: nombre.value, description: desc.value, audience: audiencia.value }) });
+            goSerie(r.id);
+          } catch (e) { alert(e.message); }
+        } }, 'Crear la serie'))));
+}
+
+// Selector de voz de un personaje o del narrador: voces CLONADAS de la serie
+// primero, luego el catálogo de cada proveedor de voz.
+function vozValor(v) {
+  if (!v || !v.voice_id) return '';
+  return String(v.voice_id).startsWith('vz_') ? `vz|${v.voice_id}` : `cat|${v.provider || ''}|${v.voice_id}`;
+}
+function vozDesdeValor(val) {
+  if (!val) return null;
+  const t = val.split('|');
+  return t[0] === 'vz' ? { voice_id: t[1] } : { provider: t[1] || null, voice_id: t[2] };
+}
+function vozSelect(serie, current, onchange) {
+  const sel = el('select', { class: 'input', style: 'width:auto;max-width:280px;font-size:13px', onchange: e => onchange(vozDesdeValor(e.target.value)) },
+    el('option', { value: '' }, '— sin voz propia (usa la del narrador)'));
+  const clonadas = (serie.voices || []).filter(v => v.kind === 'clonada');
+  if (clonadas.length) {
+    const g = el('optgroup', { label: 'Voces clonadas de la serie' });
+    for (const v of clonadas) g.append(el('option', { value: `vz|${v.id}` }, `🎤 ${v.name}`));
+    sel.append(g);
+  }
+  for (const prov of (S.cfg?.catalog?.tts?.options || [])) {
+    if (!(prov.voices || []).length) continue;
+    const g = el('optgroup', { label: prov.label || prov.name });
+    for (const v of prov.voices) g.append(el('option', { value: `cat|${prov.name}|${v.id}` }, v.label || v.id));
+    sel.append(g);
+  }
+  sel.value = vozValor(current);
+  if (sel.value !== vozValor(current) && current?.voice_id) {
+    // una voz pegada a mano (voice_id de su cuenta) que no está en el catálogo
+    sel.append(el('option', { value: vozValor(current) }, `voz propia: ${current.voice_id}`));
+    sel.value = vozValor(current);
+  }
+  return sel;
+}
+
+function serieImg(rel, size) {
+  return el('img', { src: `/series-files/${S.serieId}/${rel}`, loading: 'lazy',
+    style: `width:${size || 52}px;height:${size || 52}px;object-fit:cover;border-radius:4px;border:1px solid var(--divider)` });
+}
+
+function seccionSerie(titulo, nota, ...kids) {
+  return el('div', { style: 'border-top:1px solid var(--divider);margin-top:26px;padding-top:20px' },
+    el('div', { class: 'kicker' }, titulo),
+    nota ? el('p', { class: 'muted', style: 'font-size:13px;line-height:1.7;margin-top:8px;max-width:680px' }, nota) : null,
+    ...kids);
+}
+
+function viewSerie() {
+  const d = S.serie;
+  if (!d) return el('div', { class: 'center' }, el('div', { class: 'kicker' }, 'Cargando…'));
+  const sid = d.id;
+  const mut = async (fn) => { try { await fn(); await loadSerie(); } catch (e) { alert(e.message); } };
+
+  /* --- personajes --- */
+  const pjNombre = el('input', { class: 'input', placeholder: 'Nombre (ej. Lola)' });
+  const pjRasgos = el('input', { class: 'input', placeholder: 'Rasgos físicos (ej. zorrita roja de ojos grandes)' });
+  const pjRopa = el('input', { class: 'input', placeholder: 'Vestimenta (ej. bufanda azul y botas amarillas)' });
+  const pjCaracter = el('input', { class: 'input', placeholder: 'Personalidad (ej. curiosa y valiente)' });
+  const pjPend = el('span', { class: 'muted', style: 'font-size:13px' });
+  let pjFiles = [];
+  const pjCards = (d.characters || []).map(c => el('div', { class: 'card', style: 'padding:14px' },
+    el('div', { style: 'display:flex;gap:10px;align-items:center' },
+      (c.images || [])[0] ? serieImg(c.images[0], 56) : el('div', { class: 'plate', style: 'width:56px;height:56px;border-radius:4px' }),
+      el('div', { style: 'flex:1' },
+        el('div', { style: 'font-family:var(--heading);font-size:18px' }, c.name),
+        el('div', { class: 'mono muted' }, `${(c.images || []).length} imagen(es)`)),
+      c.narrator ? el('span', { class: 'tag' }, 'narrador') : null),
+    el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:8px' },
+      [c.description, c.clothing ? `Vestimenta: ${c.clothing}` : '', c.personality].filter(Boolean).join(' · ') || 'sin descripción'),
+    el('div', { style: 'margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+      el('span', { class: 'muted', style: 'font-size:12px' }, 'Voz:'),
+      vozSelect(d, c.voice, v => mut(() => api(`/api/series/${sid}/characters/${c.id}`, { method: 'PUT', body: JSON.stringify({ voice: v }) })))),
+    el('div', { style: 'display:flex;gap:6px;margin-top:12px;flex-wrap:wrap' },
+      c.narrator ? null : el('button', { class: 'btn btn-sm', onclick: () => mut(() => api(`/api/series/${sid}/characters/${c.id}`, { method: 'PUT', body: JSON.stringify({ narrator: true }) })) }, 'Hacer narrador'),
+      el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*,video/*', fs => mut(() => api(`/api/series/${sid}/characters/${c.id}/files`, { method: 'POST', body: JSON.stringify({ files: fs }) }))) }, 'Añadir fotos/videos'),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: () => { if (confirm(`¿Borrar a ${c.name} de la serie?`)) mut(() => api(`/api/series/${sid}/characters/${c.id}`, { method: 'DELETE' })); } }, 'Borrar'))));
+
+  /* --- locaciones --- */
+  const lcNombre = el('input', { class: 'input', placeholder: 'Nombre (ej. La cueva de los cristales)' });
+  const lcDesc = el('input', { class: 'input', placeholder: 'Cómo es (ej. cueva cálida iluminada por cristales azules)' });
+  const lcAmb = el('input', { class: 'input', placeholder: 'Ambiente sonoro (ej. goteo de agua, eco suave)' });
+  const lcPend = el('span', { class: 'muted', style: 'font-size:13px' });
+  let lcFiles = [];
+  const lcCards = (d.locations || []).map(l => el('div', { class: 'card', style: 'padding:14px' },
+    el('div', { style: 'display:flex;gap:10px;align-items:center' },
+      (l.images || [])[0] ? serieImg(l.images[0], 56) : el('div', { class: 'plate', style: 'width:56px;height:56px;border-radius:4px' }),
+      el('div', { style: 'flex:1' },
+        el('div', { style: 'font-family:var(--heading);font-size:18px' }, l.name),
+        el('div', { class: 'mono muted' }, `${(l.images || []).length} imagen(es)`))),
+    el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:8px' },
+      [l.description, l.ambience ? `Ambiente: ${l.ambience}` : ''].filter(Boolean).join(' · ') || 'sin descripción'),
+    el('div', { style: 'display:flex;gap:6px;margin-top:12px;flex-wrap:wrap' },
+      el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*', fs => mut(() => api(`/api/series/${sid}/locations/${l.id}/files`, { method: 'POST', body: JSON.stringify({ files: fs }) }))) }, 'Añadir imágenes'),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: () => { if (confirm(`¿Borrar la locación «${l.name}»?`)) mut(() => api(`/api/series/${sid}/locations/${l.id}`, { method: 'DELETE' })); } }, 'Borrar'))));
+
+  /* --- escenas recurrentes --- */
+  const esNombre = el('input', { class: 'input', placeholder: 'Nombre (ej. El desayuno en la cueva)' });
+  const esLoc = el('select', { class: 'input', style: 'width:auto' },
+    el('option', { value: '' }, '— locación —'),
+    (d.locations || []).map(l => el('option', { value: l.name }, l.name)));
+  const esDesc = el('input', { class: 'input', placeholder: 'Qué pasa siempre en esta escena' });
+  const esChecks = (d.characters || []).map(c => {
+    const cb = el('input', { type: 'checkbox', value: c.name });
+    return el('label', { style: 'display:flex;gap:6px;align-items:center;font-size:13px' }, cb, c.name);
+  });
+  const esFilas = (d.scenes || []).map(sc => el('tr', {},
+    el('td', { style: 'font-family:var(--heading)' }, sc.name),
+    el('td', {}, sc.location || '—'),
+    el('td', { class: 'muted', style: 'font-size:13px' }, (sc.characters || []).join(', ') || '—'),
+    el('td', { class: 'muted', style: 'font-size:13px;max-width:280px' }, sc.description || ''),
+    el('td', { style: 'text-align:right' },
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: () => { if (confirm(`¿Borrar la escena «${sc.name}»?`)) mut(() => api(`/api/series/${sid}/scenes/${sc.id}`, { method: 'DELETE' })); } }, '🗑'))));
+
+  /* --- música --- */
+  const musica = el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:12px;max-width:640px' },
+    el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
+      el('span', { style: 'font-size:14px;min-width:70px' }, 'Jingle:'),
+      d.jingle ? el('audio', { controls: 'controls', src: `/series-files/${sid}/${d.jingle}`, style: 'height:32px' }) : el('span', { class: 'muted', style: 'font-size:13px' }, 'sin jingle todavía'),
+      el('button', { class: 'btn btn-sm', onclick: () => pickFile('audio/*', fs => mut(() => api(`/api/series/${sid}/music`, { method: 'POST', body: JSON.stringify({ kind: 'jingle', file: fs[0] }) }))) }, d.jingle ? 'Cambiar' : 'Subir jingle'),
+      d.jingle ? el('button', { class: 'btn btn-sm btn-ghost', onclick: () => mut(() => api(`/api/series/${sid}/music/${encodeURIComponent(d.jingle)}`, { method: 'DELETE' })) }, 'Quitar') : null),
+    (d.songs || []).map(sng => el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
+      el('span', { class: 'mono', style: 'font-size:12px;min-width:70px;overflow:hidden;text-overflow:ellipsis' }, sng.split('/').pop()),
+      el('audio', { controls: 'controls', src: `/series-files/${sid}/${sng}`, style: 'height:32px' }),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: () => mut(() => api(`/api/series/${sid}/music/${encodeURIComponent(sng)}`, { method: 'DELETE' })) }, '🗑'))),
+    el('div', {},
+      el('button', { class: 'btn btn-sm', onclick: () => pickFile('audio/*', fs => mut(async () => { for (const f of fs) await api(`/api/series/${sid}/music`, { method: 'POST', body: JSON.stringify({ kind: 'cancion', file: f }) }); })) }, 'Subir canción propia')));
+
+  /* --- voces --- */
+  const vzFilas = (d.voices || []).map(v => el('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--divider)' },
+    el('span', { style: 'font-size:14px;min-width:140px' }, v.name),
+    el('span', { class: v.kind === 'clonada' ? 'tag' : 'tag tag-quiet' }, v.kind === 'clonada' ? 'clonada ✓ lista para hablar' : 'muestra (aún sin clonar)'),
+    (v.files || [])[0] ? el('audio', { controls: 'controls', src: `/series-files/${sid}/${v.files[0]}`, style: 'height:32px' }) : null,
+    el('button', { class: 'btn btn-sm btn-ghost', onclick: () => { if (confirm(`¿Borrar la voz «${v.name}»?`)) mut(() => api(`/api/series/${sid}/voices/${v.id}`, { method: 'DELETE' })); } }, '🗑')));
+  const vzMsg = el('div', { class: 'muted', style: 'font-size:13px;margin-top:8px' });
+  const subirVoz = (clone) => {
+    const nombre = prompt(clone ? 'Nombre de la voz clonada (ej. Mi voz)' : 'Nombre de la voz (ej. Voz de Lola)');
+    if (!nombre) return;
+    pickFile('audio/*,video/*', fs => mut(async () => {
+      vzMsg.textContent = clone ? 'Clonando la voz…' : 'Guardando…';
+      const r = await api(`/api/series/${sid}/voices`, { method: 'POST', body: JSON.stringify({ name: nombre, files: fs, clone }) });
+      if (r.hint) alert(r.hint);
+    }));
+  };
+
+  /* --- crear episodio --- */
+  const epNombre = el('input', { class: 'input', placeholder: 'nombre-del-proyecto (ej. bosque-ep-01)' });
+  const epNumero = el('input', { class: 'input', type: 'number', min: '1', style: 'width:110px', placeholder: 'Nº', value: String((d.episodes || []).length + 1) });
+  const epTitulo = el('input', { class: 'input', placeholder: 'Título del episodio (ej. El tesoro del río)' });
+  const epGuion = el('textarea', { class: 'input', rows: '5', placeholder: 'Pega aquí el guion del episodio (o la idea), o adjunta el archivo…' });
+  const epPend = el('span', { class: 'muted', style: 'font-size:13px' });
+  let epFiles = [];
+  const epFilas = (d.episodes || []).map(e => el('tr', { class: e.missing ? null : 'row', onclick: e.missing ? null : () => go('corrida', e.slug) },
+    el('td', { class: 'mono' }, String(e.number || '—')),
+    el('td', { style: 'font-family:var(--heading)' }, e.title || e.slug),
+    el('td', {}, e.missing ? el('span', { class: 'tag tag-quiet' }, 'proyecto borrado')
+      : el('span', { class: e.running ? 'tag' : 'tag tag-quiet' }, e.running ? 'generando' : e.has_error ? 'con error' : (e.done === e.total ? 'listo' : 'borrador'))),
+    el('td', { class: 'mono', style: 'text-align:right' }, e.missing ? '—' : `${e.done}/${e.total}`)));
+
+  /* --- el director --- */
+  const dirGuion = el('textarea', { class: 'input', rows: '4', placeholder: 'Pega el guion (o el borrador) del próximo episodio…' });
+  const dirOut = el('div', { style: 'margin-top:12px' });
+  async function analizar() {
+    dirOut.replaceChildren(el('span', { class: 'muted' }, 'Analizando…'));
+    try {
+      const r = await api(`/api/series/${sid}/analyze`, { method: 'POST', body: JSON.stringify({ script: dirGuion.value }) });
+      dirOut.replaceChildren(
+        el('p', { style: 'font-size:14px;line-height:1.7;max-width:680px' }, r.summary || ''),
+        el('div', { style: 'display:flex;gap:18px;flex-wrap:wrap;margin-top:10px' },
+          el('div', {}, el('div', { class: 'kicker' }, 'Personajes'),
+            (r.characters || []).map(c => el('div', { style: 'font-size:13px;margin-top:5px' }, `${c.appears ? '✓' : '·'} ${c.name} — ${c.plan} · voz ${c.voice}`))),
+          el('div', {}, el('div', { class: 'kicker' }, 'Locaciones'),
+            (r.locations || []).map(l => el('div', { style: 'font-size:13px;margin-top:5px' }, `${l.appears ? '✓' : '·'} ${l.name} — ${l.plan}`)))),
+        (r.actions || []).length ? el('div', { style: 'margin-top:12px' },
+          el('div', { class: 'kicker' }, 'Lo que conviene resolver antes de generar'),
+          r.actions.map(a => el('div', { class: 'muted', style: 'font-size:13px;line-height:1.6;margin-top:5px' }, `⚠ ${a}`))) : el('div', { class: 'muted', style: 'font-size:13px;margin-top:10px' }, 'Todo listo: nada pendiente.'));
+    } catch (e) { dirOut.replaceChildren(el('span', { class: 'muted' }, e.message)); }
+  }
+
+  return el('div', { class: 'wrap', style: 'max-width:1080px' },
+    el('div', { style: 'display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap' },
+      el('div', {},
+        el('div', { class: 'kicker' }, `Serie ${d.audience === 'adultos' ? 'para adultos' : 'para niños'} · ${(d.episodes || []).length} episodio(s)`),
+        el('h1', { style: 'font-size:34px;margin-top:10px' }, d.name),
+        d.description ? el('p', { class: 'muted', style: 'max-width:640px;line-height:1.7;margin-top:8px' }, d.description) : null),
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: async () => {
+        const name = prompt('Nombre nuevo de la serie', d.name);
+        if (name) mut(() => api(`/api/series/${sid}`, { method: 'PUT', body: JSON.stringify({ name }) }));
+      } }, '✎ Renombrar')),
+
+    seccionSerie('🧑 Personajes',
+      'La identidad de cada personaje queda FIJA para toda la serie: mismos rasgos, misma vestimenta, misma voz en cada episodio. Sube fotos (o videos: se sacan fotogramas) para fijar su aspecto; sin fotos, su retrato se genera UNA vez y se reutiliza. «Clonarme» crea un personaje-avatar con TU cara a partir de tus fotos y videos.',
+      pjCards.length ? el('div', { class: 'grid4', style: 'margin-top:14px' }, pjCards) : null,
+      el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:16px;max-width:560px' },
+        el('div', { class: 'kicker', style: 'font-size:11px' }, 'Crear personaje'),
+        pjNombre, pjRasgos, pjRopa, pjCaracter,
+        el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+          el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*,video/*', fs => { pjFiles = fs; pjPend.textContent = `${fs.length} archivo(s) listos`; }) }, 'Elegir fotos/videos'), pjPend),
+        el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+          el('button', { class: 'btn btn-primary', onclick: () => mut(async () => {
+            await api(`/api/series/${sid}/characters`, { method: 'POST', body: JSON.stringify({ name: pjNombre.value, description: pjRasgos.value, clothing: pjRopa.value, personality: pjCaracter.value, files: pjFiles }) });
+            pjFiles = [];
+          }) }, 'Guardar personaje'),
+          el('button', { class: 'btn', title: 'Crea un personaje-avatar con tu cara a partir de tus fotos y videos', onclick: () => {
+            const nombre = prompt('¿Cómo se llamará tu avatar en la serie?', 'Yo');
+            if (!nombre) return;
+            pickFile('image/*,video/*', fs => mut(async () => {
+              const r = await api(`/api/series/${sid}/clone-avatar`, { method: 'POST', body: JSON.stringify({ name: nombre, files: fs }) });
+              if (r.hint) alert(r.hint);
+            }));
+          } }, '🪞 Clonarme')))),
+
+    seccionSerie('📍 Locaciones',
+      'Cada locación mantiene SIEMPRE el mismo aspecto: sus imágenes de referencia alimentan el modelo de identidad en todas las escenas que ocurren en ella. Sin imágenes, su referencia se genera una vez y queda fijada.',
+      lcCards.length ? el('div', { class: 'grid4', style: 'margin-top:14px' }, lcCards) : null,
+      el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:16px;max-width:560px' },
+        el('div', { class: 'kicker', style: 'font-size:11px' }, 'Crear locación'),
+        lcNombre, lcDesc, lcAmb,
+        el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+          el('button', { class: 'btn btn-sm', onclick: () => pickFile('image/*', fs => { lcFiles = fs; lcPend.textContent = `${fs.length} imagen(es) listas`; }) }, 'Elegir imágenes'), lcPend,
+          el('button', { class: 'btn btn-primary', onclick: () => mut(async () => {
+            await api(`/api/series/${sid}/locations`, { method: 'POST', body: JSON.stringify({ name: lcNombre.value, description: lcDesc.value, ambience: lcAmb.value, files: lcFiles }) });
+            lcFiles = [];
+          }) }, 'Guardar locación')))),
+
+    seccionSerie('🎬 Escenas recurrentes',
+      'Las escenas que se repiten episodio a episodio (el desayuno, la llegada a la escuela…): el director las monta siempre igual — misma locación, mismos personajes, misma puesta.',
+      esFilas.length ? el('table', { style: 'margin-top:14px;max-width:860px' },
+        el('thead', {}, el('tr', {}, el('th', {}, 'Escena'), el('th', {}, 'Locación'), el('th', {}, 'Personajes'), el('th', {}, 'Descripción'), el('th', {}, ''))),
+        el('tbody', {}, esFilas)) : null,
+      el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:16px;max-width:560px' },
+        el('div', { class: 'kicker', style: 'font-size:11px' }, 'Crear escena'),
+        esNombre, esLoc,
+        esChecks.length ? el('div', { style: 'display:flex;gap:14px;flex-wrap:wrap' }, esChecks) : null,
+        esDesc,
+        el('button', { class: 'btn btn-primary', style: 'align-self:flex-start', onclick: () => mut(async () => {
+          const quienes = esChecks.map(l => l.querySelector('input')).filter(c => c.checked).map(c => c.value);
+          await api(`/api/series/${sid}/scenes`, { method: 'POST', body: JSON.stringify({ name: esNombre.value, location: esLoc.value, characters: quienes, description: esDesc.value }) });
+        }) }, 'Guardar escena'))),
+
+    seccionSerie('🎵 Música: jingle y canciones',
+      'El jingle abre TODOS los episodios (suena al frente mientras la música de fondo baja). Las canciones propias entran a la selección del supervisor musical junto con tu biblioteca.',
+      musica),
+
+    seccionSerie('🎤 Voces: cargar, clonar y narrador',
+      'Sube voces (audio o video con voz) y CLONA la tuya o la de cada personaje con ElevenLabs: la voz clonada queda lista para que ese personaje hable con ella en todos los episodios. La voz del narrador cuenta la historia entre diálogos.',
+      vzFilas.length ? el('div', { style: 'margin-top:10px;max-width:760px' }, vzFilas) : null,
+      el('div', { style: 'display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center' },
+        el('button', { class: 'btn btn-sm', onclick: () => subirVoz(false) }, 'Cargar voz'),
+        el('button', { class: 'btn', title: 'Clona tu voz con ElevenLabs a partir de 1-5 audios tuyos (1-3 minutos en total funcionan muy bien)', onclick: () => subirVoz(true) }, '🎙 Clonar mi voz')),
+      vzMsg,
+      el('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap' },
+        el('span', { style: 'font-size:14px' }, 'Voz del narrador:'),
+        vozSelect(d, d.narrator_voice, v => mut(() => api(`/api/series/${sid}`, { method: 'PUT', body: JSON.stringify({ narrator_voice: v }) }))))),
+
+    seccionSerie('🎥 El director de la serie',
+      'Pega el guion del próximo episodio y el director te dice qué material se REUTILIZA (personajes y locaciones con referencia), qué se generará una única vez, y qué falta por resolver — antes de gastar nada.',
+      el('div', { style: 'max-width:680px;margin-top:10px' }, dirGuion,
+        el('button', { class: 'btn', style: 'margin-top:8px', onclick: analizar }, 'Analizar el guion'), dirOut)),
+
+    seccionSerie('📺 Episodios',
+      'Cada episodio es un proyecto normal del programa que NACE con la biblia de la serie puesta: elenco, locaciones, voces por personaje, voz del narrador y jingle.',
+      epFilas.length ? el('table', { style: 'margin-top:14px;max-width:760px' },
+        el('thead', {}, el('tr', {}, el('th', {}, 'Nº'), el('th', {}, 'Episodio'), el('th', {}, 'Estado'), el('th', { style: 'text-align:right' }, 'Fases'))),
+        el('tbody', {}, epFilas)) : null,
+      el('div', { style: 'display:flex;flex-direction:column;gap:10px;margin-top:16px;max-width:640px' },
+        el('div', { class: 'kicker', style: 'font-size:11px' }, 'Crear episodio'),
+        el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, epNumero, el('div', { style: 'flex:1;min-width:220px' }, epTitulo)),
+        epNombre, epGuion,
+        el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+          el('button', { class: 'btn btn-sm', title: 'Guion en archivo (PDF, Word, txt…) o narración grabada', onclick: () => pickFile('.txt,.md,.pdf,.docx,.doc,audio/*', fs => { epFiles = fs; epPend.textContent = `${fs.length} archivo(s) listos`; }) }, 'Adjuntar guion o voces'), epPend),
+        el('button', { class: 'btn btn-primary', style: 'align-self:flex-start', onclick: async () => {
+          try {
+            const files = epFiles.map(f => ({ ...f, category: 'auto' }));
+            const r = await api('/api/projects', { method: 'POST', body: JSON.stringify({
+              slug: epNombre.value, text: epGuion.value, files,
+              serie_id: sid, episode_number: Number(epNumero.value) || null, episode_title: epTitulo.value }) });
+            epFiles = [];
+            go('corrida', r.slug);
+          } catch (e) { alert(e.message); }
+        } }, 'Crear el episodio'))));
 }
 
 function tabBar(active) {
