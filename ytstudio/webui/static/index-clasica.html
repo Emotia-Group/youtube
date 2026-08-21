@@ -675,9 +675,9 @@ async function showSerie(id){
           <div class="row" style="margin-top:6px;font-size:12px">Voz: ${srVozSelectHtml(c.voice,`srSetCharVoice('${esc(c.id)}',this.value)`)}</div>
         </div>
         <div class="row">
-          ${c.narrator?'':`<button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/characters/${esc(c.id)}',{method:'PUT',body:JSON.stringify({narrator:true})})">Hacer narrador</button>`}
-          <button class="btn sec small" onclick="srPick('image/*,video/*',fs=>srApi('/api/series/${esc(id)}/characters/${esc(c.id)}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Fotos/videos</button>
-          <button class="btn sec small" onclick="if(confirm('¿Borrar a ${esc(c.name)}?'))srApi('/api/series/${esc(id)}/characters/${esc(c.id)}',{method:'DELETE'})">🗑</button>
+          ${c.narrator?'':`<button class="btn sec small" onclick="srApi('/api/series/${id}/characters/${c.id}',{method:'PUT',body:JSON.stringify({narrator:true})})">Hacer narrador</button>`}
+          <button class="btn sec small" onclick="srPick('image/*,video/*',fs=>srApi('/api/series/${id}/characters/${c.id}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Fotos/videos</button>
+          <button class="btn sec small" onclick="if(confirm('¿Borrar a ${esc(c.name)}?'))srApi('/api/series/${id}/characters/${c.id}',{method:'DELETE'})">🗑</button>
         </div>
       </div>`).join('')}
     <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
@@ -701,8 +701,8 @@ async function showSerie(id){
         <div style="flex:1;min-width:220px"><b>${esc(l.name)}</b>
           <div class="muted" style="font-size:12px">${esc([l.description,l.ambience?`Ambiente: ${l.ambience}`:''].filter(Boolean).join(' · ')||'sin descripción')} · ${(l.images||[]).length} imagen(es)</div></div>
         <div class="row">
-          <button class="btn sec small" onclick="srPick('image/*',fs=>srApi('/api/series/${esc(id)}/locations/${esc(l.id)}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Imágenes</button>
-          <button class="btn sec small" onclick="if(confirm('¿Borrar la locación «${esc(l.name)}»?'))srApi('/api/series/${esc(id)}/locations/${esc(l.id)}',{method:'DELETE'})">🗑</button>
+          <button class="btn sec small" onclick="srPick('image/*',fs=>srApi('/api/series/${id}/locations/${l.id}/files',{method:'POST',body:JSON.stringify({files:fs})}))">＋ Imágenes</button>
+          <button class="btn sec small" onclick="if(confirm('¿Borrar la locación «${esc(l.name)}»?'))srApi('/api/series/${id}/locations/${l.id}',{method:'DELETE'})">🗑</button>
         </div>
       </div>`).join('')}
     <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
@@ -720,7 +720,7 @@ async function showSerie(id){
       <div class="row" style="border-top:1px solid var(--line);padding:8px 0">
         <b style="min-width:160px">${esc(sc.name)}</b>
         <span class="muted" style="font-size:12px;flex:1">${esc([sc.location,(sc.characters||[]).join(', '),sc.description].filter(Boolean).join(' · '))}</span>
-        <button class="btn sec small" onclick="if(confirm('¿Borrar la escena «${esc(sc.name)}»?'))srApi('/api/series/${esc(id)}/scenes/${esc(sc.id)}',{method:'DELETE'})">🗑</button>
+        <button class="btn sec small" onclick="if(confirm('¿Borrar la escena «${esc(sc.name)}»?'))srApi('/api/series/${id}/scenes/${sc.id}',{method:'DELETE'})">🗑</button>
       </div>`).join('')}
     <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px;max-width:560px">
       <label class="f"><span>Nombre</span><input id="sr-es-nombre" placeholder="ej. El desayuno en la cueva"></label>
@@ -740,13 +740,13 @@ async function showSerie(id){
     <div class="row" style="flex-wrap:wrap">
       <b>Jingle:</b>
       ${d.jingle?`<audio controls src="/series-files/${esc(id)}/${esc(d.jingle)}" style="height:30px"></audio>`:'<span class="muted" style="font-size:12px">sin jingle todavía</span>'}
-      <button class="btn sec small" onclick="srPick('audio/*',fs=>srApi('/api/series/${esc(id)}/music',{method:'POST',body:JSON.stringify({kind:'jingle',file:fs[0]})}))">${d.jingle?'Cambiar':'Subir jingle'}</button>
-      ${d.jingle?`<button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/music/${encodeURIComponent(d.jingle)}',{method:'DELETE'})">Quitar</button>`:''}
+      <button class="btn sec small" onclick="srPick('audio/*',fs=>srApi('/api/series/${id}/music',{method:'POST',body:JSON.stringify({kind:'jingle',file:fs[0]})}))">${d.jingle?'Cambiar':'Subir jingle'}</button>
+      ${d.jingle?`<button class="btn sec small" onclick="srApi('/api/series/${id}/music/${encodeURIComponent(d.jingle)}',{method:'DELETE'})">Quitar</button>`:''}
     </div>
     ${(d.songs||[]).map(sng=>`<div class="row" style="margin-top:6px;flex-wrap:wrap">
       <span class="muted" style="font-size:12px">${esc(sng.split('/').pop())}</span>
       <audio controls src="/series-files/${esc(id)}/${esc(sng)}" style="height:30px"></audio>
-      <button class="btn sec small" onclick="srApi('/api/series/${esc(id)}/music/${encodeURIComponent(sng)}',{method:'DELETE'})">🗑</button></div>`).join('')}
+      <button class="btn sec small" onclick="srApi('/api/series/${id}/music/${encodeURIComponent(sng)}',{method:'DELETE'})">🗑</button></div>`).join('')}
     <div style="margin-top:8px"><button class="btn sec small" onclick="srPick('audio/*',fs=>srSubirCanciones(fs))">Subir canción propia</button></div>
   </div>
 
@@ -757,7 +757,7 @@ async function showSerie(id){
       <b style="min-width:140px">${esc(v.name)}</b>
       <span class="badge">${v.kind==='clonada'?'clonada ✓ lista para hablar':'muestra (aún sin clonar)'}</span>
       ${(v.files||[])[0]?`<audio controls src="/series-files/${esc(id)}/${esc(v.files[0])}" style="height:30px"></audio>`:''}
-      <button class="btn sec small" onclick="if(confirm('¿Borrar la voz «${esc(v.name)}»?'))srApi('/api/series/${esc(id)}/voices/${esc(v.id)}',{method:'DELETE'})">🗑</button></div>`).join('')}
+      <button class="btn sec small" onclick="if(confirm('¿Borrar la voz «${esc(v.name)}»?'))srApi('/api/series/${id}/voices/${v.id}',{method:'DELETE'})">🗑</button></div>`).join('')}
     <div class="row" style="margin-top:8px">
       <button class="btn sec small" onclick="srSubirVoz(false)">Cargar voz</button>
       <button class="btn small" title="Clona tu voz con ElevenLabs a partir de 1-5 audios tuyos (1-3 minutos en total funcionan muy bien)" onclick="srSubirVoz(true)">🎙 Clonar mi voz</button>

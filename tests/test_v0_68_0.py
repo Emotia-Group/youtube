@@ -409,8 +409,11 @@ for nombre, ruta in (("nuevo", ROOT / "MANUAL.md"),
           "por dónde se recorta" in texto.lower())
     check(f"T8c el manual {nombre} habla de la prueba de 150 px",
           "150 px" in texto)
+    # OJO: no se fija el número aquí — un número escrito a mano rompía esta
+    # batería en cuanto salía la versión siguiente. El manual debe ir a la
+    # par del CHANGELOG (la comprobación de paridad exacta vive en v0.67.0).
     check(f"T8d el manual {nombre} declara qué versión documenta",
-          bool(re.search(r"MANUAL_VERSION:\s*0\.68\.0", texto)))
+          bool(re.search(r"MANUAL_VERSION:\s*[0-9]+\.[0-9]+\.[0-9]+", texto)))
 
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 check("T8e el CHANGELOG cuenta lo que trae la v0.68.0",

@@ -404,8 +404,10 @@ for nombre, ruta in (("nuevo", ROOT / "MANUAL.md"),
     check(f"T9b el manual {nombre} explica la pantalla de Series",
           "biblia" in texto.lower() and "locaci" in texto.lower()
           and "jingle" in texto.lower())
+    # Sin número fijo: fijarlo rompería esta batería en la versión siguiente.
+    # La paridad exacta manual↔CHANGELOG ya la vigila la batería v0.67.0.
     check(f"T9c el manual {nombre} declara qué versión documenta",
-          bool(re.search(r"MANUAL_VERSION:\s*0\.69\.0", texto)))
+          bool(re.search(r"MANUAL_VERSION:\s*[0-9]+\.[0-9]+\.[0-9]+", texto)))
 
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 check("T9d el CHANGELOG cuenta lo que trae la v0.69.0",
