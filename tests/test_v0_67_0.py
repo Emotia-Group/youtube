@@ -34,6 +34,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -186,8 +187,16 @@ check("T5c cada hilo usa su propio temporal",
 check("T5d no queda basura si la escritura falla",
       "tmp.unlink()" in fuente)
 
-# Mil guardados con la interfaz leyendo a la vez: ni una lectura rota. Antes
-# de arreglarlo, esta prueba fallaba a los pocos ciclos.
+# Guardar mientras la interfaz lee: ni una lectura rota y ni un guardado que
+# reviente. Antes de arreglarlo, esta prueba fallaba a los pocos ciclos.
+#
+# El lector hace una PAUSA entre lecturas, como la interfaz de verdad (que
+# pregunta cada segundo y medio). Sin la pausa, el archivo quedaba abierto
+# prácticamente siempre y en Windows —donde no se puede sustituir un archivo
+# que otro tiene abierto— cada guardado se pasaba el rato reintentando: la
+# batería tardaba minutos en el equipo del creador aunque el programa
+# estuviera sano. Esa carrera, provocada a propósito y sin depender del
+# sistema, se prueba en la batería de la v0.67.2.
 errores: list[str] = []
 parar = threading.Event()
 
@@ -199,16 +208,25 @@ def _leer():
         except Exception as e:                      # pragma: no cover
             errores.append(repr(e))
             return
+        time.sleep(0.002)
 
 
 lector = threading.Thread(target=_leer, daemon=True)
 lector.start()
-for i in range(400):
-    p.set("contador", i)
+fallo_guardando = None
+try:
+    for i in range(200):
+        p.set("contador", i)
+except Exception as e:                              # pragma: no cover
+    fallo_guardando = repr(e)
 parar.set()
 lector.join(timeout=5)
-check("T5e leer el proyecto mientras se guarda 400 veces nunca falla",
+check("T5e leer el proyecto mientras se guarda 200 veces nunca falla",
       not errores, "; ".join(errores[:2]))
+check("T5e2 y guardar mientras se lee tampoco falla",
+      fallo_guardando is None, fallo_guardando or "")
+check("T5e3 y lo último guardado es lo que queda en disco",
+      Project("prueba-atomica").get("contador") == 199)
 
 # Un archivo de verdad corrupto sí tiene que dar la cara (no fingir que está
 # vacío: eso perdería el proyecto en silencio).

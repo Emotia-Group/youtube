@@ -100,6 +100,45 @@ dice el framework.
   **esa regla se cambió a propósito**, con su comentario al lado, porque el
   framework la revocó. No se «arregló» la prueba para que pasara.
 
+## v0.67.2 — 2026-08-20
+**Guardar el proyecto ya no falla en Windows.** Lo vio el creador al correr
+`probar.bat`, y el arreglo importa mucho más que la prueba en rojo.
+
+- 🪟 «ACCESO DENEGADO» AL GUARDAR EL PROYECTO. La versión v0.67.0 arregló que
+  la interfaz leyera el archivo del proyecto a medias: en vez de escribir
+  encima, se escribe en un archivo aparte y se mueve a su sitio de un golpe.
+  En Linux y Mac eso funciona siempre. **En Windows no**: Windows no deja
+  sustituir un archivo que otro programa tenga abierto en ese preciso
+  instante, y contesta «Acceso denegado».
+
+  Y como la interfaz consulta el proyecto cada segundo y medio mientras se
+  genera el video, tarde o temprano una consulta y un guardado coinciden. Lo
+  grave es DÓNDE saltaba el error: no en pantalla como un aviso, sino dentro
+  del guardado, que es lo que llaman todas las fases para apuntar su
+  progreso. Habría **abortado la generación a media faena**, tirando minutos
+  de trabajo y el dinero ya gastado. O sea: el arreglo anterior cambió un
+  mensaje molesto por algo peor. Pedimos disculpas.
+
+  Ahora, si Windows dice que no, se espera unas milésimas y se reintenta: la
+  lectura que estorba dura microsegundos, así que casi siempre basta el
+  primer reintento. Y si tras siete intentos (unos siete décimas de segundo)
+  siguiera bloqueado —un antivirus revisando la carpeta, por ejemplo— se
+  escribe directamente encima. Es la mala menor: quien lee ya sabe
+  reintentar, mientras que fallar ahí costaría la corrida entera.
+
+- 🐌 Y DE PASO, MUCHÍSIMAS ESCRITURAS DE MENOS. Abrir un proyecto lo
+  reescribía **siempre**, por si venía de una versión antigua guardada en otra
+  codificación. Como cada consulta de la interfaz abre el proyecto, el archivo
+  se estaba reescribiendo decenas de veces por minuto sin que hubiera cambiado
+  nada: disco gastado para nada y, en Windows, muchísimas más ocasiones de
+  chocar. Ahora solo se reescribe cuando de verdad hay algo que migrar. Los
+  proyectos antiguos se siguen migrando igual, la primera vez que se abren.
+
+- 🧪 La batería nueva IMITA a Windows para poder probar todo esto en cualquier
+  equipo: sustituye la función del sistema por una que da «acceso denegado»
+  cuando el archivo está abierto. Se comprobó que, con el código anterior,
+  esa batería falla exactamente con el error que vio el creador.
+
 ## v0.67.1 — 2026-08-20
 **El canal ya vuelve a traer sus estilos**, visto por el creador nada más
 estrenar la v0.67.0.
