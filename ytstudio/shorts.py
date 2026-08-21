@@ -81,6 +81,33 @@ def safe_margins(cfg: dict) -> dict | None:
     }
 
 
+# ---------------------------------------------------------------------------
+# MINIATURA VERTICAL (framework §4.1)
+# ---------------------------------------------------------------------------
+# La miniatura no aparece en el feed deslizable, y por eso se da por hecho que
+# da igual. No da igual: es lo que decide el clic en la PESTAÑA DE SHORTS del
+# canal, en la búsqueda, en la portada y en el feed de suscripciones. Y tiene
+# su propia zona segura, distinta a la del video: la parrilla del canal
+# recorta y superpone en otros sitios.
+MINIATURA_ZONA = {"top": 390, "bottom": 390, "left": 90, "right": 120}
+MINIATURA_MAX_BYTES = 2 * 1024 * 1024
+# LA REGLA QUE DECIDE SI SIRVE: la miniatura no se ve nunca a 1080 px de
+# ancho, se ve a unos 150 en la parrilla del canal. A ese tamaño el
+# presupuesto real es una cara y tres o cuatro palabras: nada más entra.
+MINIATURA_PRUEBA_PX = 150
+MINIATURA_PALABRAS_MAX = 4
+
+
+def miniatura_margins(w: int, h: int) -> dict:
+    """Zona segura de la miniatura en píxeles reales, escalada desde el
+    lienzo canónico de 1080x1920."""
+    kx, ky = w / SAFE_BASE[0], h / SAFE_BASE[1]
+    return {"top": round(MINIATURA_ZONA["top"] * ky),
+            "bottom": round(MINIATURA_ZONA["bottom"] * ky),
+            "left": round(MINIATURA_ZONA["left"] * kx),
+            "right": round(MINIATURA_ZONA["right"] * kx)}
+
+
 def subtitle_margins(cfg: dict) -> tuple[int, int, int]:
     """(MarginL, MarginR, MarginV) para el .ass de subtítulos quemados.
 
@@ -120,7 +147,18 @@ SPEC = {
     "duration_music_risk": 60.0,
     "duration_sweet_min": 20.0,
     "duration_sweet_max": 75.0,
+    # Bitrate de publicación: 8-12 Mbps (objetivo 10). Por debajo de 6 la
+    # plataforma recomprime una imagen que ya venía blanda y se nota.
+    "bitrate_min": 8_000_000,
+    "bitrate_max": 12_000_000,
+    "bitrate_low": 6_000_000,
 }
+
+# BANDAS Y ZONA MUERTA (framework §3.1: la imagen ocupa los cuatro bordes).
+# Cuánta superficie puede faltar antes de decir algo: por debajo del 2% es
+# ruido de medición; a partir del 5% son bandas de verdad.
+BANDA_AVISO = 0.02
+BANDA_PROBLEMA = 0.05
 
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 
@@ -191,7 +229,73 @@ def loudness(path) -> dict | None:
     return out or None
 
 
-def evaluate(info: dict | None, loud: dict | None) -> tuple[list, list, list]:
+def _luma(rgb: tuple[int, int, int]) -> float:
+    """Claridad percibida (0 negro, 1 blanco). El ojo ve el verde mucho más
+    claro que el azul: por eso no es la media de los tres canales."""
+    r, g, b = rgb
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+
+
+def accent_over_image(hex_color: str, min_luma: float = 0.62) -> str:
+    """ACLARA el color de acento lo justo para que se lea SOBRE IMAGEN.
+
+    Un color de marca calibrado sobre fondo negro casi siempre se queda sin
+    contraste cuando el texto deja de ir sobre negro y pasa a ir sobre el
+    vídeo (framework §3.1). Aquí se mezcla con blanco hasta alcanzar una
+    claridad mínima —el tono se conserva, solo sube la luz— y el color
+    original se reserva para los fondos planos."""
+    h = (hex_color or "").strip().lstrip("#")
+    if len(h) != 6:
+        return (hex_color or "").strip() or "E8C46B"
+    try:
+        rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return h
+    luz = _luma(rgb)  # type: ignore[arg-type]
+    if luz >= min_luma:
+        return h.upper()
+    t = (min_luma - luz) / (1.0 - luz)
+    claro = tuple(round(c + t * (255 - c)) for c in rgb)
+    return "".join(f"{c:02X}" for c in claro)
+
+
+def detect_bands(path, info: dict | None = None) -> dict | None:
+    """¿La imagen llega a los cuatro bordes, o hay bandas y zona muerta?
+
+    El framework (§3.1) no admite bandas: en vertical se ve a pantalla
+    completa y cualquier píxel que no sea imagen se lee como «esto es el
+    recorte de otra cosa» justo en el segundo en que el espectador decide si
+    desliza.
+
+    Se mide con `cropdetect` en TRES puntos del vídeo y se QUEDA CON EL
+    RECORTE MÁS GRANDE de los tres, no con el más pequeño: un plano oscuro o
+    un fundido a negro engañarían a una sola medición y harían saltar el
+    aviso en un vídeo perfecto. Devuelve {'width', 'height', 'perdido'} —
+    `perdido` es la fracción de superficie que no es imagen— o None si no se
+    pudo medir."""
+    info = info or probe(path)
+    if not info or not info.get("width") or not info.get("height"):
+        return None
+    W, H = int(info["width"]), int(info["height"])
+    dur = float(info.get("duration") or 0)
+    puntos = [dur * f for f in (0.2, 0.5, 0.8)] if dur > 4 else [0.0]
+    mejor_w = mejor_h = 0
+    for t in puntos:
+        r = _run(["ffmpeg", "-hide_banner", "-nostdin", "-ss", f"{t:.2f}",
+                  "-t", "1.5", "-i", str(path), "-vf",
+                  "cropdetect=limit=24:round=2:reset=0", "-f", "null", "-"])
+        for m in re.finditer(r"crop=(\d+):(\d+):", r.stderr or ""):
+            mejor_w = max(mejor_w, int(m.group(1)))
+            mejor_h = max(mejor_h, int(m.group(2)))
+    if not mejor_w or not mejor_h:
+        return None
+    mejor_w, mejor_h = min(mejor_w, W), min(mejor_h, H)
+    return {"width": mejor_w, "height": mejor_h,
+            "perdido": max(0.0, 1.0 - (mejor_w * mejor_h) / float(W * H))}
+
+
+def evaluate(info: dict | None, loud: dict | None,
+             bands: dict | None = None) -> tuple[list, list, list]:
     """Devuelve (problemas, avisos, correctos) en lenguaje llano."""
     bad: list[str] = []
     warn: list[str] = []
@@ -246,6 +350,35 @@ def evaluate(info: dict | None, loud: dict | None) -> tuple[list, list, list]:
     if sr and sr != SPEC["sample_rate"]:
         warn.append(f"Muestreo de audio {sr} Hz — se recomienda 48000 Hz")
 
+    br = info.get("bitrate")
+    if br:
+        if br < SPEC["bitrate_low"]:
+            warn.append(f"Bitrate {br / 1e6:.1f} Mbps — bajo para publicar "
+                        f"(objetivo {SPEC['bitrate_min'] / 1e6:.0f}-"
+                        f"{SPEC['bitrate_max'] / 1e6:.0f} Mbps). La "
+                        "plataforma recomprime encima: la imagen se ve "
+                        "blanda justo en los planos con movimiento")
+        elif br <= SPEC["bitrate_max"] * 1.6:
+            ok.append(f"Bitrate {br / 1e6:.1f} Mbps")
+
+    # --- Bandas y zona muerta: la imagen tiene que llegar a los bordes
+    if bands and bands.get("perdido") is not None:
+        perdido = float(bands["perdido"])
+        if perdido >= BANDA_PROBLEMA:
+            bad.append(
+                f"Hay BANDAS: la imagen ocupa {bands['width']}x"
+                f"{bands['height']} y deja fuera el {perdido * 100:.0f}% del "
+                "cuadro. En vertical se ve a pantalla completa y una banda "
+                "se lee como «esto es el recorte de otra cosa» en el mismo "
+                "segundo en que se decide si deslizar. Reencuadrar a sangre")
+        elif perdido >= BANDA_AVISO:
+            warn.append(
+                f"Puede haber bandas: la imagen ocupa {bands['width']}x"
+                f"{bands['height']} ({perdido * 100:.0f}% del cuadro sin "
+                "imagen). Míralo: en vertical no debería sobrar ni un píxel")
+        else:
+            ok.append("La imagen llega a los cuatro bordes")
+
     if not info.get("has_audio"):
         bad.append("El archivo NO tiene pista de audio")
 
@@ -297,10 +430,11 @@ def audit_file(path) -> dict:
     """Audita UN archivo y devuelve su ficha con problemas y avisos."""
     info = probe(path)
     loud = loudness(path) if info and info.get("has_audio") else None
-    bad, warn, ok = evaluate(info, loud)
+    bands = detect_bands(path, info) if info else None
+    bad, warn, ok = evaluate(info, loud, bands)
     return {"archivo": os.path.basename(str(path)), "ruta": str(path),
-            "info": info, "sonoridad": loud, "problemas": bad,
-            "avisos": warn, "correcto": ok}
+            "info": info, "sonoridad": loud, "bandas": bands,
+            "problemas": bad, "avisos": warn, "correcto": ok}
 
 
 def gather(paths) -> list[str]:
@@ -362,7 +496,11 @@ def report_lines(results: list[dict]) -> list[str]:
             "    el gancho tiene que entenderse con el sonido apagado)",
             "  · Que los subtítulos no tapen la franja inferior",
             "  · Que haya UN cierre con llamada a la acción, no un corte seco",
-            "  · Que el primer fotograma prometa algo"]
+            "  · Que el primer fotograma prometa algo",
+            "  · Que la imagen llegue a los CUATRO BORDES: ni bandas, ni",
+            "    barras, ni fondo desenfocado, ni un solo píxel muerto",
+            "  · Que ningún empalme sea un corte a hueso: fundidos de",
+            "    0,3-0,4 s entre planos y una cama musical continua debajo"]
     return out
 
 
@@ -513,12 +651,47 @@ def publish_checklist(project, cfg: dict) -> list[dict]:
           "poner desde fuera, y sin él la vista se regala. Se puede añadir "
           "después de publicar")
 
-    # 4. Subtítulos aparte (accesibilidad + texto indexable para búsqueda)
+    # 4. La miniatura: en este framework se produce SIEMPRE
+    mini = project.dir / DIRS["final"] / "miniatura.jpg"
+    if mini.exists():
+        peso = mini.stat().st_size
+        tam = None
+        try:
+            from PIL import Image
+            with Image.open(mini) as im:
+                tam = im.size
+        except Exception:  # noqa: BLE001 — sin PIL, se comprueba solo el peso
+            pass
+        bien = peso <= MINIATURA_MAX_BYTES and (tam is None or tam[1] > tam[0])
+        detalle = (f"{tam[0]}x{tam[1]} · " if tam else "") + \
+            f"{peso / 1024:.0f} KB (límite {MINIATURA_MAX_BYTES // 1024} KB)"
+        if tam and tam[1] <= tam[0]:
+            detalle += " — es HORIZONTAL: en la parrilla de Shorts se recorta"
+        punto(bien, "Miniatura vertical generada", detalle)
+    else:
+        punto(False, "Miniatura vertical generada",
+              "no aparece en el feed deslizable, pero es lo que decide el "
+              "clic en la pestaña de Shorts del canal, en la búsqueda y en "
+              "el feed de suscripciones")
+    pruebas = sorted((project.dir / DIRS["final"]).glob("*_prueba150px.png"))
+    punto(None, "Miniatura mirada a 150 px",
+          (f"abre {pruebas[0].name}: si a ese tamaño —el de la parrilla del "
+           "canal— no lees el texto, la miniatura no sirve por bonita que "
+           "sea a tamaño completo" if pruebas else
+           "la prueba se genera con la miniatura; vuelve a ejecutar la fase "
+           "de Metadatos"))
+
+    # 5. Subtítulos aparte (accesibilidad + texto indexable para búsqueda)
     srt = project.dir / DIRS["subtitles"] / "subtitulos.srt"
     punto(srt.exists(), "Archivo de subtítulos (SRT) generado",
           "se sube aparte: accesibilidad y texto indexable para búsqueda")
 
-    # 5. Lo que solo puede mirar una persona
+    punto(None, "Los subtítulos NO viajan junto al MP4 con el mismo nombre",
+          "el programa los deja en 08_subtitles y el video en 09_final, que "
+          "es como tiene que ser: juntos y con el mismo nombre, VLC carga el "
+          ".srt ENCIMA del que ya va quemado y todo el texto sale duplicado")
+
+    # 6. Lo que solo puede mirar una persona
     punto(None, "El gancho se entiende CON EL SONIDO APAGADO",
           "texto en pantalla desde el primer fotograma — la mayoría lo verá "
           "sin sonido")

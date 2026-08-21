@@ -29,7 +29,37 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
+from ytstudio.shorts import (MINIATURA_MAX_BYTES, MINIATURA_PALABRAS_MAX,
+                             MINIATURA_PRUEBA_PX, accent_over_image,
+                             miniatura_margins)
 from ytstudio.utils.media import find_font
+
+
+def _ancho_util(W: int, x: int, ancho: int, safe: dict | None) -> tuple[int, int]:
+    """(x, ancho) del texto, metidos en la zona segura de la miniatura.
+
+    Los laterales importan tanto como el alto: en la parrilla del canal la
+    miniatura se recorta también por los lados, y una palabra cortada por la
+    derecha se lee como un error, no como diseño."""
+    if not safe:
+        return x, ancho
+    izq = max(x, safe["left"])
+    return izq, max(80, min(ancho, W - safe["right"] - izq))
+
+
+def _dentro(y: float, block_h: float, safe: dict | None, H: int) -> int:
+    """Sube o baja un bloque de texto hasta que quepa en la ZONA SEGURA.
+
+    En vertical la parrilla del canal recorta arriba y abajo: el texto que se
+    sale de esa ventana simplemente no está ahí para quien mira la pestaña de
+    Shorts del canal."""
+    if not safe:
+        return round(y)
+    tope = safe["top"]
+    suelo = H - safe["bottom"] - block_h
+    if suelo < tope:            # bloque más alto que la ventana: se centra
+        return round((H - block_h) / 2)
+    return round(min(max(y, tope), suelo))
 
 
 def _hex_rgb(hexcolor: str) -> tuple[int, int, int]:
@@ -166,7 +196,8 @@ def _draw_kicker(draw, x, y, text: str, size: int, color: tuple,
 
 # ------------------------------------------------------------------ diseños
 
-def _design_cine(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
+def _design_cine(bg, W, H, kicker, text, accent_word, accent,
+                 safe=None) -> Image.Image:
     img = bg.convert("RGBA")
     img.alpha_composite(_vgrad(W, H, H * 0.45, H * 0.96, 0, 235))
     draw = ImageDraw.Draw(img, "RGBA")
@@ -174,14 +205,19 @@ def _design_cine(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
         bar = round(H * 0.045)
         draw.rectangle([(0, 0), (W, bar)], fill=(6, 7, 9, 255))
         draw.rectangle([(0, H - bar), (W, H)], fill=(6, 7, 9, 255))
-    margin = round(W * 0.055)
-    font, lines = _fit(draw, text, round(W * 0.82), round(H * 0.20))
+    margin, ancho = _ancho_util(W, round(W * 0.055), round(W * 0.82), safe)
+    font, lines = _fit(draw, text, ancho, round(H * 0.20))
     line_h = round(font.size * 1.14)
     block_h = line_h * len(lines)
-    y = H - round(H * 0.075) - block_h
+    ksize = max(24, round(font.size * 0.30)) if kicker else 0
+    alto_kicker = (ksize + round(H * 0.022)) if kicker else 0
+    subrayado = 12 + max(5, H // 130)
+    y = _dentro(H - round(H * 0.075) - block_h,
+                block_h + subrayado, safe, H)
+    if safe and kicker:         # el kicker vive por encima del texto
+        y = max(y, safe["top"] + alto_kicker)
     if kicker:
-        ksize = max(24, round(font.size * 0.30))
-        _draw_kicker(draw, margin + 2, y - ksize - round(H * 0.022),
+        _draw_kicker(draw, margin + 2, y - alto_kicker,
                      kicker, ksize, accent)
     widths = []
     for ln in lines:
@@ -189,27 +225,35 @@ def _design_cine(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
                                         accent_word, accent, stroke=2))
         y += line_h
     # subrayado de acento bajo la última línea
-    uw = min(max(widths), round(W * 0.5))
+    uw = min(max(widths), round(ancho * 0.6))
     draw.rectangle([(margin, y + 6), (margin + uw, y + 6 + max(5, H // 130))],
                    fill=accent)
     return img
 
 
-def _design_impacto(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
+def _design_impacto(bg, W, H, kicker, text, accent_word, accent,
+                    safe=None) -> Image.Image:
     img = bg.convert("RGBA")
     img.alpha_composite(_vignette(W, H, 185))
     img.alpha_composite(_vgrad(W, H, H * 0.55, H, 0, 120))
     draw = ImageDraw.Draw(img, "RGBA")
-    font, lines = _fit(draw, text, round(W * 0.86), round(H * 0.24))
+    izq, ancho = _ancho_util(W, round(W * 0.07), round(W * 0.86), safe)
+    centro = izq + ancho / 2
+    font, lines = _fit(draw, text, ancho, round(H * 0.24))
     line_h = round(font.size * 1.08)
     block_h = line_h * len(lines)
     y = round(H * 0.56) - block_h // 2 if W > H else round(H * 0.64) - block_h // 2
+    ksize0 = max(26, round(font.size * 0.26)) if kicker else 0
+    alto_kicker = (ksize0 + round(ksize0 * 1.1) + round(H * 0.03)) if kicker else 0
+    y = _dentro(y, block_h, safe, H)
+    if safe and kicker:
+        y = max(y, safe["top"] + alto_kicker)
     if kicker:
         ksize = max(26, round(font.size * 0.26))
         kfont = _font(ksize)
         kw = draw.textlength(kicker.upper(), font=kfont) + 8 * len(kicker)
         pad = round(ksize * 0.55)
-        kx = (W - kw) / 2
+        kx = centro - kw / 2
         ky = y - ksize - pad * 2 - round(H * 0.03)
         draw.rounded_rectangle([(kx - pad, ky - pad // 2),
                                 (kx + kw + pad, ky + ksize + pad)],
@@ -217,7 +261,7 @@ def _design_impacto(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
         _draw_kicker(draw, kx, ky, kicker, ksize, (12, 12, 14), tracking=8)
     stroke = max(6, font.size // 11)
     for ln in lines:
-        x = (W - _line_width(draw, ln, font)) / 2
+        x = centro - _line_width(draw, ln, font) / 2
         _draw_line_accent(draw, x, y, ln, font, accent_word, accent,
                           stroke=stroke, shadow=False)
         y += line_h
@@ -230,9 +274,14 @@ def _line_width(draw, line: str, font) -> float:
         space * (len(line.split()) - 1)
 
 
-def _design_panel(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
+def _design_panel(bg, W, H, kicker, text, accent_word, accent,
+                  safe=None) -> Image.Image:
+    """Panel oscuro con filo de acento y texto apilado; la imagen respira al
+    otro lado. En vertical el panel se dimensiona DESPUÉS de medir el texto,
+    para que ni una línea caiga en la franja que recorta la parrilla."""
     horizontal = W > H
     img = Image.new("RGBA", (W, H), (13, 15, 19, 255))
+    medidor = ImageDraw.Draw(img, "RGBA")
     if horizontal:
         pw = round(W * 0.40)
         img.alpha_composite(_cover(bg, W - pw, H, focus_x=0.5).convert("RGBA"),
@@ -245,18 +294,26 @@ def _design_panel(bg, W, H, kicker, text, accent_word, accent) -> Image.Image:
         draw.rectangle([(pw - max(6, W // 190), 0), (pw, H)], fill=accent)
         tx, tw = round(W * 0.05), pw - round(W * 0.09)
         ty = round(H * 0.30)
+        ksize = max(24, round(H * 0.032)) if kicker else 0
+        font, lines = _fit(medidor, text, tw, round(H * 0.16))
     else:
+        tx, tw = _ancho_util(W, round(W * 0.07), W - round(W * 0.14), safe)
+        ksize = max(24, round(W * 0.032)) if kicker else 0
+        font, lines = _fit(medidor, text, tw, round(W * 0.16))
+        alto_kicker = round(ksize * 1.9) if kicker else 0
+        bloque = alto_kicker + round(font.size * 1.16) * len(lines) + 13
+        pad = round(H * 0.03)
         ph = round(H * 0.36)
+        if safe:   # el panel crece lo justo para que el texto quede dentro
+            ph = min(round(H * 0.62), max(ph, safe["bottom"] + bloque + pad * 2))
         img.alpha_composite(_cover(bg, W, H - ph).convert("RGBA"), (0, 0))
         draw = ImageDraw.Draw(img, "RGBA")
-        draw.rectangle([(0, H - ph - max(6, H // 240)), (W, H - ph)], fill=accent)
-        tx, tw = round(W * 0.07), W - round(W * 0.14)
-        ty = H - ph + round(ph * 0.16)
+        draw.rectangle([(0, H - ph - max(6, H // 240)), (W, H - ph)],
+                       fill=accent)
+        ty = H - ph + pad
     if kicker:
-        ksize = max(24, round((H if horizontal else W) * 0.032))
         _draw_kicker(draw, tx + 2, ty, kicker, ksize, accent)
         ty += round(ksize * 1.9)
-    font, lines = _fit(draw, text, tw, round((H if horizontal else W) * 0.16))
     line_h = round(font.size * 1.16)
     for ln in lines:
         _draw_line_accent(draw, tx, ty, ln, font, accent_word, accent,
@@ -299,16 +356,57 @@ def pick_backgrounds(scenes: list[dict], wanted_ids: list[int], n: int = 3
     return out[:n]
 
 
+def _guardar(img: Image.Image, dest: Path) -> int:
+    """Guarda la miniatura por debajo del límite de peso de la plataforma
+    (2 MB). Devuelve el tamaño final en bytes."""
+    calidad = 92
+    while True:
+        img.convert("RGB").save(dest, quality=calidad, optimize=True)
+        peso = dest.stat().st_size
+        if peso <= MINIATURA_MAX_BYTES or calidad <= 60:
+            return peso
+        calidad -= 8
+
+
+def prueba_150px(dest: Path) -> Path:
+    """LA PRUEBA QUE DECIDE SI LA MINIATURA SIRVE.
+
+    La miniatura no se ve nunca a 1080 px de ancho: se ve a unos 150 en la
+    parrilla del canal. Se guarda esa versión reducida al lado, sobre un
+    fondo neutro, para poder mirarla al tamaño de verdad. Si ahí no se lee el
+    texto, la miniatura no sirve — por bonita que sea a tamaño completo."""
+    img = Image.open(dest)
+    alto = round(img.height * MINIATURA_PRUEBA_PX / img.width)
+    pequena = img.convert("RGB").resize((MINIATURA_PRUEBA_PX, alto),
+                                        Image.LANCZOS)
+    lienzo = Image.new("RGB", (MINIATURA_PRUEBA_PX + 40, alto + 40), (32, 34, 38))
+    lienzo.paste(pequena, (20, 20))
+    salida = dest.with_name(dest.stem + "_prueba150px.png")
+    lienzo.save(salida)
+    return salida
+
+
 def render_thumbnails(project, cfg, options: list[dict],
                       scenes: list[dict]) -> list[str]:
     """Genera miniatura_1..N.jpg (un diseño distinto por opción) y devuelve
-    los nombres de archivo. Rápido (PIL local): no añade tiempo perceptible."""
+    los nombres de archivo. Rápido (PIL local): no añade tiempo perceptible.
+
+    En vertical (Shorts) manda el framework §4.1: lienzo 9:16 de 1080x1920,
+    texto dentro de la zona segura de la parrilla, color de acento aclarado
+    para que se lea sobre la imagen, menos de 2 MB, y su prueba a 150 px al
+    lado."""
     from ytstudio.catalog import is_vertical
-    W, H = (1080, 1920) if is_vertical(cfg) else (1280, 720)
-    accent = _hex_rgb(cfg.get("video", {}).get("overlay_accent", "E8C46B"))
+    vertical = is_vertical(cfg)
+    W, H = (1080, 1920) if vertical else (1280, 720)
+    safe = miniatura_margins(W, H) if vertical else None
+    acento_hex = cfg.get("video", {}).get("overlay_accent", "E8C46B")
+    # Sobre imagen, el color de marca calibrado para fondo negro se queda sin
+    # contraste: en vertical se usa la variante aclarada.
+    accent = _hex_rgb(accent_over_image(acento_hex) if vertical else acento_hex)
     bgs = pick_backgrounds(scenes, [o.get("scene_id") for o in options],
                            n=len(options))
     names: list[str] = []
+    largas: list[str] = []
     for i, opt in enumerate(options):
         text = (opt.get("text") or "").strip() or "LA HISTORIA"
         kicker = (opt.get("kicker") or "").strip()
@@ -319,8 +417,19 @@ def render_thumbnails(project, cfg, options: list[dict],
         else:  # sin imágenes aún: fondo neutro de marca
             base = Image.new("RGB", (W, H), (19, 22, 28))
         _, fn = _DESIGNS[i % len(_DESIGNS)]
-        img = fn(base, W, H, kicker, text, accent_word, accent)
+        img = fn(base, W, H, kicker, text, accent_word, accent, safe)
         name = f"miniatura_{i + 1}.jpg"
-        img.convert("RGB").save(project.path("final", name), quality=92)
+        dest = project.path("final", name)
+        _guardar(img, dest)
+        if vertical:
+            prueba_150px(dest)
+            if len(text.split()) > MINIATURA_PALABRAS_MAX:
+                largas.append(text)
         names.append(name)
+    if largas:
+        project.add_warning(
+            f"{len(largas)} miniatura(s) con más de {MINIATURA_PALABRAS_MAX} "
+            "palabras. A 150 px —el tamaño al que se ve de verdad en la "
+            "parrilla del canal— solo entran una cara y tres o cuatro "
+            "palabras: mira las pruebas «_prueba150px.png» antes de elegir.")
     return names

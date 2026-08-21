@@ -670,6 +670,28 @@ function cambiarModo(i,valor){
   const nota=document.getElementById(`sh-modo-nota-${i}`);
   if(nota)nota.textContent=(plan.modos||{})[valor]?.hint||'';
 }
+/* POR DÓNDE se recorta ESTA pieza. Al pasar de 16:9 a 9:16 solo cabe un
+   tercio del ancho: recortar siempre por el centro decapita los planos cuyo
+   sujeto no está centrado. */
+function puntoSelectorHtml(c,i,plan){
+  const puntos=plan.puntos||{};
+  if(c.modo!=='recorte'||plan.puede_recortar===false||!Object.keys(puntos).length)return '';
+  c.punto_recorte=c.punto_recorte||plan.punto_defecto||'centro';
+  const ops=Object.entries(puntos).map(([k,label])=>
+    `<option value="${k}" ${k===c.punto_recorte?'selected':''}>${esc(label)}</option>`).join('');
+  return `<div style="margin-top:6px"><span class="muted">Recortar la imagen </span>
+      <select data-i="${i}" style="width:auto" onchange="cambiarPunto(${i},this.value)">${ops}</select></div>`;
+}
+function cambiarPunto(i,valor){
+  const plan=window._plan||{};
+  (plan.candidatos||[])[i].punto_recorte=valor;
+}
+/* Los FRAGMENTOS del video largo con los que se monta la pieza. */
+function fragmentosTexto(c){
+  const t=c.tramos||[];
+  if(t.length>1)return t.map(x=>`${Math.round(x.desde)}s→${Math.round(x.hasta)}s`).join('  +  ');
+  return c.desde!=null?`${Math.round(c.desde)}s → ${Math.round(c.hasta||0)}s`:'';
+}
 
 function origenShortHtml(p){
   const o=p.derived_from, pl=p.shorts_plan||{};
@@ -679,7 +701,10 @@ function origenShortHtml(p){
     <h3 style="margin-top:0">${esc(o.titulo||'el video largo')}</h3>
     ${o.url?`<a href="${esc(o.url)}" target="_blank" class="muted" style="font-size:12px">${esc(o.url)}</a>`:''}
     <div style="margin-top:10px">
-      ${fila('Momento del original', o.desde!=null?`${Math.round(o.desde)}s → ${Math.round(o.hasta||0)}s`:'')}
+      ${fila((p.clip_tramos||[]).length>1?'Fragmentos del original':'Momento del original',
+              (p.clip_tramos||[]).length>1
+                ? p.clip_tramos.map(x=>`${Math.round(x.desde)}s → ${Math.round(x.hasta)}s`).join('   +   ')
+                : (o.desde!=null?`${Math.round(o.desde)}s → ${Math.round(o.hasta||0)}s`:''))}
       ${fila('La idea (una sola)', pl.idea)}
       ${fila('Texto en pantalla', pl.texto_pantalla)}
       ${fila('Llamada a la acción', pl.cta)}
@@ -728,12 +753,13 @@ function pintarPropuesta(plan){
           <span class="badge">${esc((plan.estructuras||{})[c.gancho_tipo]||c.gancho_tipo)}</span>
           <span class="badge">${c.duracion}s</span>
           ${modoSelectorHtml(c,i,plan)}
+          ${puntoSelectorHtml(c,i,plan)}
           <h3 style="margin:6px 0 2px">${esc(c.nombre)}</h3>
           <div class="muted" style="line-height:1.6">${esc(c.idea)}</div>
           <div style="margin-top:8px;line-height:1.7"><b>En pantalla desde el fotograma 1:</b> ${esc(c.texto_pantalla)}</div>
           <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Ver el guion completo</summary>
             <div style="white-space:pre-wrap;line-height:1.8;margin-top:8px">${esc(c.guion)}</div>
-            <div class="muted" style="margin-top:8px">Sale del segundo ${Math.round(c.desde||0)} del video largo · ${esc(c.titulo_youtube)} · ${esc((c.hashtags||[]).join(' '))}</div>
+            <div class="muted" style="margin-top:8px">${(c.tramos||[]).length>1?`${c.tramos.length} fragmentos del video largo: `:'Sale del segundo '}${fragmentosTexto(c)} · ${esc(c.titulo_youtube)} · ${esc((c.hashtags||[]).join(' '))}</div>
           </details>
         </div>
       </div>
@@ -1501,7 +1527,26 @@ function showSettings(){
       <label class="f"><span>Sonido de los insertos (fotos de archivo, cifras, mapas)</span>
         <select id="a-insfx">${(CAT.insert_sfx_options||[]).map(o=>`<option value="${o.id}" ${(CFG.audio.element_sfx||'auto')===o.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
     </div>
-    <div class="muted" style="font-size:12px">En «Automático» el acento lo elige el estilo del video, y dentro de cada paleta la foto, la cifra y el mapa suenan distinto (no el mismo golpe 20 veces).</div></div>`;
+    <div class="muted" style="font-size:12px">En «Automático» el acento lo elige el estilo del video, y dentro de cada paleta la foto, la cifra y el mapa suenan distinto (no el mismo golpe 20 veces).</div></div>
+  <div class="card"><h2>Shorts (video vertical)</h2>
+    <div class="grid2">
+      <label class="f"><span>Cómo se pasa a vertical</span>
+        <select id="s-reenc">
+          <option value="a_sangre" ${(CFG.shorts?.reencuadre||'a_sangre')==='a_sangre'?'selected':''}>A sangre (recomendado)</option>
+          <option value="fondo_desenfocado" ${(CFG.shorts?.reencuadre||'')==='fondo_desenfocado'?'selected':''}>Fondo desenfocado (no recomendado)</option>
+        </select></label>
+      <label class="f"><span>Por dónde se recorta</span>
+        <select id="s-punto">
+          ${['izquierda','centro','derecha'].map(v=>`<option value="${v}" ${(CFG.shorts?.punto_recorte||'centro')===v?'selected':''}>Por ${v==='centro'?'el centro':'la '+v}</option>`).join('')}
+        </select></label>
+      <label class="f"><span>Cama musical bajo los empalmes</span>
+        <select id="s-cama">
+          <option value="auto" ${String(CFG.shorts?.cama_musical||'auto')==='auto'?'selected':''}>Solo si hay varios fragmentos</option>
+          <option value="si" ${String(CFG.shorts?.cama_musical||'')==='si'?'selected':''}>Siempre</option>
+          <option value="no" ${String(CFG.shorts?.cama_musical||'')==='no'?'selected':''}>Nunca</option>
+        </select></label>
+    </div>
+    <div class="muted" style="font-size:12px">A sangre = la imagen ocupa los cuatro bordes. Se pierde lo que queda fuera del recorte, y ese es el precio correcto: en vertical cualquier banda se lee como «esto es el recorte de otra cosa» justo cuando se decide si deslizar. Y como solo cabe un tercio del ancho, elige por dónde recortar según dónde esté el sujeto (se puede cambiar Short a Short en la pestaña Shorts). La cama musical continua es lo que tapa los empalmes cuando el Short se monta con varios trozos del video largo; por encima de 60 s, solo música propia.</div></div>`;
   cats.forEach(renderModelPick);
 }
 async function saveKeys(){
@@ -1529,6 +1574,10 @@ async function saveSettings(){
   cfg.language=$('#v-lang').value||'es';
   cfg.audio.music_db=+$('#a-db').value; cfg.audio.duck=$('#a-duck').value==='true';
   cfg.audio.element_sfx=$('#a-insfx')?.value||'auto';
+  cfg.shorts=cfg.shorts||{};
+  if($('#s-reenc'))cfg.shorts.reencuadre=$('#s-reenc').value;
+  if($('#s-punto'))cfg.shorts.punto_recorte=$('#s-punto').value;
+  if($('#s-cama'))cfg.shorts.cama_musical=$('#s-cama').value;
   for(const catKey of Object.keys(CAT.catalog)){
     const sel=document.querySelector(`input[name=prov-${catKey}]:checked`)?.value;
     if(!sel)continue;

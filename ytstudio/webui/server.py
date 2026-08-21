@@ -592,6 +592,8 @@ def api_project_detail(slug: str) -> dict:
     # DE DÓNDE SALIÓ (si es un Short derivado) y ADÓNDE APUNTA: sin esto se
     # pierde el enlace al video largo, que es todo el objetivo de la pieza.
     detail["derived_from"] = project.get("derived_from")
+    # Los fragmentos con los que se monta el recorte (uno solo, o varios).
+    detail["clip_tramos"] = (project.get("clip_source") or {}).get("tramos") or []
     detail["shorts_plan"] = project.get("shorts_plan")
     # LISTA DE COMPROBACIÓN de publicación (solo verticales): se calcula en
     # vivo para que refleje el título/descripción que el creador tenga
@@ -694,6 +696,12 @@ def api_derive_propose(body: dict) -> dict:
     plan["estructuras"] = {k: v["label"]
                            for k, v in derive.HOOK_STRUCTURES.items()}
     plan["modos"] = derive.MODOS
+    # POR DÓNDE se recorta cada pieza: se elige mirando el plano, así que la
+    # interfaz necesita las opciones y cuál manda por defecto.
+    from ytstudio import clip
+    plan["puntos"] = {k: v["label"] for k, v in clip.PUNTOS_RECORTE.items()}
+    plan["punto_defecto"] = ((cfg.get("shorts") or {}).get("punto_recorte")
+                             or clip.PUNTO_POR_DEFECTO)
     _, plan["puede_recortar"] = derive.modo_disponible(source, cfg)
     plan["nota"] = nota
     _log_derive("info", f"{len(candidatos)} Short(s) propuestos de "
@@ -1243,6 +1251,10 @@ _UI_CONFIG_PATHS = (
     ("video", "target_minutes"), ("video", "width"), ("video", "height"),
     ("video", "burn_subtitles"), ("video", "scene_seconds"),
     ("audio", "music_db"), ("audio", "duck"), ("audio", "element_sfx"),
+    # Shorts: cómo se reencuadra el vertical, por dónde se recorta y si se
+    # tiende cama musical bajo los empalmes.
+    ("shorts", "reencuadre"), ("shorts", "punto_recorte"),
+    ("shorts", "cama_musical"),
     ("providers",),  # el usuario elige proveedores/modelos
     ("migrations",),  # marcas de migraciones ya aplicadas (ver _apply_migrations)
 )

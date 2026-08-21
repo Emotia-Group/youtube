@@ -95,7 +95,13 @@ check("T1d el recorte declara que necesita el enlace",
 CFGYAML = (ROOT / "config.yaml").read_text(encoding="utf-8")
 check("T1e la configuración trae el modo, con el recorte puesto",
       "shorts:" in CFGYAML and "modo: recorte" in CFGYAML)
-check("T1f y la forma de reencuadrar", "reencuadre: fondo_desenfocado" in CFGYAML)
+# OJO: esta batería nació pidiendo «fondo_desenfocado». En la v0.68.0 el
+# framework de Shorts se actualizó y desaconseja expresamente el fondo
+# desenfocado —deja zona muerta, y en vertical eso se lee como «esto es el
+# recorte de otra cosa»—, así que el defecto pasó a ser el recorte a sangre.
+# La regla vieja se cambia aquí a propósito, no se «arregla» la prueba.
+check("T1f y la forma de reencuadrar (a sangre desde la v0.68.0)",
+      "reencuadre: a_sangre" in CFGYAML)
 
 # Sin enlace no se puede recortar, se pida lo que se pida
 _disp = clip.available
@@ -269,14 +275,16 @@ else:
           (i2["width"], i2["height"]) == (1080, 1920), str(i2))
 
 # ---------------------------------------------------------------------------
-# T6 — el reencuadre no pierde imagen por defecto
+# T6 — el reencuadre llena el cuadro por defecto (v0.68.0)
 # ---------------------------------------------------------------------------
 print("\nT6 cómo se pasa de horizontal a vertical")
 
 check("T6a hay dos formas de reencuadrar",
-      set(clip.REENCUADRES) == {"fondo_desenfocado", "recorte_centrado"})
-check("T6b la de por defecto NO pierde imagen",
-      clip.REENCUADRE_POR_DEFECTO == "fondo_desenfocado")
+      set(clip.REENCUADRES) == {"a_sangre", "fondo_desenfocado"})
+check("T6b la de por defecto llena el cuadro, sin bandas",
+      clip.REENCUADRE_POR_DEFECTO == "a_sangre")
+check("T6b2 el nombre viejo del recorte sigue valiendo",
+      clip.normalizar_modo("recorte_centrado") == "a_sangre")
 f_fondo = clip.reframe_filter("fondo_desenfocado", 1080, 1920)
 check("T6c el fondo se hace con la propia imagen, desenfocada",
       "gblur" in f_fondo and "overlay" in f_fondo)

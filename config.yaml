@@ -329,13 +329,52 @@ shorts:
                            #             todo de cero. Cuesta dinero y tiempo,
                            #             pero permite decir algo que en el
                            #             video largo no está dicho así
-  reencuadre: fondo_desenfocado
-                           # Cómo pasar de horizontal (16:9) a vertical (9:16):
-                           #   fondo_desenfocado · el fotograma entero, centrado,
-                           #     sobre su propia imagen ampliada y desenfocada.
-                           #     Llena la pantalla SIN perder nada (recomendado)
-                           #   recorte_centrado · se queda con la franja central.
-                           #     Llena el cuadro pero pierde los lados: solo si
-                           #     el sujeto va siempre centrado
+  reencuadre: a_sangre     # Cómo pasar de horizontal (16:9) a vertical (9:16):
+                           #   a_sangre · la imagen ocupa los cuatro bordes,
+                           #     sin bandas. Se pierde lo que queda fuera del
+                           #     recorte, y ese es el precio correcto: en
+                           #     vertical se ve a pantalla completa y una
+                           #     banda se lee como «esto es el recorte de
+                           #     otra cosa» justo cuando se decide si
+                           #     deslizar (RECOMENDADO)
+                           #   fondo_desenfocado · el fotograma entero sobre
+                           #     su propia imagen ampliada y desenfocada. No
+                           #     pierde nada, pero deja zona muerta arriba y
+                           #     abajo. El framework lo desaconseja
+  punto_recorte: centro    # POR DÓNDE se recorta a sangre: izquierda, centro
+                           # o derecha. Se elige MIRANDO el plano: el recorte
+                           # centrado por defecto decapita cualquier plano
+                           # cuyo sujeto no esté en el centro. Se puede
+                           # cambiar Short a Short en la pestaña Shorts
+  velo: true               # velo oscuro DEGRADADO arriba y abajo para que el
+                           # texto se lea sobre la imagen. No es una caja
+                           # opaca a propósito: eso volvería a meter la banda
+                           # que se acaba de quitar
+  gancho_acento: true      # el texto de gancho va en el color del canal,
+                           # aclarado para que tenga contraste sobre la
+                           # imagen (false = blanco de siempre)
+  fundido: 0.35            # FUNDIDO entre planos, en segundos, cuando el
+                           # Short se monta con varios fragmentos del largo.
+                           # Un corte a hueso cada tres segundos se lee como
+                           # nervioso en vertical
+  brecha: 0.25             # AIRE entre fragmentos (segundos): devuelve la
+                           # respiración que se perdió al quitar las pausas
+                           # del video largo y quita el chasquido del empalme
+  cama_musical: auto       # CAMA MUSICAL continua por debajo de la voz, que
+                           # es lo que de verdad tapa los empalmes:
+                           #   auto · solo cuando el Short se monta con más
+                           #          de un fragmento (recomendado)
+                           #   si   · siempre
+                           #   no   · nunca
+                           # La pista sale de la música del propio video
+                           # largo —el mismo mundo sonoro— o de assets/music,
+                           # y se elige POR MEDICIÓN: la más plana (menor
+                           # rango de sonoridad) es la única que se puede
+                           # tender bajo 40 segundos sin que se note.
+                           # OJO: por encima de 60 s una reclamación de
+                           # copyright BLOQUEA el video en todo el mundo —
+                           # ahí, solo música propia
+  cama_db: -20             # volumen de la cama (dB). El framework pide entre
+                           # -18 y -22 LUFS, por debajo de la voz
   clip_height: 1080        # calidad máxima que se descarga del original. Bajar
                            # 4K para entregar 1080 de alto es tirar tiempo
